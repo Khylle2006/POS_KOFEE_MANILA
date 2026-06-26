@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BrewBliss POS</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">☕</div>
+
+  <button class="nav-btn active" onclick="showPage('home', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span>Home</span>
+  </button>
+
+  <button class="nav-btn" onclick="showPage('menu', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+    <span>Order</span>
+  </button>
+
+  <button class="nav-btn" onclick="showPage('history', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span>History</span>
+  </button>
+
+  <button class="nav-btn" onclick="showPage('analytics', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    <span>Stats</span>
+  </button>
+
+  <button class="nav-btn" onclick="showPage('addmenu', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+    <span>Add</span>
+  </button>
+
+  <div class="sidebar-spacer"></div>
+
+  <button class="logout-btn" title="Logout">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+  </button>
+</nav>
+
+<!-- PAGES -->
+<div class="pages">
+
+  <!-- ══ HOME ══ -->
+  <div id="page-home" class="page active">
+    <div class="page-header">
+      <div>
+        <h1>Good morning! ☀️</h1>
+        <p id="home-date">Today's overview</p>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="home-grid">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fff3e0">💰</div>
+          <div class="stat-label">Today's Sales</div>
+          <div class="stat-value">₱2,480</div>
+          <div class="stat-sub">↑ 12% from yesterday</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#e8f5e9">📋</div>
+          <div class="stat-label">Total Orders</div>
+          <div class="stat-value">34</div>
+          <div class="stat-sub">↑ 4 more than yesterday</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#e3f2fd">🛒</div>
+          <div class="stat-label">Avg Order</div>
+          <div class="stat-value">₱72</div>
+          <div class="stat-sub">Per transaction</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fce4ec">🍵</div>
+          <div class="stat-label">Top Item</div>
+          <div class="stat-value" style="font-size:16px">Taro Milk Tea</div>
+          <div class="stat-sub">18 cups today</div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:12px">Quick Access</div>
+        <div class="home-shortcuts">
+          <div class="shortcut-card" onclick="showPage('menu', document.querySelector('[onclick*=menu]'))">
+            <div class="shortcut-icon" style="background:#fff3e0">📋</div>
+            <div>
+              <h3>New Order</h3>
+              <p>Start taking an order now</p>
+            </div>
+          </div>
+          <div class="shortcut-card" onclick="showPage('history', document.querySelector('[onclick*=history]'))">
+            <div class="shortcut-icon" style="background:#e8f5e9">🕐</div>
+            <div>
+              <h3>Order History</h3>
+              <p>View all past transactions</p>
+            </div>
+          </div>
+          <div class="shortcut-card" onclick="showPage('addmenu', document.querySelector('[onclick*=addmenu]'))">
+            <div class="shortcut-icon" style="background:#e3f2fd">➕</div>
+            <div>
+              <h3>Add Menu Item</h3>
+              <p>Add drinks to your menu</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="recent-section">
+        <h2>Recent Orders</h2>
+        <table class="recent-table">
+          <thead>
+            <tr>
+              <th>Order #</th>
+              <th>Items</th>
+              <th>Type</th>
+              <th>Total</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="recent-tbody">
+            <tr><td>#0034</td><td>Taro Milk Tea x2, Brown Sugar Boba x1</td><td><span class="badge badge-dine">Dine In</span></td><td>₱195</td><td>10:42 AM</td></tr>
+            <tr><td>#0033</td><td>Iced Americano x1, Mango Fruit Tea x1</td><td><span class="badge badge-take">Take Out</span></td><td>₱130</td><td>10:28 AM</td></tr>
+            <tr><td>#0032</td><td>Caramel Latte x2</td><td><span class="badge badge-delivery">Delivery</span></td><td>₱160</td><td>10:15 AM</td></tr>
+            <tr><td>#0031</td><td>Matcha Milk Tea x1, Lychee Fruit Tea x2</td><td><span class="badge badge-dine">Dine In</span></td><td>₱215</td><td>9:58 AM</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MENU / ORDER ══ -->
+  <div id="page-menu" class="page">
+    <div class="menu-left">
+      <!-- Category tabs -->
+      <div class="category-tabs">
+        <div class="cat-tab active" onclick="switchCat(this,'ice-coffee')">
+          <span class="cat-icon">🧊</span>ICE COFFEE
+        </div>
+        <div class="cat-tab" onclick="switchCat(this,'hot-coffee')">
+          <span class="cat-icon">☕</span>HOT COFFEE
+        </div>
+        <div class="cat-tab" onclick="switchCat(this,'milk-tea')">
+          <span class="cat-icon">🧋</span>MILK TEA
+        </div>
+        <div class="cat-tab" onclick="switchCat(this,'fruit-tea')">
+          <span class="cat-icon">🍹</span>FRUIT TEA
+        </div>
+      </div>
+
+      <!-- Size bar -->
+      <div class="size-bar">
+        <button class="size-btn active" onclick="switchSize(this,'small')">Small</button>
+        <button class="size-btn" onclick="switchSize(this,'large')">Large</button>
+      </div>
+
+      <!-- Menu grid -->
+      <div class="menu-grid-wrap">
+        <div class="menu-grid" id="menu-grid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Order Panel -->
+    <div class="order-panel">
+      <div class="order-type-bar">
+        <button class="order-type-btn active" onclick="switchOrderType(this,'dine')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h18M3 6h18M21 12H3M3 16h10"/><circle cx="17" cy="18" r="3"/></svg>
+          Dine In
+        </button>
+        <button class="order-type-btn" onclick="switchOrderType(this,'take')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          Take Out
+        </button>
+        <button class="order-type-btn" onclick="switchOrderType(this,'delivery')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          Delivery
+        </button>
+      </div>
+
+      <div class="order-items" id="order-items">
+        <div class="order-empty" id="order-empty">
+          <div class="oe-icon">🧋</div>
+          <p>No items yet</p>
+          <small>Tap a drink to add it to the order</small>
+        </div>
+      </div>
+
+      <div class="order-footer">
+        <div class="order-row"><span>Subtotal</span><span id="subtotal">₱0.00</span></div>
+        <div class="order-row"><span>Tax (12%)</span><span id="tax">₱0.00</span></div>
+        <div class="order-row total"><span>Total</span><span id="total">₱0.00</span></div>
+        <button class="checkout-btn" onclick="checkout()">Place Order</button>
+        <button class="clear-btn" onclick="clearOrder()">Clear Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ HISTORY ══ -->
+  <div id="page-history" class="page">
+    <div class="page-header">
+      <div>
+        <h1>Order History</h1>
+        <p>All past transactions</p>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="filter-bar">
+        <input class="filter-input" type="text" placeholder="🔍  Search by order # or item…" oninput="filterHistory(this.value)">
+        <select class="filter-select" onchange="filterType(this.value)">
+          <option value="">All Types</option>
+          <option value="Dine In">Dine In</option>
+          <option value="Take Out">Take Out</option>
+          <option value="Delivery">Delivery</option>
+        </select>
+        <select class="filter-select">
+          <option>Today</option>
+          <option>This Week</option>
+          <option>This Month</option>
+        </select>
+      </div>
+
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Order #</th>
+            <th>Date & Time</th>
+            <th>Items</th>
+            <th>Type</th>
+            <th>Total</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══ ANALYTICS ══ -->
+  <div id="page-analytics" class="page">
+    <div class="page-header">
+      <div>
+        <h1>Analytics</h1>
+        <p>Sales performance overview</p>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="analytics-top">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fff3e0">💰</div>
+          <div class="stat-label">Weekly Sales</div>
+          <div class="stat-value">₱14,280</div>
+          <div class="stat-sub">↑ 8% vs last week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#e8f5e9">📦</div>
+          <div class="stat-label">Weekly Orders</div>
+          <div class="stat-value">198</div>
+          <div class="stat-sub">↑ 22 more orders</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#e3f2fd">🥤</div>
+          <div class="stat-label">Cups Sold</div>
+          <div class="stat-value">267</div>
+          <div class="stat-sub">Across all categories</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fce4ec">⭐</div>
+          <div class="stat-label">Best Category</div>
+          <div class="stat-value" style="font-size:16px">Milk Tea</div>
+          <div class="stat-sub">42% of all orders</div>
+        </div>
+      </div>
+
+      <div class="chart-section">
+        <div class="chart-card">
+          <h3>Daily Sales This Week (₱)</h3>
+          <div class="bar-chart" id="bar-chart"></div>
+        </div>
+        <div class="chart-card">
+          <h3>Sales by Category</h3>
+          <div class="donut-wrap">
+            <svg class="donut-svg" viewBox="0 0 120 120" id="donut-svg"></svg>
+            <div class="legend" id="donut-legend"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="top-items-card">
+        <h3>Top Selling Items</h3>
+        <div id="top-items-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ADD MENU ══ -->
+  <div id="page-addmenu" class="page">
+    <div class="page-header">
+      <div>
+        <h1>Add Menu Item</h1>
+        <p>Add a new drink to your menu</p>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="add-menu-wrap">
+
+        <div class="form-card">
+          <h2>Item Details</h2>
+
+          <div class="field-group">
+            <label class="field-label">Category</label>
+            <select class="field-select" id="add-category">
+              <option value="">Select a category…</option>
+              <option value="ice-coffee">Ice Coffee</option>
+              <option value="hot-coffee">Hot Coffee</option>
+              <option value="milk-tea">Milk Tea</option>
+              <option value="fruit-tea">Fruit Tea</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Drink Name</label>
+            <input class="field-input" type="text" id="add-name" placeholder="e.g. Taro Milk Tea" />
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Description (optional)</label>
+            <textarea class="field-textarea" id="add-desc" placeholder="Brief description of the drink…"></textarea>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <h2>Choose an Icon</h2>
+          <div class="emoji-picker" id="emoji-picker">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <div class="form-card">
+          <h2>Pricing</h2>
+          <div class="price-row">
+            <div class="field-group">
+              <label class="field-label">Small Price (₱)</label>
+              <input class="field-input" type="number" id="add-price-small" placeholder="0.00" min="0" />
+            </div>
+            <div class="field-group">
+              <label class="field-label">Large Price (₱)</label>
+              <input class="field-input" type="number" id="add-price-large" placeholder="0.00" min="0" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Available Now</div>
+              <div class="toggle-sub">Show this item on the order menu</div>
+            </div>
+            <div class="toggle-switch on" id="avail-toggle" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+
+        <button class="submit-btn" onclick="addMenuItem()">➕ Add to Menu</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span id="toast-icon">✅</span>
+  <span id="toast-msg">Done!</span>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────
+let currentCat = 'ice-coffee';
+let currentSize = 'small';
+let orderItems = [];
+let orderType = 'dine';
+let selectedEmoji = '🍵';
+
+let menuData = {
+  'ice-coffee': [],
+  'hot-coffee': [],
+  'milk-tea': [],
+  'fruit-tea': []
+};
+
+let historyData = [
+  { id:'#0034', dt:'Jun 25, 10:42 AM', items:'Taro Milk Tea x2, Brown Sugar Boba x1', type:'Dine In', total:195 },
+  { id:'#0033', dt:'Jun 25, 10:28 AM', items:'Iced Americano x1, Mango Fruit Tea x1', type:'Take Out', total:130 },
+  { id:'#0032', dt:'Jun 25, 10:15 AM', items:'Caramel Latte x2', type:'Delivery', total:160 },
+  { id:'#0031', dt:'Jun 25, 9:58 AM', items:'Matcha Milk Tea x1, Lychee Fruit Tea x2', type:'Dine In', total:215 },
+  { id:'#0030', dt:'Jun 24, 7:30 PM', items:'Brown Sugar Boba x3', type:'Take Out', total:255 },
+  { id:'#0029', dt:'Jun 24, 6:12 PM', items:'Iced Caramel Macchiato x1', type:'Dine In', total:95 },
+];
+
+// ── NAV ──────────────────────────────────────────
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name === 'menu') renderGrid();
+  if (name === 'analytics') renderAnalytics();
+  if (name === 'history') renderHistory(historyData);
+}
+
+// ── CATEGORY & SIZE ──────────────────────────────
+function switchCat(el, cat) {
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentCat = cat;
+  renderGrid();
+}
+
+function switchSize(el, size) {
+  document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentSize = size;
+  renderGrid();
+}
+
+function switchOrderType(el, type) {
+  document.querySelectorAll('.order-type-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  orderType = type;
+}
+
+// ── MENU GRID ──────────────────────────────────────
+function renderGrid() {
+  const grid = document.getElementById('menu-grid');
+  const items = menuData[currentCat] || [];
+  if (items.length === 0) {
+    grid.innerHTML = `<div class="empty-cat">
+      <div class="empty-icon">🫙</div>
+      <p>No items in this category yet</p>
+      <small>Go to "Add" to create your first drink</small>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = items.map(item => {
+    const price = currentSize === 'small' ? item.priceSmall : item.priceLarge;
+    return `<div class="menu-card" onclick="addToOrder('${item.id}')">
+      <div class="item-img">${item.icon}</div>
+      <div class="item-name">${item.name}</div>
+      <div class="item-price">₱${price}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── ORDER ──────────────────────────────────────────
+function addToOrder(itemId) {
+  const item = menuData[currentCat].find(i => i.id === itemId);
+  if (!item) return;
+  const price = currentSize === 'small' ? item.priceSmall : item.priceLarge;
+  const key = itemId + '_' + currentSize;
+  const existing = orderItems.find(o => o.key === key);
+  if (existing) {
+    existing.qty++;
+  } else {
+    orderItems.push({ key, id: itemId, name: item.name, icon: item.icon, size: currentSize, price: Number(price), qty: 1 });
+  }
+  renderOrder();
+  showToast('🧋', item.name + ' added!');
+}
+
+function renderOrder() {
+  const container = document.getElementById('order-items');
+  const empty = document.getElementById('order-empty');
+
+  if (orderItems.length === 0) {
+    container.innerHTML = '';
+    container.appendChild(getEmptyEl());
+    updateTotals();
+    return;
+  }
+
+  let html = orderItems.map(o => `
+    <div class="order-item-row">
+      <div class="oi-icon">${o.icon}</div>
+      <div class="oi-info">
+        <div class="oi-name">${o.name}</div>
+        <div class="oi-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
+      </div>
+      <div class="oi-controls">
+        <button class="qty-btn" onclick="changeQty('${o.key}',-1)">−</button>
+        <span class="qty-num">${o.qty}</span>
+        <button class="qty-btn" onclick="changeQty('${o.key}',1)">+</button>
+      </div>
+      <div class="oi-price">₱${(o.price * o.qty).toFixed(0)}</div>
+    </div>
+  `).join('');
+  container.innerHTML = html;
+  updateTotals();
+}
+
+function getEmptyEl() {
+  const d = document.createElement('div');
+  d.className = 'order-empty';
+  d.id = 'order-empty';
+  d.innerHTML = '<div class="oe-icon">🧋</div><p>No items yet</p><small>Tap a drink to add it to the order</small>';
+  return d;
+}
+
+function changeQty(key, delta) {
+  const idx = orderItems.findIndex(o => o.key === key);
+  if (idx === -1) return;
+  orderItems[idx].qty += delta;
+  if (orderItems[idx].qty <= 0) orderItems.splice(idx, 1);
+  renderOrder();
+}
+
+function updateTotals() {
+  const sub = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
+  const tax = sub * 0.12;
+  document.getElementById('subtotal').textContent = '₱' + sub.toFixed(2);
+  document.getElementById('tax').textContent = '₱' + tax.toFixed(2);
+  document.getElementById('total').textContent = '₱' + (sub + tax).toFixed(2);
+}
+
+function clearOrder() {
+  orderItems = [];
+  renderOrder();
+}
+
+function checkout() {
+  if (orderItems.length === 0) { showToast('⚠️', 'Add items first'); return; }
+  const sub = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
+  const total = (sub * 1.12).toFixed(2);
+  const num = '#' + String(historyData.length + 1).padStart(4,'0');
+  const typeMap = { dine:'Dine In', take:'Take Out', delivery:'Delivery' };
+  const itemsStr = orderItems.map(o => `${o.name} x${o.qty}`).join(', ');
+  const now = new Date();
+  const dt = now.toLocaleString('en-PH',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  historyData.unshift({ id: num, dt, items: itemsStr, type: typeMap[orderType], total: Number(total) });
+  clearOrder();
+  showToast('✅', 'Order ' + num + ' placed!');
+}
+
+// ── HISTORY ──────────────────────────────────────
+function renderHistory(data) {
+  const tbody = document.getElementById('history-tbody');
+  const typeClass = { 'Dine In':'badge-dine','Take Out':'badge-take','Delivery':'badge-delivery' };
+  tbody.innerHTML = data.map(h => `
+    <tr>
+      <td><strong>${h.id}</strong></td>
+      <td>${h.dt}</td>
+      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.items}</td>
+      <td><span class="badge ${typeClass[h.type]||''}">${h.type}</span></td>
+      <td><strong>₱${h.total}</strong></td>
+      <td><button class="receipt-btn">Receipt</button></td>
+    </tr>
+  `).join('');
+}
+
+let _histFilterText = '';
+let _histFilterType = '';
+
+function filterHistory(val) {
+  _histFilterText = val.toLowerCase();
+  applyHistoryFilter();
+}
+function filterType(val) {
+  _histFilterType = val;
+  applyHistoryFilter();
+}
+function applyHistoryFilter() {
+  let d = historyData;
+  if (_histFilterText) d = d.filter(h => h.id.toLowerCase().includes(_histFilterText) || h.items.toLowerCase().includes(_histFilterText));
+  if (_histFilterType) d = d.filter(h => h.type === _histFilterType);
+  renderHistory(d);
+}
+
+// ── ANALYTICS ──────────────────────────────────────
+function renderAnalytics() {
+  // Bar chart
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const vals = [1820, 2100, 1650, 2480, 2200, 2800, 1230];
+  const max = Math.max(...vals);
+  const barChart = document.getElementById('bar-chart');
+  barChart.innerHTML = days.map((d, i) => `
+    <div class="bar-col">
+      <div class="bar-val">₱${vals[i]}</div>
+      <div class="bar" style="height:${(vals[i]/max)*120}px"></div>
+      <div class="bar-label">${d}</div>
+    </div>
+  `).join('');
+
+  // Donut
+  const cats = [
+    { label:'Milk Tea', pct:42, color:'#8B5E3C' },
+    { label:'Ice Coffee', pct:28, color:'#C9A96E' },
+    { label:'Fruit Tea', pct:18, color:'#e07b5a' },
+    { label:'Hot Coffee', pct:12, color:'#d4b896' },
+  ];
+  const r = 40, cx = 60, cy = 60;
+  let offset = -Math.PI / 2;
+  let paths = '';
+  cats.forEach(c => {
+    const angle = (c.pct / 100) * Math.PI * 2;
+    const x1 = cx + r * Math.cos(offset);
+    const y1 = cy + r * Math.sin(offset);
+    offset += angle;
+    const x2 = cx + r * Math.cos(offset);
+    const y2 = cy + r * Math.sin(offset);
+    const large = angle > Math.PI ? 1 : 0;
+    paths += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z" fill="${c.color}" stroke="#fff" stroke-width="2"/>`;
+  });
+  document.getElementById('donut-svg').innerHTML = paths +
+    `<circle cx="${cx}" cy="${cy}" r="24" fill="white"/>`+
+    `<text x="${cx}" y="${cy+5}" text-anchor="middle" font-size="11" font-weight="800" fill="#2d2417">Sales</text>`;
+
+  document.getElementById('donut-legend').innerHTML = cats.map(c =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${c.color}"></div>${c.label}<span class="legend-pct">${c.pct}%</span></div>`
+  ).join('');
+
+  // Top items
+  const topItems = [
+    { icon:'🧋', name:'Taro Milk Tea', count: 84 },
+    { icon:'🍵', name:'Brown Sugar Boba', count: 67 },
+    { icon:'🧊', name:'Iced Americano', count: 52 },
+    { icon:'🍹', name:'Mango Fruit Tea', count: 41 },
+    { icon:'☕', name:'Caramel Latte', count: 38 },
+  ];
+  document.getElementById('top-items-list').innerHTML = topItems.map((t, i) => `
+    <div class="top-item-row">
+      <div class="ti-rank">${i+1}</div>
+      <div class="ti-icon">${t.icon}</div>
+      <div class="ti-info">
+        <div class="ti-name">${t.name}</div>
+        <div class="ti-count">${t.count} cups sold</div>
+      </div>
+      <div class="ti-bar-wrap"><div class="ti-bar-fill" style="width:${(t.count/84)*100}%"></div></div>
+    </div>
+  `).join('');
+}
+
+// ── ADD MENU ──────────────────────────────────────
+
+function addMenuItem() {
+  const cat = document.getElementById('add-category').value;
+  const name = document.getElementById('add-name').value.trim();
+  const priceSmall = parseFloat(document.getElementById('add-price-small').value);
+  const priceLarge = parseFloat(document.getElementById('add-price-large').value);
+
+  if (!cat) { showToast('⚠️','Please select a category'); return; }
+  if (!name) { showToast('⚠️','Please enter a drink name'); return; }
+  if (isNaN(priceSmall) || priceSmall <= 0) { showToast('⚠️','Enter a valid small price'); return; }
+  if (isNaN(priceLarge) || priceLarge <= 0) { showToast('⚠️','Enter a valid large price'); return; }
+
+  const id = 'item_' + Date.now();
+  menuData[cat].push({ id, name, icon: selectedEmoji, priceSmall, priceLarge });
+
+  // Reset form
+  document.getElementById('add-category').value = '';
+  document.getElementById('add-name').value = '';
+  document.getElementById('add-desc').value = '';
+  document.getElementById('add-price-small').value = '';
+  document.getElementById('add-price-large').value = '';
+  selectedEmoji = '🍵';
+  initEmojiPicker();
+
+  showToast('✅', '"' + name + '" added to menu!');
+}
+
+// ── TOAST ──────────────────────────────────────────
+function showToast(icon, msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-icon').textContent = icon;
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ── INIT ──────────────────────────────────────────
+document.getElementById('home-date').textContent = new Date().toLocaleDateString('en-PH', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+initEmojiPicker();
+renderHistory(historyData);
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sidebar-bg: #1a1a2e;
+    --sidebar-active: #8B5E3C;
+    --accent: #8B5E3C;
+    --accent-light: #C9A96E;
+    --cream: #fdf6ec;
+    --card-bg: #ffffff;
+    --border: #e8ddd0;
+    --text-main: #2d2417;
+    --text-muted: #8a7968;
+    --tab-active: #8B5E3C;
+    --danger: #e05252;
+    --success: #4caf7d;
+    --sidebar-width: 72px;
+  }
+
+  body {
+    font-family: 'Poppins', sans-serif;
+    background-image: url('../assets/images/coffee_milktea.webp');
+    background-size: cover;
+    color: var(--text-main);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .pages { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+  .page { display: none; flex: 1; overflow: hidden; }
+  .page.active { display: flex; flex-direction: column; }
+
+  /* ── PAGE HEADER ── */
+  .page-header {
+    padding: 20px 28px 12px;
+    background: var(--cream);
+    border-bottom: 1.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .page-header h1 { font-size: 20px; font-weight: 700; color: var(--text-main); }
+  .page-header p { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent-light); }
