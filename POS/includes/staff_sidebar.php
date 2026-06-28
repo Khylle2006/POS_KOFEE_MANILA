@@ -18,7 +18,7 @@
 
     <div class="sidebar-spacer"></div>
 
-    <button class="logout-btn">
+    <button class="logout-btn" onclick="window.location.href='../auth/logout.php'">
         Logout
     </button>
 </nav>

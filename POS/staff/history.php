@@ -1,3 +1,8 @@
+<?php
+require_once '../includes/auth_check.php';
+require_role('admin');
+?>
+
 <!DOCTYPE html>
 <html>
 <head>
