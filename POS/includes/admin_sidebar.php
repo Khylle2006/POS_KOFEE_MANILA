@@ -8,7 +8,7 @@
 
     <button class="nav-btn"
             onclick="window.location.href='menu.php'">
-        Order
+        Menu
     </button>
 
     <button class="nav-btn"
