@@ -1,0 +1,246 @@
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f5f6fa;
+      --surface:   #ffffff;
+      --border:    #e8eaef;
+      --text:      #1a1d23;
+      --muted:     #7a7f8e;
+      --accent:    #f57c00;        /* warm orange — echoes the 💰 card */
+      --accent-lt: #fff3e0;        /* same as stat-card bg */
+      --green-lt:  #e8f5e9;
+      --blue-lt:   #e3f2fd;
+      --red:       #e53935;
+      --input-bg:  #f8f9fc;
+      --radius:    14px;
+      --shadow:    0 4px 24px rgba(0,0,0,.07);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    /* ── card ── */
+    .login-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      width: 100%;
+      max-width: 420px;
+      overflow: hidden;
+    }
+
+    /* ── header strip ── */
+    .card-header {
+      background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+      padding: 36px 36px 28px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--surface);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      margin: 0 auto 16px;
+      box-shadow: 0 2px 12px rgba(245,124,0,.15);
+    }
+
+    .card-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -.3px;
+    }
+
+    .card-header p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── body ── */
+    .card-body {
+      padding: 32px 36px 36px;
+    }
+
+    /* ── role pills ── */
+    .role-switcher {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .role-pill {
+      flex: 1;
+      padding: 9px 0;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--input-bg);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      text-align: center;
+      transition: all .18s;
+    }
+
+    .role-pill.active {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+      color: var(--accent);
+    }
+
+    /* ── form ── */
+    .field + .field { margin-top: 16px; }
+
+    .field label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: .2px;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-wrap .icon {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+      pointer-events: none;
+    }
+
+    .input-wrap input {
+      width: 100%;
+      padding: 11px 12px 11px 40px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      background: var(--input-bg);
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      outline: none;
+      transition: border-color .18s, box-shadow .18s;
+    }
+
+    .input-wrap input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(245,124,0,.12);
+      background: #fff;
+    }
+
+    .input-wrap input::placeholder { color: #b0b5c3; }
+
+    /* show/hide toggle */
+    .toggle-pw {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: var(--muted);
+      padding: 2px;
+      line-height: 1;
+    }
+
+    /* ── error banner ── */
+    .error-msg {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: #fdecea;
+      border: 1px solid #f5c6cb;
+      border-radius: 8px;
+      padding: 10px 13px;
+      font-size: 13px;
+      color: var(--red);
+      margin-top: 16px;
+    }
+
+    .error-msg.show { display: flex; }
+
+    /* ── submit ── */
+    .btn-login {
+      width: 100%;
+      margin-top: 24px;
+      padding: 13px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .18s, transform .1s;
+      letter-spacing: .1px;
+    }
+
+    .btn-login:hover  { background: #e65100; }
+    .btn-login:active { transform: scale(.98); }
+
+    /* ── footer note ── */
+    .card-footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 0 36px 24px;
+    }
+
+    .card-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    /* ── quick-fill chips (demo only) ── */
+    .demo-chips {
+      display: flex;
+      gap: 6px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .demo-chip {
+      padding: 5px 10px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--input-bg);
+      font-size: 11.5px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .demo-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-lt);
+    }
+
+    .demo-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 14px;
+      text-align: center;
+    }
