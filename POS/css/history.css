@@ -24,10 +24,10 @@
   .filter-select:focus, .filter-input:focus { border-color: var(--accent); }
   .filter-input { width: 220px; }
 
-  .history-table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 14px; overflow: hidden; border: 1.5px solid var(--border); }
+  .history-table { width: 100%; border-collapse: collapse; background: #000000; border-radius: 14px; overflow: hidden; border: 1.5px solid var(--border); }
   .history-table th { background: #f5ece0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 14px 16px; text-align: left; }
   .history-table td { padding: 14px 16px; font-size: 13px; border-top: 1px solid var(--border); }
-  .history-table tr:hover td { background: #fdf8f3; }
+  .history-table tr:hover td { background: #000000; }
 
   .receipt-btn {
     padding: 5px 14px;

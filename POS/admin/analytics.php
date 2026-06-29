@@ -7,8 +7,6 @@
     <link rel="stylesheet" href="../css/sidebar.css">
     <link rel="stylesheet" href="../css/analytics.css">
 </head>
-
-
 <body>
     <?php include('../includes/admin_sidebar.php'); ?>
 
@@ -81,7 +79,7 @@
             </div>
         `).join('');
 
-        // MENU IMNIDA
+        // Donut
         const cats = [
             { label:'Milk Tea', pct:42, color:'#8B5E3C' },
             { label:'Ice Coffee', pct:28, color:'#C9A96E' },
@@ -131,34 +129,5 @@
         }
 
   </script>
-
-<script>
-fetch('get_analytics.php')
-.then(r => r.json())
-.then(data => {
-
-    document.querySelectorAll('.stat-value')[0].innerHTML = '₱' + data.weekly_sales;
-    document.querySelectorAll('.stat-value')[1].innerHTML = data.weekly_orders;
-    document.querySelectorAll('.stat-value')[2].innerHTML = data.cups;
-    document.querySelectorAll('.stat-value')[3].innerHTML = data.best_category;
-
-    // REAL BAR CHART
-    const barChart = document.getElementById('bar-chart');
-
-    const days = data.daily_sales.map(d => d.date);
-    const vals = data.daily_sales.map(d => d.total);
-
-    const max = Math.max(...vals, 1);
-
-    barChart.innerHTML = days.map((d, i) => `
-        <div class="bar-col">
-            <div class="bar-val">₱${vals[i]}</div>
-            <div class="bar" style="height:${(vals[i]/max)*120}px"></div>
-            <div class="bar-label">${d}</div>
-        </div>
-    `).join('');
-});
-</script>
-
 </body>
 </html>
