@@ -2,7 +2,6 @@
     flex: 1;
     overflow-y: auto;
     padding: 24px 28px;
-    background-image: url("assets/images/login_background.jpg");
     display: flex;
     flex-direction: column;
     gap: 24px;
