@@ -138,12 +138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
   <style>
     :root {
       --accent:       #c47d3e;
-      --accent-light: #ecddc8;
-      --cream:        #faf5ef;
+      --accent-light: #ffe6a7;
+      --cream:        #99582a;
       --card-bg:      #ffffff;
-      --border:       #ecddc8;
-      --text-main:    #2c1a0e;
-      --text-muted:   #9a7e65;
+      --border:       #99582a;
+      --text-main:    #ffffff;
+      --text-muted:   #ffe6a7;
       --bg:           #faf5ef;
       --green:        #2e7d32;
       --green-lt:     #e8f5e9;
@@ -155,6 +155,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
 
     /* ── page layout ── */
     #page-menu {
+      background-image: url("../assets/images/login_background.jpg");
+    background-size: cover;       
+    background-position: center; 
       display: flex;
       flex-direction: row !important;
       height: 100vh;

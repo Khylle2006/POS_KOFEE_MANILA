@@ -77,11 +77,11 @@ $categories = $pdo->query('SELECT * FROM categories ORDER BY category_name')->fe
     :root {
       --accent:       #c47d3e;
       --accent-light: #ecddc8;
-      --cream:        #faf5ef;
+      --cream:        #99582a;
       --card-bg:      #ffffff;
       --border:       #ecddc8;
-      --text-main:    #2c1a0e;
-      --text-muted:   #9a7e65;
+      --text-main:    #000000;
+      --text-muted:   #000000;
       --bg:           #faf5ef;
       --green:        #2e7d32;
       --green-lt:     #e8f5e9;

@@ -43,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':u' => $username, ':f' => $firstname, ':l' => $lastname,
                     ':e' => $email,    ':p' => $hash,       ':r' => $role,
                 ]);
-                $toast = '✅ User "' . htmlspecialchars($username) . '" registered successfully!';
             }
         }
     }
@@ -158,10 +157,10 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
     :root {
       --accent:     #c47d3e;
       --accent-lt:  #fdf3ea;
-      --card-bg:    #ffffff;
+      --card-bg:    #99582a;
       --border:     #ecddc8;
-      --text-main:  #2c1a0e;
-      --text-muted: #9a7e65;
+      --text-main:  #000000;
+      --text-muted: #000000;
       --bg:         #faf5ef;
       --green:      #2e7d32;  --green-lt:  #e8f5e9;
       --red:        #c62828;  --red-lt:    #ffebee;

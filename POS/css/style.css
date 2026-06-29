@@ -1,15 +1,15 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --sidebar-bg: #1a1a2e;
-    --sidebar-active: #8B5E3C;
+    --sidebar-bg: #99582a;
+    --sidebar-active: #bb9457;
     --accent: #8B5E3C;
     --accent-light: #C9A96E;
-    --cream: #fdf6ec;
-    --card-bg: #ffffff;
-    --border: #e8ddd0;
-    --text-main: #2d2417;
-    --text-muted: #8a7968;
+    --cream: #99582a;
+    --card-bg: #99582a;
+    --border: #99582a;
+    --text-main: #000000;
+    --text-muted: #000000;
     --tab-active: #8B5E3C;
     --danger: #e05252;
     --success: #4caf7d;
@@ -18,8 +18,10 @@
 
   body {
     font-family: 'Poppins', sans-serif;
-    background-image: url('../assets/images/coffee_milktea.webp');
-    background-size: cover;
+    background-image: url("../assets/images/login_background.jpg");
+    background-size: cover;       
+    background-position: center;   
+    background-repeat: no-repeat; 
     color: var(--text-main);
     display: flex;
     height: 100vh;
