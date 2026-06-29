@@ -31,12 +31,12 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-           
+      --bg:        #f5f6fa;
       --surface:   #ffffff;
       --border:    #e8eaef;
-      --text:      #000000;
+      --text:      #1a1d23;
       --muted:     #7a7f8e;
-      --accent:    #99582a;
+      --accent:    #f57c00;
       --accent-lt: #fff3e0;
       --red:       #e53935;
       --green:     #2e7d32;
@@ -48,10 +48,7 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
 
     body {
       font-family: 'Inter', sans-serif;
-      background-image: url("assets/images/login_background.jpg");
-      background-size: cover;        
-      background-position: center;   
-      background-repeat: no-repeat;  
+      background: var(--bg);
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -145,7 +142,7 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
       cursor: pointer; letter-spacing: .1px;
       transition: background .18s, transform .1s;
     }
-    .btn-login:hover  { background: #99582a; }
+    .btn-login:hover  { background: #e65100; }
     .btn-login:active { transform: scale(.98); }
 
     .card-footer {

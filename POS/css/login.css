@@ -1,11 +1,11 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #99582a;
+      --bg:        #f5f6fa;
       --surface:   #ffffff;
       --border:    #e8eaef;
-      --text:      #000000;
-      --muted:     #000000;
+      --text:      #1a1d23;
+      --muted:     #7a7f8e;
       --accent:    #f57c00;        /* warm orange — echoes the 💰 card */
       --accent-lt: #fff3e0;        /* same as stat-card bg */
       --green-lt:  #e8f5e9;
@@ -19,7 +19,6 @@
     body {
       font-family: 'Inter', sans-serif;
       background: var(--bg);
-      background-color: #99582a;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -39,7 +38,7 @@
 
     /* ── header strip ── */
     .card-header {
-      background: linear-gradient(135deg, #99582a 0%, #ffe0b2 100%);
+      background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
       padding: 36px 36px 28px;
       text-align: center;
       border-bottom: 1px solid var(--border);
@@ -170,7 +169,7 @@
       align-items: center;
       gap: 8px;
       background: #fdecea;
-      border: 1px solid #99582a;
+      border: 1px solid #f5c6cb;
       border-radius: 8px;
       padding: 10px 13px;
       font-size: 13px;

@@ -1,6 +1,11 @@
 <?php
 require_once '../includes/auth_check.php';
 require_role('admin');
+
+
+
+
+
 ?>
 
 
@@ -101,6 +106,7 @@ require_role('admin');
           </thead>
           <tbody id="recent-tbody">
             // Recent orders will be dynamically populated here
+            
           </tbody>
         </table>
       </div>
