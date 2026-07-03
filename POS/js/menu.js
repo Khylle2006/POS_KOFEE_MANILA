@@ -262,6 +262,12 @@ function printReceipt() {
     window.print();
 }
 
+  // Move modals to <body> root so no parent stacking context clips them
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('receipt-overlay');
+    if (el) document.body.appendChild(el);
+  });
+
 // ── Exports ───────────────────────────────────
 window.clearOrder      = clearOrder;
 window.checkout        = checkout;
@@ -273,3 +279,4 @@ window.switchSize      = switchSize;
 window.switchOrderType = switchOrderType;
 window.changeQty       = changeQty;
 window.removeItem      = removeItem;
+

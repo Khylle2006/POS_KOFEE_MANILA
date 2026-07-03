@@ -1,108 +1,88 @@
-document.addEventListener("DOMContentLoaded", function () {
+        function renderAnalytics() {
+        // Bar chart
+        const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+        const vals = [1820, 2100, 1650, 2480, 2200, 2800, 1230];
+        const max = Math.max(...vals);
+        const barChart = document.getElementById('bar-chart');
+        barChart.innerHTML = days.map((d, i) => `
+            <div class="bar-col">
+            <div class="bar-val">₱${vals[i]}</div>
+            <div class="bar" style="height:${(vals[i]/max)*120}px"></div>
+            <div class="bar-label">${d}</div>
+            </div>
+        `).join('');
 
-    fetch("get_analytics.php")
-        .then(res => res.json())
-        .then(data => {
+        // MENU IMNIDA
+        const cats = [
+            { label:'Milk Tea', pct:42, color:'#8B5E3C' },
+            { label:'Ice Coffee', pct:28, color:'#C9A96E' },
+            { label:'Fruit Tea', pct:18, color:'#e07b5a' },
+            { label:'Hot Coffee', pct:12, color:'#d4b896' },
+        ];
+        const r = 40, cx = 60, cy = 60;
+        let offset = -Math.PI / 2;
+        let paths = '';
+        cats.forEach(c => {
+            const angle = (c.pct / 100) * Math.PI * 2;
+            const x1 = cx + r * Math.cos(offset);
+            const y1 = cy + r * Math.sin(offset);
+            offset += angle;
+            const x2 = cx + r * Math.cos(offset);
+            const y2 = cy + r * Math.sin(offset);
+            const large = angle > Math.PI ? 1 : 0;
+            paths += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z" fill="${c.color}" stroke="#fff" stroke-width="2"/>`;
+        });
+        document.getElementById('donut-svg').innerHTML = paths +
+            `<circle cx="${cx}" cy="${cy}" r="24" fill="white"/>`+
+            `<text x="${cx}" y="${cy+5}" text-anchor="middle" font-size="11" font-weight="800" fill="#2d2417">Sales</text>`;
 
-            console.log("Analytics loaded:", data);
+        document.getElementById('donut-legend').innerHTML = cats.map(c =>
+            `<div class="legend-item"><div class="legend-dot" style="background:${c.color}"></div>${c.label}<span class="legend-pct">${c.pct}%</span></div>`
+        ).join('');
 
-           
-            document.getElementById("weeklySales") &&
-                (document.getElementById("weeklySales").textContent = data.weekly_sales);
+        // Top items
+        const topItems = [
+            { icon:'🧋', name:'Taro Milk Tea', count: 84 },
+            { icon:'🍵', name:'Brown Sugar Boba', count: 67 },
+            { icon:'🧊', name:'Iced Americano', count: 52 },
+            { icon:'🍹', name:'Mango Fruit Tea', count: 41 },
+            { icon:'☕', name:'Caramel Latte', count: 38 },
+        ];
+        document.getElementById('top-items-list').innerHTML = topItems.map((t, i) => `
+            <div class="top-item-row">
+            <div class="ti-rank">${i+1}</div>
+            <div class="ti-icon">${t.icon}</div>
+            <div class="ti-info">
+                <div class="ti-name">${t.name}</div>
+                <div class="ti-count">${t.count} cups sold</div>
+            </div>
+            <div class="ti-bar-wrap"><div class="ti-bar-fill" style="width:${(t.count/84)*100}%"></div></div>
+            </div>
+        `).join('');
+        }
 
-            document.getElementById("weeklyOrders") &&
-                (document.getElementById("weeklyOrders").textContent = data.weekly_orders);
+fetch('get_analytics.php')
+.then(r => r.json())
+.then(data => {
 
-            document.getElementById("cupsSold") &&
-                (document.getElementById("cupsSold").textContent = data.cups);
+    document.querySelectorAll('.stat-value')[0].innerHTML = '₱' + data.weekly_sales;
+    document.querySelectorAll('.stat-value')[1].innerHTML = data.weekly_orders;
+    document.querySelectorAll('.stat-value')[2].innerHTML = data.cups;
+    document.querySelectorAll('.stat-value')[3].innerHTML = data.best_category;
 
-            document.getElementById("bestCategory") &&
-                (document.getElementById("bestCategory").textContent = data.best_category);
+    // REAL BAR CHART
+    const barChart = document.getElementById('bar-chart');
 
-          
-            const dailyChart = document.getElementById("dailyChart");
+    const days = data.daily_sales.map(d => d.date);
+    const vals = data.daily_sales.map(d => d.total);
 
-            if (dailyChart && window.Chart) {
-                new Chart(dailyChart, {
-                    type: "bar",
-                    data: {
-                        labels: data.daily_sales.map(d => d.date),
-                        datasets: [{
-                            label: "Daily Sales",
-                            data: data.daily_sales.map(d => d.total),
-                            backgroundColor: "#c08a4b"
-                        }]
-                    }
-                });
-            }
+    const max = Math.max(...vals, 1);
 
-            
-            const categoryBox = document.getElementById("categoryBox");
-
-            if (categoryBox) {
-                categoryBox.innerHTML = "";
-
-                data.categories.forEach(cat => {
-                    const div = document.createElement("div");
-                    div.className = "analytics-row";
-                    div.innerHTML = `
-                        <span>${cat.category_name}</span>
-                        <span>₱${cat.total_sales}</span>
-                    `;
-                    categoryBox.appendChild(div);
-                });
-            }
-
-            
-            const topItemsBox = document.getElementById("topItemsBox");
-
-            if (topItemsBox) {
-                topItemsBox.innerHTML = "";
-
-                data.top_items.forEach(item => {
-                    const div = document.createElement("div");
-                    div.className = "analytics-row";
-                    div.innerHTML = `
-                        <span>${item.name}</span>
-                        <span>${item.total_sold}</span>
-                    `;
-                    topItemsBox.appendChild(div);
-                });
-            }
-
-           
-            const tbody = document.getElementById("recent-tbody");
-
-            if (tbody) {
-                tbody.innerHTML = "";
-
-                if (data.recent_orders && data.recent_orders.length > 0) {
-
-                    data.recent_orders.forEach(order => {
-
-                        const row = document.createElement("tr");
-
-                        row.innerHTML = `
-                            <td>#${order.id}</td>
-                            <td>${order.items_count ?? 0}</td>
-                            <td>${order.type ?? 'N/A'}</td>
-                            <td>₱${order.total_amount}</td>
-                            <td>${order.created_at}</td>
-                        `;
-
-                        tbody.appendChild(row);
-                    });
-
-                } else {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="5">No recent orders</td>
-                        </tr>
-                    `;
-                }
-            }
-
-        })
-        .catch(err => console.error("Analytics error:", err));
-
+    barChart.innerHTML = days.map((d, i) => `
+        <div class="bar-col">
+            <div class="bar-val">₱${vals[i]}</div>
+            <div class="bar" style="height:${(vals[i]/max)*120}px"></div>
+            <div class="bar-label">${d}</div>
+        </div>
+    `).join('');
 });

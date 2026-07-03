@@ -1,0 +1,135 @@
+
+    :root {
+      --accent:       #c47d3e;
+      --accent-light: #ecddc8;
+      --cream:        #99582a;
+      --card-bg:      #ffffff;
+      --border:       #ecddc8;
+      --text-main:    #000000;
+      --text-muted:   #000000;
+      --bg:           #faf5ef;
+      --green:        #2e7d32;
+      --green-lt:     #e8f5e9;
+      --red:          #c62828;
+      --red-lt:       #ffebee;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--text-main); }
+
+    /* ── page layout ── */
+    #page-addmenu {
+      padding: 32px 36px;
+      max-width: 700px;
+    }
+
+    .page-header { margin-bottom: 28px; }
+    .page-header h1 { font-size: 24px; font-weight: 800; color: var(--text-main); }
+    .page-header p  { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ── form card ── */
+    .form-card {
+      background: var(--card-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .form-card h2 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    /* ── fields ── */
+    .field-group { margin-bottom: 16px; }
+    .field-group:last-child { margin-bottom: 0; }
+    .field-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+    .field-label .req { color: var(--accent); margin-left: 2px; }
+
+    .field-input,
+    .field-select,
+    .field-textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      background: #fff;
+      color: var(--text-main);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      appearance: none;
+    }
+    .field-input:focus,
+    .field-select:focus,
+    .field-textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(196,125,62,.12);
+    }
+    .field-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a7e65' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px;
+      cursor: pointer;
+    }
+    .field-textarea { resize: vertical; min-height: 80px; }
+
+    /* price + stock row */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    /* ── submit button ── */
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, transform .12s;
+      margin-top: 4px;
+    }
+    .submit-btn:hover    { background: #7a4e2e; transform: translateY(-1px); }
+    .submit-btn:active   { transform: scale(.98); }
+    .submit-btn:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; transform: none; }
+
+    /* ── toast ── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--text-main); color: #fff;
+      padding: 11px 22px; border-radius: 10px;
+      font-size: 13px; font-weight: 600;
+      box-shadow: 0 4px 20px rgba(0,0,0,.2);
+      z-index: 9999; opacity: 0; pointer-events: none;
+      transition: opacity .25s;
+      white-space: nowrap;
+    }
+    .toast.show    { opacity: 1; }
+    .toast.success { background: var(--green); }
+    .toast.error   { background: var(--red);   }
+
+    /* ── field error highlight ── */
+    .field-input.invalid,
+    .field-select.invalid,
+    .field-textarea.invalid {
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(198,40,40,.10);
+    }

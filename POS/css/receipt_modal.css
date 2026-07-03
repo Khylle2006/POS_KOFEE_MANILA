@@ -1,0 +1,144 @@
+ /* ── Receipt Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(44, 26, 14, 0.45);
+      z-index: 99999;
+      backdrop-filter: blur(3px);
+      /* must not inherit any transform from parent */
+    }
+    .modal-overlay.open {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .receipt-modal {
+      background: #fff;
+      border-radius: 24px;
+      margin: auto;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 24px 64px rgba(44,26,14,.22);
+      animation: popIn .25s cubic-bezier(.34,1.56,.64,1);
+      overflow: hidden;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(.88) translateY(20px); }
+      to   { opacity: 1; transform: scale(1)  translateY(0); }
+    }
+
+    /* header strip */
+    .receipt-head {
+      background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+      padding: 32px 28px 24px;
+      text-align: center;
+      border-bottom: 1.5px solid #ecddc8;
+    }
+    .receipt-check {
+      width: 64px; height: 64px;
+      background: #c47d3e;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px;
+      margin: 0 auto 14px;
+      box-shadow: 0 4px 16px rgba(196,125,62,.3);
+    }
+    .receipt-head h2 {
+      font-size: 20px; font-weight: 800;
+      color: #2c1a0e; margin-bottom: 4px;
+    }
+    .receipt-head p {
+      font-size: 13px; color: #9a7e65;
+    }
+    .receipt-order-num {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 5px 16px;
+      background: #c47d3e;
+      color: #fff;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+
+    /* body */
+    .receipt-body { padding: 22px 28px; }
+
+    .receipt-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #9a7e65;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 14px;
+    }
+
+    .receipt-items { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+    .receipt-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      background: #faf5ef;
+      border-radius: 10px;
+      border: 1px solid #ecddc8;
+    }
+    .ri-icon { font-size: 20px; flex-shrink: 0; }
+    .ri-info { flex: 1; }
+    .ri-name { font-size: 13px; font-weight: 700; color: #2c1a0e; }
+    .ri-size { font-size: 10px; color: #9a7e65; }
+    .ri-qty  { font-size: 11px; font-weight: 700; color: #9a7e65; background: #ecddc8; border-radius: 6px; padding: 2px 7px; flex-shrink: 0; }
+    .ri-price{ font-size: 13px; font-weight: 800; color: #c47d3e; flex-shrink: 0; min-width: 52px; text-align: right; }
+
+    /* totals */
+    .receipt-totals {
+      border-top: 1.5px dashed #ecddc8;
+      padding-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .rt-row { display: flex; justify-content: space-between; font-size: 12px; color: #9a7e65; }
+    .rt-row.grand {
+      font-size: 17px; font-weight: 800;
+      color: #2c1a0e; margin-top: 6px;
+      padding-top: 10px;
+      border-top: 1.5px solid #ecddc8;
+    }
+    .rt-row.grand span:last-child { color: #c47d3e; }
+
+    /* footer buttons */
+    .receipt-footer {
+      padding: 0 28px 24px;
+      display: flex;
+      gap: 10px;
+    }
+    .btn-print {
+      flex: 1; padding: 12px;
+      border: 1.5px solid #ecddc8;
+      border-radius: 12px;
+      background: none;
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px; font-weight: 600;
+      color: #9a7e65; cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-print:hover { border-color: #c47d3e; color: #c47d3e; }
+    .btn-new-order {
+      flex: 2; padding: 12px;
+      background: #c47d3e; color: #fff;
+      border: none; border-radius: 12px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: background .15s;
+    }
+    .btn-new-order:hover { background: #7a4e2e; }

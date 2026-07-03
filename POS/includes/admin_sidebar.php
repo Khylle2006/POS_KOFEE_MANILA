@@ -27,12 +27,12 @@
     </button>
 
     <button class="nav-btn"
-            onclick="window.location.href='add-item.php'">
+            onclick="window.location.href='add_item.php'">
         Add Item
     </button>
 
     <button class="nav-btn"
-            onclick="window.location.href='manage-users.php'">
+            onclick="window.location.href='manage_users.php'">
         Manage Users
     </button>
 

@@ -103,19 +103,19 @@ error_log('Session data: ' . print_r($_SESSION, true));
 // Use RELATIVE paths instead of absolute
 if ($user['role'] === 'admin' || $user['role'] === 'manager') {
     // Check if admin dashboard exists
-    if (file_exists('../admin/dashboard.php')) {
-        $destination = '../admin/dashboard.php';
+    if (file_exists('../php/dashboard.php')) {
+        $destination = '../php/dashboard.php';
     } else {
         // Fallback
-        $destination = '../index.php';
+        $destination = '../php/home.php';
     }
 } else {
     // Staff
-    if (file_exists('../staff/home.php')) {
-        $destination = '../staff/home.php';
+    if (file_exists('../php/menu.php')) {
+        $destination = '../php/menu.php';
     } else {
         // Fallback
-        $destination = '../index.php';
+        $destination = '../php/home.php';
     }
 }
 

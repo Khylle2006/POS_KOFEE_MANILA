@@ -28,9 +28,9 @@ function require_role(?string $role = null, ?string $redirect_to = null): void {
         $current_role = $_SESSION['role'] ?? 'staff';
         
         if (in_array($current_role, ['admin', 'manager'])) {
-            header('Location: ../admin/dashboard.php');
+            header('Location: ../php/dashboard.php');
         } else {
-            header('Location: ../staff/menu.php');
+            header('Location: ../php/menu.php');
         }
         exit;
     }
@@ -90,9 +90,9 @@ function is_logged_in(): bool {
  */
 function get_dashboard_url(): string {
     if (in_array($_SESSION['role'] ?? '', ['admin', 'manager'])) {
-        return '../admin/dashboard.php';
+        return '../php/dashboard.php';
     }
-    return '../staff/home.php';
+    return '../php/menu.php';
 }
 
 /**
