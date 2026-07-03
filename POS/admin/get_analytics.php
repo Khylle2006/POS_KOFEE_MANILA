@@ -1,17 +1,17 @@
 <?php
+// get_analytics.php
+// FIX: removed stray "/" that was a PHP syntax error before a comment block.
 require_once '../includes/db.php';
 
 header('Content-Type: application/json');
 
 $pdo = get_db();
 
-
 $weeklySales = $pdo->query("
-    SELECT COALESCE(SUM(total_amount),0) AS weekly_sales
+    SELECT COALESCE(SUM(total_amount), 0) AS weekly_sales
     FROM orders
     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
 ")->fetch();
-
 
 $weeklyOrders = $pdo->query("
     SELECT COUNT(*) AS weekly_orders
@@ -19,39 +19,37 @@ $weeklyOrders = $pdo->query("
     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
 ")->fetch();
 
-
 $cups = $pdo->query("
-    SELECT COALESCE(SUM(quantity),0) AS cups
+    SELECT COALESCE(SUM(quantity), 0) AS cups
     FROM order_items
 ")->fetch();
 
-/
+// Daily sales for the last 7 days
 $daily = $pdo->query("
-    SELECT DATE(created_at) as date, SUM(total_amount) as total
+    SELECT DATE(created_at) AS date, SUM(total_amount) AS total
     FROM orders
     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
     GROUP BY DATE(created_at)
     ORDER BY date ASC
 ")->fetchAll();
 
-
+// Sales by category
 $categories = $pdo->query("
-    SELECT 
+    SELECT
         c.category_name,
         SUM(oi.quantity * oi.price) AS total_sales
     FROM order_items oi
-    JOIN products p ON p.id = oi.product_id
+    JOIN products p  ON p.id = oi.product_id
     JOIN categories c ON c.id = p.category_id
     GROUP BY c.category_name
     ORDER BY total_sales DESC
 ")->fetchAll();
 
-
 $bestCategory = $categories[0]['category_name'] ?? 'N/A';
 
-
+// Top 5 selling items
 $topItems = $pdo->query("
-    SELECT 
+    SELECT
         p.name,
         SUM(oi.quantity) AS total_sold
     FROM order_items oi
@@ -61,9 +59,9 @@ $topItems = $pdo->query("
     LIMIT 5
 ")->fetchAll();
 
-
+// Recent 10 orders
 $recentOrders = $pdo->query("
-    SELECT 
+    SELECT
         o.id,
         o.total_amount,
         o.created_at,
@@ -75,14 +73,13 @@ $recentOrders = $pdo->query("
     LIMIT 10
 ")->fetchAll();
 
-
 echo json_encode([
-    "weekly_sales" => $weeklySales['weekly_sales'],
-    "weekly_orders" => $weeklyOrders['weekly_orders'],
-    "cups" => $cups['cups'],
-    "best_category" => $bestCategory,
-    "daily_sales" => $daily,
-    "categories" => $categories,
-    "top_items" => $topItems,
-    "recent_orders" => $recentOrders
+    "weekly_sales"   => $weeklySales['weekly_sales'],
+    "weekly_orders"  => $weeklyOrders['weekly_orders'],
+    "cups"           => $cups['cups'],
+    "best_category"  => $bestCategory,
+    "daily_sales"    => $daily,
+    "categories"     => $categories,
+    "top_items"      => $topItems,
+    "recent_orders"  => $recentOrders,
 ]);

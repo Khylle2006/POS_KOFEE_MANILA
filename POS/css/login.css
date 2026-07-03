@@ -1,10 +1,10 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #f5f6fa;
+      --bg:        #8B5E3C;
       --surface:   #ffffff;
       --border:    #e8eaef;
-      --text:      #1a1d23;
+      --text:      #000000;
       --muted:     #7a7f8e;
       --accent:    #f57c00;        /* warm orange — echoes the 💰 card */
       --accent-lt: #fff3e0;        /* same as stat-card bg */

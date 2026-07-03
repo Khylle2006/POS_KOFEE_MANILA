@@ -31,12 +31,11 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #f5f6fa;
       --surface:   #ffffff;
       --border:    #e8eaef;
-      --text:      #1a1d23;
+      --text:      #000000;
       --muted:     #7a7f8e;
-      --accent:    #f57c00;
+      --accent:    #99582a;
       --accent-lt: #fff3e0;
       --red:       #e53935;
       --green:     #2e7d32;
@@ -48,7 +47,10 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
 
     body {
       font-family: 'Inter', sans-serif;
-      background: var(--bg);
+      background-image: url("assets/images/login_background.jpg");
+      background-size: cover;        
+      background-position: center;   
+      background-repeat: no-repeat;
       min-height: 100vh;
       display: flex;
       align-items: center;

@@ -91,21 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // ── Delete ────────────────────────────────
-    if ($action === 'delete') {
-        $id = (int)($_POST['user_id'] ?? 0);
-        if ($id && $id !== (int)$_SESSION['user_id']) {
-            $pdo->prepare('DELETE FROM users WHERE id = :id')->execute([':id'=>$id]);
-            $toast = '🗑️ User deleted.';
-        } else {
-            $toast = '⚠️ You cannot delete your own account.'; $toast_type = 'error';
-        }
-    }
-
-    $q = $toast ? '?toast=' . urlencode($toast) . '&type=' . $toast_type : '';
-    $redirect_base = dirname($_SERVER['PHP_SELF']) . '/manage_users.php';
-    header('Location: ' . $redirect_base . $q);
-    exit;
+      $q = $toast ? '?toast=' . urlencode($toast) . '&type=' . $toast_type : '';
+      header('Location: ' . basename($_SERVER['PHP_SELF']) . $q);
+      exit;
 }
 
 // Flash from redirect
@@ -154,7 +142,7 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
   <link rel="stylesheet" href="../css/sidebar.css"/>
   <link rel="stylesheet" href="../css/add-items.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-  <style>
+<style>
     :root {
       --accent:     #c47d3e;
       --accent-lt:  #fdf3ea;
@@ -173,7 +161,7 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
 
     #page-users { display: flex; flex-direction: column; height: 100vh; }
     #page-users .page-body { flex: 1; overflow-y: auto; padding: 28px; }
-    .users-wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+    .users-wrap { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
 
     /* stat row */
     .stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
@@ -211,37 +199,242 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
     .submit-btn:hover { background: #7a4e2e; transform: translateY(-2px); }
     .submit-btn:active { transform: scale(.98); }
 
-    /* table card */
-    .table-card { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 18px; overflow: hidden; }
-    .table-toolbar { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1.5px solid var(--border); flex-wrap: wrap; }
-    .table-toolbar h2 { font-size: 15px; font-weight: 700; flex: 1; }
-    .search-wrap { position: relative; }
-    .search-wrap input { padding: 9px 14px 9px 34px; border: 1.5px solid var(--border); border-radius: 9px; font-family: 'Poppins', sans-serif; font-size: 13px; background: #fdf6ec; outline: none; width: 200px; transition: border-color .15s; }
-    .search-wrap input:focus { border-color: var(--accent); background: #fff; }
-    .search-wrap .s-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; pointer-events: none; }
-    .filter-select { padding: 9px 10px; border: 1.5px solid var(--border); border-radius: 9px; font-family: 'Poppins', sans-serif; font-size: 12px; background: #fdf6ec; color: var(--text-main); outline: none; cursor: pointer; }
+    /* TABLE CARD - FIXED */
+    .table-card { 
+        background: var(--card-bg); 
+        border: 1.5px solid var(--border); 
+        border-radius: 18px; 
+        overflow: hidden; 
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .table-toolbar { 
+        display: flex; 
+        align-items: center; 
+        gap: 15px; 
+        padding: 16px 24px; 
+        border-bottom: 1.5px solid var(--border); 
+        flex-wrap: wrap; 
+        flex-shrink: 0;
+        background: var(--card-bg);
+    }
+    
+    .table-toolbar h2 { 
+        font-size: 18px; 
+        font-weight: 700; 
+        flex: 1; 
+        min-width: 80px;
+        margin: 0;
+    }
+    
+    .table-toolbar form {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        flex: 1;
+    }
+    
+    .search-wrap { 
+        position: relative; 
+        flex: 0 1 220px; 
+        min-width: 160px;
+    }
+    
+    .search-wrap input { 
+        padding: 10px 16px 10px 40px; 
+        border: 1.5px solid var(--border); 
+        border-radius: 10px; 
+        font-family: 'Poppins', sans-serif; 
+        font-size: 13px; 
+        background: #fdf6ec; 
+        outline: none; 
+        width: 100%;
+        transition: border-color .15s;
+        box-sizing: border-box;
+    }
+    
+    .search-wrap input:focus { 
+        border-color: var(--accent); 
+        background: #fff; 
+    }
+    
+    .search-wrap .s-icon { 
+        position: absolute; 
+        left: 14px; 
+        top: 50%; 
+        transform: translateY(-50%); 
+        font-size: 14px; 
+        pointer-events: none;
+        color: var(--text-muted);
+    }
+    
+    .filter-select { 
+        padding: 10px 14px; 
+        border: 1.5px solid var(--border); 
+        border-radius: 10px; 
+        font-family: 'Poppins', sans-serif; 
+        font-size: 13px; 
+        background: #fdf6ec; 
+        color: var(--text-main); 
+        outline: none; 
+        cursor: pointer;
+        min-width: 120px;
+        flex-shrink: 0;
+    }
+    
+    .table-toolbar .act-btn {
+        padding: 10px 20px;
+        flex-shrink: 0;
+        font-size: 13px;
+    }
 
-    table { width: 100%; border-collapse: collapse; }
+    /* TABLE WRAPPER */
+    .table-wrapper {
+        overflow-x: auto;
+        width: 100%;
+        padding: 0;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* TABLE - FIXED LAYOUT */
+    table { 
+        width: 100%; 
+        border-collapse: collapse;
+        table-layout: fixed;
+        min-width: 900px;
+    }
+    
+    /* Column widths */
+    table colgroup col:nth-child(1) { width: 22%; }  /* User */
+    table colgroup col:nth-child(2) { width: 14%; }  /* Username */
+    table colgroup col:nth-child(3) { width: 10%; }  /* Role */
+    table colgroup col:nth-child(4) { width: 10%; }  /* Status */
+    table colgroup col:nth-child(5) { width: 16%; }  /* Last Login */
+    table colgroup col:nth-child(6) { width: 28%; }  /* Actions */
+
     thead tr { background: #fdf6ec; }
-    th { padding: 11px 16px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; text-align: left; border-bottom: 1.5px solid var(--border); white-space: nowrap; }
-    td { padding: 13px 16px; font-size: 13px; border-bottom: 1px solid #f5ede0; vertical-align: middle; }
+    
+    th { 
+        padding: 14px 16px; 
+        font-size: 12px; 
+        font-weight: 700; 
+        color: var(--text-muted); 
+        text-transform: uppercase; 
+        letter-spacing: .06em; 
+        text-align: left; 
+        border-bottom: 2px solid var(--border); 
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    td { 
+        padding: 14px 16px; 
+        font-size: 14px; 
+        border-bottom: 1px solid #f5ede0; 
+        vertical-align: middle;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #fffaf5; }
 
-    .avatar { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
-    .user-cell { display: flex; align-items: center; gap: 10px; }
-    .user-name  { font-weight: 600; font-size: 13px; }
-    .user-meta  { font-size: 11px; color: var(--text-muted); }
+    /* USER CELL */
+    .user-cell { 
+        display: flex; 
+        align-items: center; 
+        gap: 12px;
+        min-width: 0;
+    }
+    
+    .avatar { 
+        width: 40px; 
+        height: 40px; 
+        border-radius: 10px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        font-size: 16px; 
+        font-weight: 700; 
+        color: #fff; 
+        flex-shrink: 0; 
+    }
+    
+    .user-info {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    
+    .user-name { 
+        font-weight: 600; 
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .user-email { 
+        font-size: 12px; 
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .user-you {
+        font-size: 10px;
+        color: var(--text-muted);
+        font-weight: 600;
+        margin-left: 4px;
+    }
 
-    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+    /* BADGES */
+    .badge { 
+        display: inline-flex; 
+        align-items: center; 
+        gap: 4px; 
+        padding: 4px 12px; 
+        border-radius: 20px; 
+        font-size: 11px; 
+        font-weight: 700; 
+        text-transform: uppercase; 
+        letter-spacing: .04em; 
+        white-space: nowrap; 
+        max-width: 100%;
+    }
     .badge-active  { background: var(--green-lt); color: var(--green); }
     .badge-blocked { background: var(--red-lt);   color: var(--red); }
     .badge-on_hold { background: var(--amber-lt); color: var(--amber); }
     .badge-staff   { background: var(--blue-lt);  color: var(--blue); }
     .badge-admin   { background: var(--accent-lt);color: var(--accent); }
 
-    .act-group { display: flex; gap: 5px; flex-wrap: wrap; }
-    .act-btn { padding: 6px 10px; border-radius: 8px; border: 1.5px solid transparent; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .14s; white-space: nowrap; }
+    /* ACTION BUTTONS */
+    .act-group { 
+        display: flex; 
+        gap: 6px; 
+        flex-wrap: wrap;
+    }
+    
+    .act-btn { 
+        padding: 6px 12px; 
+        border-radius: 8px; 
+        border: 1.5px solid transparent; 
+        font-family: 'Poppins', sans-serif; 
+        font-size: 11px; 
+        font-weight: 600; 
+        cursor: pointer; 
+        transition: all .14s; 
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
     .act-edit     { background: var(--blue-lt);   color: var(--blue);   border-color: #bbdefb; }
     .act-block    { background: var(--red-lt);    color: var(--red);    border-color: #ffcdd2; }
     .act-hold     { background: var(--amber-lt);  color: var(--amber);  border-color: #ffe0b2; }
@@ -251,13 +444,29 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
 
     .empty-row td { text-align: center; padding: 44px; color: var(--text-muted); font-size: 14px; }
 
-    /* toast */
-    .toast { position: fixed; bottom: 28px; right: 28px; z-index: 9999; padding: 14px 20px; border-radius: 12px; font-size: 13px; font-weight: 600; font-family: 'Poppins', sans-serif; box-shadow: 0 4px 20px rgba(0,0,0,.14); animation: slideUp .3s ease; max-width: 340px; transition: opacity .4s; }
+    /* Toast */
+    .toast { 
+        position: fixed; 
+        bottom: 28px; 
+        right: 28px; 
+        z-index: 9999; 
+        padding: 14px 20px; 
+        border-radius: 12px; 
+        font-size: 13px; 
+        font-weight: 600; 
+        font-family: 'Poppins', sans-serif; 
+        box-shadow: 0 4px 20px rgba(0,0,0,.14); 
+        animation: slideUp .3s ease; 
+        max-width: 340px; 
+        transition: opacity .4s;
+        display: block;
+        opacity: 1;
+    }
     .toast-success { background: var(--green-lt); color: var(--green); border: 1.5px solid #c8e6c9; }
     .toast-error   { background: var(--red-lt);   color: var(--red);   border: 1.5px solid #ffcdd2; }
     @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
 
-    /* modal */
+    /* Modal */
     .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
     .modal-bg.open { display: flex; }
     .modal { background: var(--card-bg); border-radius: 20px; padding: 30px; width: 100%; max-width: 480px; box-shadow: 0 12px 48px rgba(0,0,0,.18); animation: popIn .22s ease; max-height: 90vh; overflow-y: auto; }
@@ -273,11 +482,80 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
 
     .mg-b { margin-bottom: 12px; }
 
-    @media (max-width: 900px) {
-      .main-cols { grid-template-columns: 1fr; }
-      .stat-row  { grid-template-columns: repeat(2,1fr); }
+    /* RESPONSIVE */
+    @media (max-width: 1024px) {
+        .main-cols { 
+            grid-template-columns: 1fr; 
+        }
+        .stat-row { 
+            grid-template-columns: repeat(2,1fr); 
+        }
+        table {
+            min-width: 800px;
+        }
     }
-  </style>
+    
+    @media (max-width: 768px) {
+        .table-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .table-toolbar form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .search-wrap {
+            flex: 1;
+            width: 100%;
+        }
+        
+        .filter-select {
+            width: 100%;
+        }
+        
+        .table-toolbar .act-btn {
+            width: 100%;
+        }
+        
+        .stat-row {
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .mini-stat {
+            padding: 12px 14px;
+        }
+        
+        .mini-stat-val {
+            font-size: 18px;
+        }
+        
+        th, td {
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .stat-row {
+            grid-template-columns: 1fr;
+        }
+        
+        #page-users .page-body {
+            padding: 15px;
+        }
+        
+        .form-card {
+            padding: 20px;
+        }
+        
+        .field-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
 </head>
 <body>
 
@@ -469,8 +747,6 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
                           <button type="submit" class="act-btn act-block">🚫 Block</button>
                         </form>
                       <?php endif; ?>
-                      <button class="act-btn act-delete"
-                        onclick="confirmDelete(<?= (int)$u['id'] ?>, '<?= htmlspecialchars($fullname, ENT_QUOTES) ?>')">🗑️</button>
                     <?php endif; ?>
                   </div>
                 </td>
@@ -544,23 +820,6 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
   </div>
 </div>
 
-<!-- Delete modal -->
-<div class="modal-bg" id="delete-modal" onclick="closeModalBg(event)">
-  <div class="modal" style="max-width:360px;text-align:center">
-    <div style="font-size:46px;margin-bottom:12px">🗑️</div>
-    <h3 style="font-size:17px;margin-bottom:8px">Delete User?</h3>
-    <p id="delete-msg" style="font-size:13px;color:var(--text-muted);margin-bottom:22px"></p>
-    <form method="POST">
-      <input type="hidden" name="action"  value="delete"/>
-      <input type="hidden" name="user_id" id="delete-id"/>
-      <div class="modal-actions">
-        <button type="button" class="btn-cancel" onclick="closeDelete()">Cancel</button>
-        <button type="submit" class="btn-save" style="background:var(--red)">Yes, Delete</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <?php if ($toast): ?>
 <div class="toast toast-<?= $toast_type ?>" id="toast-msg"><?= $toast ?></div>
 <script>setTimeout(() => { const t = document.getElementById('toast-msg'); if(t) t.style.opacity='0'; }, 3500);</script>
@@ -602,14 +861,6 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
     document.getElementById('edit-modal').classList.add('open');
   }
   function closeEdit()   { document.getElementById('edit-modal').classList.remove('open'); }
-
-  function confirmDelete(id, name) {
-    document.getElementById('delete-id').value  = id;
-    document.getElementById('delete-msg').textContent =
-      'This will permanently remove "' + name + '". This cannot be undone.';
-    document.getElementById('delete-modal').classList.add('open');
-  }
-  function closeDelete() { document.getElementById('delete-modal').classList.remove('open'); }
 
   function closeModalBg(e) {
     if (e.target === e.currentTarget) { closeEdit(); closeDelete(); }

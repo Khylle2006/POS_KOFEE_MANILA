@@ -3,99 +3,82 @@ require_once '../includes/db.php';
 
 header('Content-Type: application/json');
 
+// Require login
+if (session_status() === PHP_SESSION_NONE) session_start();
+if (empty($_SESSION['logged_in'])) {
+    http_response_code(401);
+    echo json_encode(["success" => false, "error" => "Unauthorized"]);
+    exit;
+}
+
 $data = json_decode(file_get_contents("php://input"), true);
 
 if (!is_array($data)) {
-    echo json_encode([
-        "success" => false,
-        "error" => "Invalid JSON input"
-    ]);
+    echo json_encode(["success" => false, "error" => "Invalid JSON input"]);
     exit;
 }
 
-$total = (float)($data['total'] ?? 0);
-$payment = $data['payment_method'] ?? 'unknown';
-$items = $data['items'] ?? [];
+$total   = (float)($data['total']          ?? 0);
+$payment = $data['payment_method']          ?? 'cash';
+$items   = $data['items']                   ?? [];
 
 if (empty($items)) {
-    echo json_encode([
-        "success" => false,
-        "error" => "No items to save"
-    ]);
+    echo json_encode(["success" => false, "error" => "No items to save"]);
     exit;
 }
 
-$conn->begin_transaction();
-
+// FIX: use PDO (was using $conn / mysqli)
 try {
+    $pdo = get_db();
+    $pdo->beginTransaction();
 
-   
-    $stmt = $conn->prepare("
+    // Insert order — use session user_id, not hardcoded 1
+    $user_id = (int)$_SESSION['user_id'];
+
+    $stmt = $pdo->prepare("
         INSERT INTO orders (user_id, total_amount, payment_method, status, created_at)
-        VALUES (?, ?, ?, 'completed', NOW())
+        VALUES (:uid, :total, :payment, 'completed', NOW())
     ");
+    $stmt->execute([
+        ':uid'     => $user_id,
+        ':total'   => $total,
+        ':payment' => $payment,
+    ]);
 
-    if (!$stmt) {
-        throw new Exception("ORDER PREPARE FAILED: " . $conn->error);
-    }
+    $order_id = (int)$pdo->lastInsertId();
 
-    $user_id = 1; 
-    $stmt->bind_param("ids", $user_id, $total, $payment);
-
-    if (!$stmt->execute()) {
-        throw new Exception("ORDER INSERT FAILED: " . $stmt->error);
-    }
-
-    $order_id = $stmt->insert_id;
-
-  
-    $stmtItem = $conn->prepare("
+    $stmtItem = $pdo->prepare("
         INSERT INTO order_items (order_id, product_id, quantity, price, subtotal)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (:order_id, :product_id, :qty, :price, :subtotal)
     ");
-
-    if (!$stmtItem) {
-        throw new Exception("ITEM PREPARE FAILED: " . $conn->error);
-    }
 
     foreach ($items as $item) {
-
         if (!isset($item['id'], $item['qty'], $item['price'])) {
-            throw new Exception("INVALID ITEM FORMAT");
+            throw new Exception("Invalid item format");
         }
 
         $product_id = (int)$item['id'];
-        $qty = (int)$item['qty'];
-        $price = (float)$item['price'];
-        $subtotal = $price * $qty;
+        $qty        = (int)$item['qty'];
+        $price      = (float)$item['price'];
+        $subtotal   = $price * $qty;
 
-        $stmtItem->bind_param(
-            "iiidd",
-            $order_id,
-            $product_id,
-            $qty,
-            $price,
-            $subtotal
-        );
-
-        if (!$stmtItem->execute()) {
-            throw new Exception("ITEM INSERT FAILED: " . $stmtItem->error);
-        }
+        $stmtItem->execute([
+            ':order_id'   => $order_id,
+            ':product_id' => $product_id,
+            ':qty'        => $qty,
+            ':price'      => $price,
+            ':subtotal'   => $subtotal,
+        ]);
     }
 
-    $conn->commit();
+    $pdo->commit();
 
-    echo json_encode([
-        "success" => true,
-        "order_id" => $order_id
-    ]);
+    echo json_encode(["success" => true, "order_id" => $order_id]);
 
 } catch (Exception $e) {
-
-    $conn->rollback();
-
-    echo json_encode([
-        "success" => false,
-        "error" => $e->getMessage()
-    ]);
+    if (isset($pdo) && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('place_order error: ' . $e->getMessage());
+    echo json_encode(["success" => false, "error" => $e->getMessage()]);
 }

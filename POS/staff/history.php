@@ -1,6 +1,6 @@
 <?php
 require_once '../includes/auth_check.php';
-require_role('admin');
+require_role('staff');
 ?>
 
 <!DOCTYPE html>

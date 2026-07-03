@@ -12,6 +12,11 @@
     </button>
 
     <button class="nav-btn"
+            onclick="window.location.href='inventory.php'">
+        Inventory
+    </button>
+
+    <button class="nav-btn"
             onclick="window.location.href='history.php'">
         history
     </button>
