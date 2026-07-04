@@ -2,11 +2,11 @@
 
   :root {
 
-    --accent: #8B5E3C;
+    --accent: ##ffffff;
     --accent-light: #8B5E3C;
-    --cream: #fdf6ec;
-    --card-bg: #ffffff;
-    --border: #e8ddd0;
+    --cream: #8B5E3C;
+    --card-bg: #ffff;
+    --border: #432818;
     --text-main: #000000;
     --text-muted: #000000;
     --tab-active: #8B5E3C;
@@ -32,7 +32,7 @@
   .page-header {
     padding: 20px 28px 12px;
     background: var(--cream);
-    border-bottom: 1.5px solid var(--border);
+    border-bottom: 2px solid #000000;
     display: flex;
     align-items: center;
     gap: 12px;

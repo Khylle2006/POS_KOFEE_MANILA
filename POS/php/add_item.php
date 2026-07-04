@@ -64,7 +64,7 @@ $categories = $pdo->query('SELECT id, category_name FROM categories ORDER BY cat
     <title>POS System — Add Menu Item</title>
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/sidebar.css">
-    <link rel="stylesheet" href="../css/add-items.css">
+    <link rel="stylesheet" href="../css/add_items.css">
 </head>
 <body>
     <?php include('../includes/admin_sidebar.php'); ?>

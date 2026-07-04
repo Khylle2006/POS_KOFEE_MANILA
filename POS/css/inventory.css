@@ -1,11 +1,10 @@
-
-    :root {
+ :root {
       --accent:     #c47d3e;
-      --accent-lt:  #fdf3ea;
-      --card-bg:    #ffffff;
+      --accent-lt:  #99582a;
+      --card-bg:    #bb9457 ;
       --border:     #ecddc8;
-      --text-main:  #2c1a0e;
-      --text-muted: #9a7e65;
+      --text-main:  #000000;
+      --text-muted: #000000;
       --bg:         #faf5ef;
       --green:      #2e7d32; --green-lt: #e8f5e9;
       --amber:      #e65100; --amber-lt: #fff3e0;
@@ -17,11 +16,31 @@
 
     #page-inventory { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
-    .page-header { padding: 22px 28px 0; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; }
-    .page-header h1 { font-size: 22px; font-weight: 800; }
-    .page-header p  { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .page-header {
+  padding: 22px 28px 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #8B5E3C;
+  padding-bottom: 22px;
+}
+.page-header h1 { font-size: 22px; font-weight: 800; color: #000000; }
+.page-header p  { font-size: 13px; color: #000000; margin-top: 2px; }
 
-    .inv-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 18px 28px 24px; gap: 16px; }
+    .inv-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 28px 24px;
+  gap: 16px;
+  background-image: url('../assets/images/background.jpg');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+  background-attachment: fixed;
+}
 
     /* stat pills */
     .stat-pills { display: flex; gap: 10px; flex-shrink: 0; }

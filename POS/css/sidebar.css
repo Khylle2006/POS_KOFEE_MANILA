@@ -9,6 +9,7 @@
     gap: 4px;
     flex-shrink: 0;
     z-index: 100;
+    border-right: 2px solid #000000;
   }
 
   .sidebar-logo {
@@ -40,7 +41,7 @@
     position: relative;
   }
 
-  .nav-btn:hover { background: rgba(255,255,255,0.07); color: #ccc; }
+  .nav-btn:hover { background: rgba(255,255,255,0.07); color: #432818; }
   .nav-btn.active { background: var(--accent); color: #fff; }
 
   .nav-btn svg { width: 22px; height: 22px; }
@@ -58,8 +59,8 @@
     cursor: pointer;
     background: transparent;
     border: none;
-    color: #7a8099;
+    color: #000000;
     transition: background 0.18s, color 0.18s;
   }
-  .logout-btn:hover { background: rgba(224,82,82,0.18); color: var(--danger); }
+  .logout-btn:hover { background: #000000; color: var(--danger); }
   .logout-btn svg { width: 22px; height: 22px; }

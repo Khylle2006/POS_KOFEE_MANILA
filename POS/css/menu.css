@@ -1,4 +1,4 @@
- #page-menu {
+#page-menu {
     flex-direction: row !important;
   }
 
@@ -69,6 +69,11 @@
     flex: 1;
     overflow-y: auto;
     padding: 16px 20px;
+    background-image: url('../assets/images/background.jpg');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    background-attachment: fixed;
   }
 
   .menu-grid {
