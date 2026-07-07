@@ -35,7 +35,7 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
 <div class="login-card">
 
   <div class="card-header">
-    <div class="brand-icon">🧋</div>
+    <div class="brand-icon"><img src="assets/images/logo.jpg" alt="Kofee POS Logo" width="50" height="50"></div>
     <h1>Kofee POS</h1>
     <p>Sign in to your account</p>
   </div>
@@ -55,7 +55,6 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
       <div class="field">
         <label for="username">Username</label>
         <div class="input-wrap">
-          <span class="ico">👤</span>
           <input type="text" id="username" name="username"
                  placeholder="Enter your username"
                  value="<?= $saved_username ?>"
@@ -66,7 +65,6 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
       <div class="field">
         <label for="password">Password</label>
         <div class="input-wrap">
-          <span class="ico">🔒</span>
           <input type="password" id="password" name="password"
                  placeholder="Enter your password"
                  autocomplete="current-password" required/>

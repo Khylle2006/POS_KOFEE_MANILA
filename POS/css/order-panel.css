@@ -102,8 +102,8 @@
   .checkout-btn {
     width: 100%;
     padding: 14px;
-    background: var(--accent);
-    color: #fff;
+    background: #7a4e2e;
+    color: #ffff;
     border: none;
     border-radius: 14px;
     font-family: 'Poppins', sans-serif;

@@ -1,3 +1,9 @@
+
+<?php
+$user = current_user();
+$is_admin = $user['role'] === 'admin';
+?>
+
 <nav class="sidebar">
     <div class="sidebar-logo">☕</div>
 
@@ -9,12 +15,7 @@
     <button class="nav-btn"
             onclick="window.location.href='menu.php'">
         Order
-    </button>
-
-    <button class="nav-btn"
-            onclick="window.location.href='inventory.php'">
-        Inventory
-    </button>
+    </button>   
 
     <button class="nav-btn"
             onclick="window.location.href='history.php'">

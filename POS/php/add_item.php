@@ -112,11 +112,11 @@ $categories = $pdo->query('SELECT id, category_name FROM categories ORDER BY cat
                     <h2>Pricing</h2>
                     <div class="two-col">
                         <div class="field-group">
-                            <label class="field-label" for="add-price-small">Small Price (₱) <span class="req">*</span></label>
+                            <label class="field-label" for="add-price-small">Regular Size Price (₱) <span class="req">*</span></label>
                             <input class="field-input" type="number" id="add-price-small" placeholder="0" min="1" step="0.01"/>
                         </div>
                         <div class="field-group">
-                            <label class="field-label" for="add-price-large">Large Price (₱) <span class="req">*</span></label>
+                            <label class="field-label" for="add-price-large">Up Size Price (₱) <span class="req">*</span></label>
                             <input class="field-input" type="number" id="add-price-large" placeholder="0" min="1" step="0.01"/>
                         </div>
                 </div>
