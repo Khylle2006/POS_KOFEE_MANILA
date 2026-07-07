@@ -2,11 +2,6 @@
         <div class="sidebar-logo">☕</div>
 
     <button class="nav-btn"
-        onclick="window.location.href='dashboard.php'">
-        Home
-    </button>
-
-    <button class="nav-btn"
             onclick="window.location.href='menu.php'">
         Order
     </button>

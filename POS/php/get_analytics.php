@@ -1,57 +1,73 @@
 <?php
-// get_analytics.php
-// FIX: removed stray "/" that was a PHP syntax error before a comment block.
+require_once '../includes/auth_check.php';
+require_role('admin');
+
 require_once '../includes/db.php';
+
 
 header('Content-Type: application/json');
 
 $pdo = get_db();
 
-$weeklySales = $pdo->query("
-    SELECT COALESCE(SUM(total_amount), 0) AS weekly_sales
+// Weekly sales & orders
+$weekly = $pdo->query("
+    SELECT COALESCE(SUM(total_amount),0) AS weekly_sales,
+           COUNT(*) AS weekly_orders
     FROM orders
     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
 ")->fetch();
 
-$weeklyOrders = $pdo->query("
-    SELECT COUNT(*) AS weekly_orders
-    FROM orders
-    WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-")->fetch();
-
+// Total cups sold this week
 $cups = $pdo->query("
-    SELECT COALESCE(SUM(quantity), 0) AS cups
-    FROM order_items
+    SELECT COALESCE(SUM(oi.quantity),0) AS cups
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id
+    WHERE o.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
 ")->fetch();
 
-// Daily sales for the last 7 days
-$daily = $pdo->query("
+// Daily sales last 7 days — fill missing days with 0
+$daily_raw = $pdo->query("
     SELECT DATE(created_at) AS date, SUM(total_amount) AS total
     FROM orders
-    WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+    WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
     GROUP BY DATE(created_at)
     ORDER BY date ASC
-")->fetchAll();
+")->fetchAll(PDO::FETCH_KEY_PAIR);
+
+$daily = [];
+for ($i = 6; $i >= 0; $i--) {
+    $d = date('Y-m-d', strtotime("-$i days"));
+    $daily[] = [
+        'date'  => date('D', strtotime($d)), // Mon, Tue…
+        'full'  => $d,
+        'total' => (int)($daily_raw[$d] ?? 0),
+    ];
+}
 
 // Sales by category
 $categories = $pdo->query("
-    SELECT
-        c.category_name,
-        SUM(oi.quantity * oi.price) AS total_sales
-    FROM order_items oi
-    JOIN products p  ON p.id = oi.product_id
-    JOIN categories c ON c.id = p.category_id
-    GROUP BY c.category_name
+    SELECT c.category_name AS label,
+           COALESCE(SUM(oi.subtotal),0) AS total_sales
+    FROM categories c
+    LEFT JOIN products p  ON p.category_id = c.id
+    LEFT JOIN order_items oi ON oi.product_id = p.id
+    GROUP BY c.id, c.category_name
     ORDER BY total_sales DESC
 ")->fetchAll();
 
-$bestCategory = $categories[0]['category_name'] ?? 'N/A';
+$cat_total = array_sum(array_column($categories, 'total_sales')) ?: 1;
+$cat_colors = ['#8B5E3C','#C9A96E','#e07b5a','#d4b896','#c47d3e'];
+foreach ($categories as $i => &$c) {
+    $c['pct']   = round(($c['total_sales'] / $cat_total) * 100);
+    $c['color'] = $cat_colors[$i % count($cat_colors)];
+}
+unset($c);
 
-// Top 5 selling items
-$topItems = $pdo->query("
-    SELECT
-        p.name,
-        SUM(oi.quantity) AS total_sold
+$best_category = $categories[0]['label'] ?? 'N/A';
+
+// Top 5 selling products
+$top_items = $pdo->query("
+    SELECT p.name, SUM(oi.quantity) AS total_sold
     FROM order_items oi
     JOIN products p ON p.id = oi.product_id
     GROUP BY p.id, p.name
@@ -60,26 +76,23 @@ $topItems = $pdo->query("
 ")->fetchAll();
 
 // Recent 10 orders
-$recentOrders = $pdo->query("
-    SELECT
-        o.id,
-        o.total_amount,
-        o.created_at,
-        COUNT(oi.id) AS items_count
+$recent = $pdo->query("
+    SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at,
+           GROUP_CONCAT(CONCAT(p.name,' x',oi.quantity) SEPARATOR ', ') AS items
     FROM orders o
-    LEFT JOIN order_items oi ON o.id = oi.order_id
-    GROUP BY o.id, o.total_amount, o.created_at
-    ORDER BY o.created_at DESC
-    LIMIT 10
+    LEFT JOIN order_items oi ON oi.order_id = o.id
+    LEFT JOIN products p ON p.id = oi.product_id
+    GROUP BY o.id
+    ORDER BY o.id DESC LIMIT 10
 ")->fetchAll();
 
 echo json_encode([
-    "weekly_sales"   => $weeklySales['weekly_sales'],
-    "weekly_orders"  => $weeklyOrders['weekly_orders'],
-    "cups"           => $cups['cups'],
-    "best_category"  => $bestCategory,
-    "daily_sales"    => $daily,
-    "categories"     => $categories,
-    "top_items"      => $topItems,
-    "recent_orders"  => $recentOrders,
+    'weekly_sales'  => (int)$weekly['weekly_sales'],
+    'weekly_orders' => (int)$weekly['weekly_orders'],
+    'cups'          => (int)$cups['cups'],
+    'best_category' => $best_category,
+    'daily_sales'   => $daily,
+    'categories'    => $categories,
+    'top_items'     => $top_items,
+    'recent_orders' => $recent,
 ]);

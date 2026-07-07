@@ -151,12 +151,10 @@ function removeItem(index) {
 }
 
 function updateTotals() {
-    const sub = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
-    const tax = sub * 0.12;
+    const total = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
     const el = id => document.getElementById(id);
-    if (el('subtotal')) el('subtotal').textContent = '₱' + sub.toFixed(2);
-    if (el('tax'))      el('tax').textContent      = '₱' + tax.toFixed(2);
-    if (el('total'))    el('total').textContent    = '₱' + (sub + tax).toFixed(2);
+    if (el('subtotal')) el('subtotal').textContent = '₱' + total.toFixed(2);
+    if (el('total'))    el('total').textContent    = '₱' + total.toFixed(2);
 }
 
 function clearOrder() {
@@ -171,10 +169,7 @@ function checkout() {
         return;
     }
 
-    const sub   = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
-    const tax   = sub * 0.12;
-    const total = sub + tax;
-
+    const total = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
     const typeMap = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
 
     const payload = {
@@ -202,7 +197,7 @@ function checkout() {
             alert("Error: " + (res.error ?? "Unknown error"));
             return;
         }
-        showReceipt(res.order_id, sub, tax, total);
+        showReceipt(res.order_id, total);
     })
     .catch(err => {
         console.error("Checkout failed:", err);
@@ -211,7 +206,7 @@ function checkout() {
 }
 
 // ── Receipt Modal ─────────────────────────────
-function showReceipt(orderId, sub, tax, total) {
+function showReceipt(orderId, total) {
     const typeLabels = { dine: "🍽️ Dine In", take: "🛍️ Take Out", delivery: "🚗 Delivery" };
     const now = new Date();
     const timeStr = now.toLocaleString('en-PH', {
@@ -237,8 +232,7 @@ function showReceipt(orderId, sub, tax, total) {
         </div>
     `).join('');
 
-    document.getElementById('r-subtotal').textContent = '₱' + sub.toFixed(2);
-    document.getElementById('r-tax').textContent      = '₱' + tax.toFixed(2);
+    document.getElementById('r-subtotal').textContent = '₱' + total.toFixed(2);
     document.getElementById('r-total').textContent    = '₱' + total.toFixed(2);
 
     document.getElementById('receipt-overlay').classList.add('open');
@@ -262,11 +256,11 @@ function printReceipt() {
     window.print();
 }
 
-  // Move modals to <body> root so no parent stacking context clips them
-  document.addEventListener('DOMContentLoaded', () => {
+// Move modals to <body> root so no parent stacking context clips them
+document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('receipt-overlay');
     if (el) document.body.appendChild(el);
-  });
+});
 
 // ── Exports ───────────────────────────────────
 window.clearOrder      = clearOrder;
@@ -279,4 +273,3 @@ window.switchSize      = switchSize;
 window.switchOrderType = switchOrderType;
 window.changeQty       = changeQty;
 window.removeItem      = removeItem;
-
