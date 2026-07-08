@@ -29,6 +29,8 @@ include("../includes/$sidebar.php");
     .badge-complete { background: #e8f5e9; color: #2e7d32; }
     .badge-pending  { background: #fff3e0; color: #e65100; }
 
+    
+
     /* ── Receipt modal overlay ── */
     .modal-overlay {
       display: none;
@@ -97,6 +99,21 @@ include("../includes/$sidebar.php");
       font-size: 10px; font-weight: 700;
       text-transform: uppercase;
     }
+
+    .status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-cancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
 
     /* items table */
     .r-items-table {
@@ -203,10 +220,20 @@ include("../includes/$sidebar.php");
           <th>Type</th>
           <th>Total</th>
           <th>Receipt</th>
+          <th>Status</th>
+          
+
+          
+          
+
+          
+
+
+
         </tr>
       </thead>
       <tbody id="history-tbody">
-        <tr><td colspan="6" style="text-align:center;padding:40px;color:#9a7e65">Loading…</td></tr>
+        <tr><td colspan="7" style="text-align:center;padding:40px;color:#9a7e65">Loading…</td></tr>
       </tbody>
     </table>
 
@@ -229,7 +256,7 @@ include("../includes/$sidebar.php");
       <div class="receipt-meta">
         <span id="r-type">🍽️ Dine In</span>
         <span id="r-date"></span>
-        <span class="r-status-badge badge-pending" id="r-status">pending</span>
+        <span class="r-status-badge status-pending" id="r-status">Pending</span>
       </div>
 
       <table class="r-items-table">
@@ -260,6 +287,11 @@ include("../includes/$sidebar.php");
 </div>
 
 <script src="../js/history.js"></script>
+
+
+
+
+
 
 </body>
 </html>

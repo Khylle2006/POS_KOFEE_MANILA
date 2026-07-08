@@ -11,6 +11,8 @@ include("../includes/$sidebar.php");
 <head>
   <meta charset="UTF-8">
   <title>POS System</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="menu.js"></script>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="stylesheet" href="../css/sidebar.css">
   <link rel="stylesheet" href="../css/menu.css">

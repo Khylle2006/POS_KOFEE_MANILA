@@ -37,6 +37,14 @@ function renderHistory(orders) {
       <td>
         <button class="receipt-btn" onclick='openReceipt(${JSON.stringify(o)})'>🧾 View</button>
       </td>
+
+      <td>
+  <span class="status-badge status-${(o.status || 'pending').toLowerCase()}">
+    ${(o.status || 'Pending')}
+  </span>
+
+  
+</td>
     </tr>`;
   }).join('');
 }
