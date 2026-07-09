@@ -32,7 +32,7 @@ try {
 
     $stmt = $pdo->prepare("
         INSERT INTO orders (user_id, total_amount, payment_method, status, created_at)
-        VALUES (:uid, :total, :payment, 'completed', NOW())
+        VALUES (:uid, :total, :payment, 'pending', NOW())
     ");
     $stmt->execute([
         ':uid'     => $user_id,

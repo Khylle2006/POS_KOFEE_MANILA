@@ -15,7 +15,12 @@ $is_admin = $user['role'] === 'admin';
     <button class="nav-btn"
             onclick="window.location.href='menu.php'">
         Order
-    </button>   
+    </button>
+    
+    <button class="nav-btn"
+            onclick="window.location.href='pending_orders.php'">
+        Pending Orders
+    </button>
 
     <button class="nav-btn"
             onclick="window.location.href='history.php'">
