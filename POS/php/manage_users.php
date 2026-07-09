@@ -261,9 +261,10 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
             </form>
           </div>
 
-          <table>
+          <div class="table-scroll-wrapper">
+          <table table="table-overflow">
             <thead>
-              <tr>
+              <tr >
                 <th>User</th>
                 <th>Username</th>
                 <th>Role</th>
@@ -342,6 +343,8 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
             <?php endforeach; endif; ?>
             </tbody>
           </table>
+          </div>
+          
         </div>
 
       </div><!-- /main-cols -->

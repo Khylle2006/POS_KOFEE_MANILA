@@ -211,6 +211,7 @@ include("../includes/$sidebar.php");
       </select>
     </div>
 
+    <div class="history-table-wrapper">
     <table class="history-table">
       <thead>
         <tr>
@@ -221,21 +222,15 @@ include("../includes/$sidebar.php");
           <th>Total</th>
           <th>Receipt</th>
           <th>Status</th>
-          
-
-          
-          
-
-          
-
-
-
         </tr>
       </thead>
       <tbody id="history-tbody">
-        <tr><td colspan="7" style="text-align:center;padding:40px;color:#9a7e65">Loading…</td></tr>
+        <tr>
+          <td colspan="7" style="text-align:center;padding:40px;color:#9a7e65">Loading…</td>
+        </tr>
       </tbody>
     </table>
+</div>
 
   </div>
 </div>
