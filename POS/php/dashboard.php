@@ -1,7 +1,7 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
-require_role('admin');
+require_role();
 
 $pdo  = get_db();
 $user = current_user();
@@ -132,7 +132,7 @@ $fname = $user['firstname'] ?: $user['username'];
 </head>
 <body>
 
-<?php include('../includes/admin_sidebar.php'); ?>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-home" class="page active">
   <div class="page-header">

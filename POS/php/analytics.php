@@ -1,7 +1,7 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
-require_role('admin');
+require_role();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -17,7 +17,7 @@ require_role('admin');
 </head>
 <body>
 
-<?php include('../includes/admin_sidebar.php'); ?>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-analytics" class="page active">
   <div class="page-header">

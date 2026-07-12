@@ -2,17 +2,13 @@
 require_once '../includes/auth_check.php';
 require_role(); 
 
-$user = current_user();
-$sidebar = $user['role'] === 'admin' ? 'admin_sidebar' : 'staff_sidebar';
-include("../includes/$sidebar.php");
+include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>POS System</title>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script src="menu.js"></script>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="stylesheet" href="../css/sidebar.css">
   <link rel="stylesheet" href="../css/menu.css">
@@ -71,7 +67,8 @@ include("../includes/$sidebar.php");
       </div>
 
       <div class="order-footer">
-        <div class="order-row"><span>Subtotal</span><span id="subtotal">₱0.00</span></div>
+        <div class="order-row"><span>Subtotal (VAT-ex)</span><span id="subtotal">₱0.00</span></div>
+        <div class="order-row"><span>VAT (12%)</span><span id="tax">₱0.00</span></div>
         <div class="order-row total"><strong>Total</strong><strong id="total">₱0.00</strong></div>
         <button class="checkout-btn" onclick="checkout()">Place Order</button>
         <button class="clear-btn" onclick="clearOrder()">🗑️ Clear Order</button>
@@ -81,7 +78,7 @@ include("../includes/$sidebar.php");
   </div>
 </div>
 
-<!-- ── Receipt Modal ── -->
+<!-- Receipt Modal -->
 <div class="modal-overlay" id="receipt-overlay">
   <div class="receipt-modal">
 
@@ -101,7 +98,8 @@ include("../includes/$sidebar.php");
       <div class="receipt-items" id="r-items"></div>
 
       <div class="receipt-totals">
-        <div class="rt-row"><span>Subtotal</span><span id="r-subtotal">₱0.00</span></div>
+        <div class="rt-row"><span>Subtotal (VAT-ex)</span><span id="r-subtotal">₱0.00</span></div>
+        <div class="rt-row"><span>VAT (12%)</span><span id="r-tax">₱0.00</span></div>
         <div class="rt-row grand"><span>Total</span><span id="r-total">₱0.00</span></div>
       </div>
     </div>
@@ -114,6 +112,8 @@ include("../includes/$sidebar.php");
   </div>
 </div>
 
+<!-- SweetAlert2 first, then menu.js -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="../js/menu.js"></script>
 
 </body>

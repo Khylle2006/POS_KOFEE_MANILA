@@ -1,11 +1,13 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
-require_role('admin');
+require_role();
 
 $pdo = get_db();
 $toast = '';
 $toast_type = 'success';
+
+$allowed_roles = ['hr', 'finance', 'crew', 'manager', 'admin'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -16,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $firstname = trim($_POST['firstname'] ?? '');
         $lastname  = trim($_POST['lastname']  ?? '');
         $email     = trim($_POST['email']     ?? '');
-        $role      = in_array($_POST['role'] ?? '', ['staff','admin']) ? $_POST['role'] : 'staff';
+        $role      = in_array($_POST['role'] ?? '', $allowed_roles) ? $_POST['role'] : 'crew';
         $password  = $_POST['password']         ?? '';
         $confirm   = $_POST['confirm_password'] ?? '';
 
@@ -29,7 +31,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($password !== $confirm) {
             $toast = '⚠️ Passwords do not match.'; $toast_type = 'error';
         } else {
-            // Check username + email uniqueness
             $chk = $pdo->prepare('SELECT id FROM users WHERE username = :u OR email = :e LIMIT 1');
             $chk->execute([':u' => $username, ':e' => $email]);
             if ($chk->fetch()) {
@@ -55,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $firstname = trim($_POST['firstname'] ?? '');
         $lastname  = trim($_POST['lastname']  ?? '');
         $email     = trim($_POST['email']     ?? '');
-        $role      = in_array($_POST['role'] ?? '', ['staff','admin']) ? $_POST['role'] : 'staff';
+        $role      = in_array($_POST['role'] ?? '', $allowed_roles) ? $_POST['role'] : 'crew';
         $pw        = $_POST['password'] ?? '';
 
         if (!$username || !$firstname || !$lastname || !$email) {
@@ -91,9 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-      $q = $toast ? '?toast=' . urlencode($toast) . '&type=' . $toast_type : '';
-      header('Location: ' . basename($_SERVER['PHP_SELF']) . $q);
-      exit;
+    $q = $toast ? '?toast=' . urlencode($toast) . '&type=' . $toast_type : '';
+    header('Location: ' . basename($_SERVER['PHP_SELF']) . $q);
+    exit;
 }
 
 // Flash from redirect
@@ -116,7 +117,7 @@ if ($search) {
     $params[':s3'] = "%$search%";
     $params[':s4'] = "%$search%";
 }
-if (in_array($filter, ['staff','admin'])) {
+if (in_array($filter, $allowed_roles)) {
     $where .= ' AND role = :r'; $params[':r'] = $filter;
 }
 if (in_array($filter, ['active','blocked','on_hold'])) {
@@ -143,11 +144,10 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
   <link rel="stylesheet" href="../css/add-items.css"/>
   <link rel="stylesheet" href="../css/manage_users.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-
 </head>
 <body>
 
-<?php include('../includes/admin_sidebar.php'); ?>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-users" class="page active">
   <div class="page-header">
@@ -187,14 +187,17 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
           <h2>➕ Register New User</h2>
           <form method="POST">
             <input type="hidden" name="action" value="register"/>
-            <input type="hidden" name="role" id="reg-role-val" value="staff"/>
 
             <div class="field-group mg-b">
-              <label class="field-label">Role</label>
-              <div class="role-pills">
-                <div class="role-pill-opt selected" onclick="setRegRole('staff',this)">👤 Staff</div>
-                <div class="role-pill-opt"           onclick="setRegRole('admin',this)">🛡️ Admin</div>
-              </div>
+              <label class="field-label">Role <span style="color:var(--red)">*</span></label>
+              <select class="field-input" name="role" required>
+                <option value="">— Select Role —</option>
+                <option value="hr">HR</option>
+                <option value="finance">Finance</option>
+                <option value="crew">Crew</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+              </select>
             </div>
 
             <div class="field-group mg-b">
@@ -251,7 +254,10 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
               </div>
               <select class="filter-select" name="filter" onchange="this.form.submit()">
                 <option value="all"     <?= $filter==='all'     ?'selected':'' ?>>All</option>
-                <option value="staff"   <?= $filter==='staff'   ?'selected':'' ?>>Staff</option>
+                <option value="hr"      <?= $filter==='hr'      ?'selected':'' ?>>HR</option>
+                <option value="finance" <?= $filter==='finance' ?'selected':'' ?>>Finance</option>
+                <option value="crew"    <?= $filter==='crew'    ?'selected':'' ?>>Crew</option>
+                <option value="manager" <?= $filter==='manager' ?'selected':'' ?>>Manager</option>
                 <option value="admin"   <?= $filter==='admin'   ?'selected':'' ?>>Admin</option>
                 <option value="active"  <?= $filter==='active'  ?'selected':'' ?>>Active</option>
                 <option value="on_hold" <?= $filter==='on_hold' ?'selected':'' ?>>On Hold</option>
@@ -264,7 +270,7 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
           <div class="table-scroll-wrapper">
           <table table="table-overflow">
             <thead>
-              <tr >
+              <tr>
                 <th>User</th>
                 <th>Username</th>
                 <th>Role</th>
@@ -344,7 +350,6 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
             </tbody>
           </table>
           </div>
-          
         </div>
 
       </div><!-- /main-cols -->
@@ -362,14 +367,16 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
     <form method="POST">
       <input type="hidden" name="action"  value="edit"/>
       <input type="hidden" name="user_id" id="edit-id"/>
-      <input type="hidden" name="role"    id="edit-role-val" value="staff"/>
 
       <div class="field-group mg-b">
         <label class="field-label">Role</label>
-        <div class="role-pills">
-          <div class="role-pill-opt" id="edit-pill-staff" onclick="setEditRole('staff',this)">👤 Staff</div>
-          <div class="role-pill-opt" id="edit-pill-admin" onclick="setEditRole('admin',this)">🛡️ Admin</div>
-        </div>
+        <select class="field-input" name="role" id="edit-role" required>
+          <option value="hr">HR</option>
+          <option value="finance">Finance</option>
+          <option value="crew">Crew</option>
+          <option value="manager">Manager</option>
+          <option value="admin">Admin</option>
+        </select>
       </div>
 
       <div class="field-group mg-b">
@@ -417,7 +424,6 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
 <?php endif; ?>
 
 <script src="../js/manage_users.js"></script>
-
 
 </body>
 </html>

@@ -2,9 +2,7 @@
 require_once '../includes/auth_check.php';
 require_role();
 
-$user = current_user();
-$sidebar = $user['role'] === 'admin' ? 'admin_sidebar' : 'staff_sidebar';
-include("../includes/$sidebar.php");
+include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">

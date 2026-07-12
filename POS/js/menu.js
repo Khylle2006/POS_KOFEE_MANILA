@@ -150,10 +150,22 @@ function removeItem(index) {
     renderOrder();
 }
 
+function calcVAT(gross) {
+    // gross = VAT-inclusive price (what customer pays)
+    // subtotal (VAT-exclusive) = gross / 1.12
+    // vat = gross - subtotal
+    const subtotal = gross / 1.12;
+    const vat      = gross - subtotal;
+    return { subtotal, vat, total: gross };
+}
+
 function updateTotals() {
-    const total = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
+    const gross = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
+    const { subtotal, vat, total } = calcVAT(gross);
+
     const el = id => document.getElementById(id);
-    if (el('subtotal')) el('subtotal').textContent = '₱' + total.toFixed(2);
+    if (el('subtotal')) el('subtotal').textContent = '₱' + subtotal.toFixed(2);
+    if (el('tax'))      el('tax').textContent      = '₱' + vat.toFixed(2);
     if (el('total'))    el('total').textContent    = '₱' + total.toFixed(2);
 }
 
@@ -163,85 +175,87 @@ function clearOrder() {
 }
 
 // ── Checkout ──────────────────────────────────
-//ALERTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 function checkout() {
     if (orderItems.length === 0) {
         Swal.fire({
             title: "No Items!",
             text: "Please add items first.",
             icon: "warning",
-            confirmButtonText: "OK"
+            confirmButtonText: "OK",
+            customClass: {
+                popup: 'swal-cafe-popup',
+                title: 'swal-cafe-title',
+                htmlContainer: 'swal-cafe-text',
+                confirmButton: 'swal-cafe-confirm',
+                icon: 'swal-cafe-icon'
+            },
+            buttonsStyling: false
         });
         return;
     }
 
-    const total = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
-    const typeMap = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
+    const gross    = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
+    const { subtotal, vat, total } = calcVAT(gross);
+    const typeMap  = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
+    const snapshot = [...orderItems];
 
     const payload = {
         total,
         payment_method: typeMap[orderType] || "Dine In",
         items: orderItems.map(o => ({
-            id: o.id,
-            qty: o.qty,
+            id:    o.id,
+            qty:   o.qty,
             price: o.price,
-            size: o.size
+            size:  o.size
         }))
     };
 
     fetch('checkout.php', {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body:    JSON.stringify(payload)
     })
     .then(r => r.json())
     .then(res => {
-    if (!res.success) {
-        Swal.fire({
-            title: "Error!",
-            text: res.error ?? "Unknown error",
-            icon: "error"
-        });
-        return;
-    }
+        if (!res.success) {
+            Swal.fire({
+                title: "Error!",
+                text: res.error ?? "Unknown error",
+                icon: "error",
+                customClass: {
+                    popup: 'swal-cafe-popup',
+                    title: 'swal-cafe-title',
+                    htmlContainer: 'swal-cafe-text',
+                    confirmButton: 'swal-cafe-confirm',
+                    icon: 'swal-cafe-icon-error'
+                },
+                buttonsStyling: false
+            });
+            return;
+        }
 
-
-  
-    const completedOrder = [...orderItems];
-
-    orderItems = [];
-    renderOrder();
-
-
-    Swal.fire({
-        title: "Order Complete!",
-        text: "Order #" + res.order_id + " has been saved.",
-        icon: "success",
-        confirmButtonText: "X Close"
-    }).then(() => {
-        showReceipt(res.order_id, total, completedOrder);
-    });
-
-        
+        showReceipt(res.order_id, subtotal, vat, total, snapshot);
     })
     .catch(err => {
         Swal.fire({
             title: "Request Failed!",
             text: err.message,
-            icon: "error"
+            icon: "error",
+            customClass: {
+                popup: 'swal-cafe-popup',
+                title: 'swal-cafe-title',
+                htmlContainer: 'swal-cafe-text',
+                confirmButton: 'swal-cafe-confirm',
+                icon: 'swal-cafe-icon-error'
+            },
+            buttonsStyling: false
         });
     });
 }
+
 // ── Receipt Modal ─────────────────────────────
-function showReceipt(orderId, total) {
-
-    const receiptItems = [...orderItems];
-
-    const typeLabels = {
-        dine: "🍽️ Dine In",
-        take: "🛍️ Take Out",
-        delivery: "🚗 Delivery"
-    };
+function showReceipt(orderId, subtotal, vat, total, items) {
+    const typeLabels = { dine: "🍽️ Dine In", take: "🛍️ Take Out", delivery: "🚗 Delivery" };
 
     document.getElementById('r-order-num').textContent =
         '#' + String(orderId).padStart(4, '0');
@@ -249,34 +263,33 @@ function showReceipt(orderId, total) {
     document.getElementById('r-type').textContent =
         typeLabels[orderType] || '🍽️ Dine In';
 
+    const now = new Date();
+    const timeStr = now.toLocaleString('en-PH', {
+        month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true
+    });
+    const dateEl = document.getElementById('r-time');
+    if (dateEl) dateEl.textContent = timeStr;
 
-    document.getElementById('r-items').innerHTML = receiptItems.map(o => `
-        <tr>
-            <td>🧋 ${o.name} (${o.size})</td>
-            <td style="text-align:center">×${o.qty}</td>
-            <td style="text-align:right">
-                ₱${(o.price * o.qty).toFixed(2)}
-            </td>
-        </tr>
+    document.getElementById('r-items').innerHTML = items.map(o => `
+        <div class="receipt-item">
+            <div class="ri-icon">${o.icon}</div>
+            <div class="ri-info">
+                <div class="ri-name">${o.name}</div>
+                <div class="ri-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
+            </div>
+            <span class="ri-qty">×${o.qty}</span>
+            <div class="ri-price">₱${(o.price * o.qty).toFixed(2)}</div>
+        </div>
     `).join('');
 
+    document.getElementById('r-subtotal').textContent = '₱' + subtotal.toFixed(2);
+    if (document.getElementById('r-tax'))
+        document.getElementById('r-tax').textContent  = '₱' + vat.toFixed(2);
+    document.getElementById('r-total').textContent    = '₱' + total.toFixed(2);
 
-    document.getElementById('r-subtotal').textContent =
-        '₱' + total.toFixed(2);
+    document.getElementById('receipt-overlay').classList.add('open');
 
-    document.getElementById('r-total').textContent =
-        '₱' + total.toFixed(2);
-
-
-    updateReceiptStatus("Pending");
-
-
-    
-    document.getElementById('receipt-overlay')
-        .classList.add('open');
-
-
-   
     orderItems = [];
     renderOrder();
 }
@@ -285,33 +298,18 @@ function closeReceipt() {
     document.getElementById('receipt-overlay').classList.remove('open');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('receipt-overlay')?.addEventListener('click', function(e) {
-        if (e.target === this) closeReceipt();
-    });
-});
-
 function printReceipt() {
     window.print();
 }
 
-
 document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('receipt-overlay')?.addEventListener('click', function(e) {
+        if (e.target === this) closeReceipt();
+    });
+
     const el = document.getElementById('receipt-overlay');
     if (el) document.body.appendChild(el);
 });
-
-function updateReceiptStatus(status){
-
-    const badge = document.getElementById("r-status");
-
-    badge.textContent = status;
-
-    badge.className = 
-        "r-status-badge status-" + status.toLowerCase();
-
-}
-
 
 // ── Exports ───────────────────────────────────
 window.clearOrder      = clearOrder;

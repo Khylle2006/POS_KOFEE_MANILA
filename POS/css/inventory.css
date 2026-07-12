@@ -242,6 +242,19 @@
     .btn-msave   { flex:2; padding:11px; background:var(--accent); color:#fff; border:none; border-radius:11px; font-family:'Poppins',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
     .btn-msave:hover { background: #7a4e2e; }
 
+        .btn-edit-ing {
+      flex: 1; padding: 11px; border: 1.5px solid var(--border); border-radius: 12px;
+      background: none; font-family: 'Poppins', sans-serif; font-size: 13px;
+      font-weight: 600; color: var(--text-muted); cursor: pointer; transition: all .15s;
+    }
+    .btn-edit-ing:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-del-ing {
+      padding: 11px 16px; border: 1.5px solid #ffcdd2; border-radius: 12px;
+      background: var(--red-lt); font-family: 'Poppins', sans-serif; font-size: 13px;
+      font-weight: 600; color: var(--red); cursor: pointer; transition: all .15s;
+    }
+    .btn-del-ing:hover { background: var(--red); color: #fff; }
+
     /* toast */
     .toast { position:fixed; bottom:24px; right:24px; z-index:99998; padding:13px 20px; border-radius:12px; font-size:13px; font-weight:600; box-shadow:0 4px 20px rgba(0,0,0,.14); transition:opacity .4s; max-width:320px; }
     .toast-success { background:var(--green-lt); color:var(--green); border:1.5px solid #c8e6c9; }

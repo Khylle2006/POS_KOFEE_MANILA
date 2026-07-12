@@ -4,8 +4,8 @@ require_once '../includes/auth_check.php';
 require_role();
 
 $user = current_user();
-$sidebar = $user['role'] === 'admin' ? 'admin_sidebar' : 'staff_sidebar';
-include("../includes/$sidebar.php");
+
+include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -15,164 +15,8 @@ include("../includes/$sidebar.php");
   <title>Pending Orders — Kofee POS</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
+  <link rel="stylesheet" href="../css/pending_orders.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Poppins', sans-serif; background: #fdf6ee; color: #2c1a0e; }
-
-    #page-pending { padding: 32px 32px 32px 280px; min-height: 100vh; }
-
-    .page-header { margin-bottom: 24px; }
-    .page-header h1 { font-size: 24px; font-weight: 800; color: #2c1a0e; }
-    .page-header p  { font-size: 13px; color: #9a7e65; margin-top: 3px; }
-
-    /* ── Filter bar ── */
-    .filter-bar {
-      display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
-    }
-    .filter-btn {
-      padding: 7px 18px; border-radius: 20px; border: 1.5px solid #ecddc8;
-      background: #fff; font-family: 'Poppins', sans-serif;
-      font-size: 12px; font-weight: 600; color: #9a7e65;
-      cursor: pointer; transition: all .15s;
-    }
-    .filter-btn.active, .filter-btn:hover {
-      background: #c47d3e; border-color: #c47d3e; color: #fff;
-    }
-    .refresh-btn {
-      margin-left: auto; padding: 7px 18px; border-radius: 20px;
-      border: 1.5px solid #ecddc8; background: #fff;
-      font-family: 'Poppins', sans-serif; font-size: 12px;
-      font-weight: 600; color: #9a7e65; cursor: pointer; transition: all .15s;
-    }
-    .refresh-btn:hover { border-color: #c47d3e; color: #c47d3e; }
-
-    /* ── Orders grid ── */
-    .orders-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-      gap: 16px;
-    }
-
-    /* ── Order card ── */
-    .order-card {
-      background: #fff;
-      border-radius: 16px;
-      border: 1.5px solid #ecddc8;
-      overflow: hidden;
-      box-shadow: 0 2px 12px rgba(196,125,62,.07);
-      transition: box-shadow .2s;
-    }
-    .order-card:hover { box-shadow: 0 6px 24px rgba(196,125,62,.13); }
-
-    .card-head {
-      padding: 14px 16px 10px;
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid #f5ede0;
-    }
-    .card-order-num { font-size: 15px; font-weight: 800; color: #2c1a0e; }
-    .card-time      { font-size: 11px; color: #9a7e65; }
-
-    .status-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 3px 10px; border-radius: 20px;
-      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-    }
-    .status-pending   { background: #fff3cd; color: #856404; }
-    .status-completed { background: #d4edda; color: #155724; }
-    .status-cancelled { background: #f8d7da; color: #721c24; }
-
-    .card-type {
-      font-size: 11px; color: #9a7e65; padding: 8px 16px 0;
-      font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
-    }
-
-    .card-items { padding: 8px 16px 12px; }
-    .card-item-row {
-      display: flex; justify-content: space-between;
-      font-size: 13px; padding: 4px 0;
-      border-bottom: 1px dashed #f5ede0;
-      color: #4a3020;
-    }
-    .card-item-row:last-child { border: none; }
-    .card-item-row span:last-child { color: #c47d3e; font-weight: 700; }
-
-    .card-total {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 16px; border-top: 1.5px solid #ecddc8;
-      font-size: 14px; font-weight: 700; color: #2c1a0e;
-    }
-    .card-total span:last-child { color: #c47d3e; font-size: 16px; }
-
-    .card-actions {
-      padding: 10px 16px 14px;
-      display: flex; gap: 8px;
-    }
-    .action-btn {
-      flex: 1; padding: 8px 6px; border-radius: 10px;
-      border: 1.5px solid #ecddc8; background: #fff;
-      font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 700;
-      cursor: pointer; transition: all .15s; text-transform: uppercase; letter-spacing: .04em;
-    }
-    .action-btn:disabled { opacity: .35; cursor: not-allowed; }
-    .btn-complete { border-color: #c3e6cb; color: #155724; }
-    .btn-complete:not(:disabled):hover { background: #155724; color: #fff; border-color: #155724; }
-    .btn-pending  { border-color: #ffeeba; color: #856404; }
-    .btn-pending:not(:disabled):hover  { background: #856404; color: #fff; border-color: #856404; }
-    .btn-cancel   { border-color: #f5c6cb; color: #721c24; }
-    .btn-cancel:not(:disabled):hover   { background: #721c24; color: #fff; border-color: #721c24; }
-
-    /* ── Empty state ── */
-    .empty-state {
-      grid-column: 1/-1; text-align: center;
-      padding: 64px 20px; color: #9a7e65;
-    }
-    .empty-icon { font-size: 48px; margin-bottom: 12px; }
-    .empty-state p { font-size: 15px; font-weight: 600; }
-    .empty-state small { font-size: 12px; }
-
-    /* ── Confirm Modal ── */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(44,26,14,.45); z-index: 99999;
-      backdrop-filter: blur(3px);
-      align-items: center; justify-content: center;
-    }
-    .modal-overlay.open { display: flex; }
-
-    .confirm-card {
-      background: #fff; border-radius: 20px; padding: 32px 28px;
-      width: 100%; max-width: 360px; margin: 20px;
-      box-shadow: 0 24px 64px rgba(44,26,14,.22);
-      animation: popIn .2s cubic-bezier(.34,1.56,.64,1);
-      text-align: center;
-    }
-    @keyframes popIn {
-      from { opacity:0; transform:scale(.9); }
-      to   { opacity:1; transform:scale(1); }
-    }
-    .confirm-icon { font-size: 42px; margin-bottom: 12px; }
-    .confirm-card h3 { font-size: 18px; font-weight: 800; color: #2c1a0e; margin-bottom: 6px; }
-    .confirm-card p  { font-size: 13px; color: #9a7e65; margin-bottom: 24px; line-height: 1.5; }
-    .confirm-actions { display: flex; gap: 10px; }
-    .btn-conf-cancel {
-      flex: 1; padding: 11px; border-radius: 12px;
-      border: 1.5px solid #ecddc8; background: #fff;
-      font-family: 'Poppins', sans-serif; font-size: 13px;
-      font-weight: 600; color: #9a7e65; cursor: pointer;
-    }
-    .btn-conf-ok {
-      flex: 2; padding: 11px; border-radius: 12px; border: none;
-      font-family: 'Poppins', sans-serif; font-size: 13px;
-      font-weight: 700; color: #fff; cursor: pointer;
-    }
-    .btn-conf-ok.ok-complete  { background: #2e7d32; }
-    .btn-conf-ok.ok-pending   { background: #856404; }
-    .btn-conf-ok.ok-cancel    { background: #c62828; }
-
-    /* loading spinner */
-    .loading-wrap { grid-column:1/-1; text-align:center; padding:60px; color:#9a7e65; font-size:14px; }
-  </style>
 </head>
 <body>
 
@@ -310,7 +154,7 @@ function statusLabel(s) {
 const configs = {
   pending:   { icon:'⏳', title:'Mark as Pending',   msg:'Move this order back to pending?',        cls:'ok-pending',  label:'Mark Pending'   },
   completed: { icon:'✅', title:'Complete Order',     msg:'Mark this order as completed?',           cls:'ok-complete', label:'Complete'        },
-  cancelled: { icon:'❌', title:'Cancel Order',       msg:'Are you sure you want to cancel this order? This cannot be undone.', cls:'ok-cancel', label:'Yes, Cancel' },
+  cancelled: { icon:'❌', title:'Cancel Order',       msg:'Are you sure you want to cancel this order? This can be undone.', cls:'ok-cancel', label:'Yes, Cancel' },
 };
 
 function askConfirm(orderId, status) {

@@ -1,4 +1,4 @@
-  function setRegRole(role, el) {
+function setRegRole(role, el) {
     document.getElementById('reg-role-val').value = role;
     document.querySelectorAll('#page-users .form-card .role-pills .role-pill-opt')
       .forEach(p => p.classList.remove('selected'));

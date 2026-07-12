@@ -9,4 +9,4 @@ session_destroy();
 // Redirect to login
 header('Location: ../login.php');
 exit;
-?>
+?>s
