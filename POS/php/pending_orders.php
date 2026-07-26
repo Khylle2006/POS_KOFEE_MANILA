@@ -1,7 +1,9 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
+require_once '../includes/permissions.php';
 require_role();
+require_permission('orders.pending');
 
 $user = current_user();
 
@@ -30,10 +32,10 @@ include("../includes/sidebar.php");
 
   <div class="filter-bar">
     <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
-    <button class="filter-btn" onclick="setFilter('pending', this)">⏳ Pending</button>
-    <button class="filter-btn" onclick="setFilter('completed', this)">✅ Completed</button>
-    <button class="filter-btn" onclick="setFilter('cancelled', this)">❌ Cancelled</button>
-    <button class="refresh-btn" onclick="loadOrders()">🔄 Refresh</button>
+    <button class="filter-btn" onclick="setFilter('pending', this)">Pending</button>
+    <button class="filter-btn" onclick="setFilter('completed', this)">Completed</button>
+    <button class="filter-btn" onclick="setFilter('cancelled', this)">Cancelled</button>
+    <button class="refresh-btn" onclick="loadOrders()">Refresh</button>
   </div>
 
   <div class="orders-grid" id="orders-grid">
@@ -132,13 +134,13 @@ function renderOrders() {
       <div class="card-actions">
         <button class="action-btn btn-pending"
           ${s === 'pending' ? 'disabled' : ''}
-          onclick="askConfirm(${o.id}, 'pending')">⏳ Pending</button>
+          onclick="askConfirm(${o.id}, 'pending')">Pending</button>
         <button class="action-btn btn-complete"
           ${s === 'completed' ? 'disabled' : ''}
-          onclick="askConfirm(${o.id}, 'completed')">✅ Done</button>
+          onclick="askConfirm(${o.id}, 'completed')">Done</button>
         <button class="action-btn btn-cancel"
           ${s === 'cancelled' ? 'disabled' : ''}
-          onclick="askConfirm(${o.id}, 'cancelled')">❌ Cancel</button>
+          onclick="askConfirm(${o.id}, 'cancelled')">Cancel</button>
       </div>
     </div>`;
   }).join('');

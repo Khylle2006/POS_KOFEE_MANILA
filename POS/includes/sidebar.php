@@ -14,6 +14,11 @@ $access = [
     'menu_manager' => in_array($role, ['admin', 'manager']),
     'inventory'    => in_array($role, ['admin', 'manager', 'crew']),
     'users'        => in_array($role, ['admin', 'hr']),
+    // ── HR module ──
+    'hr_employees' => in_array($role, ['admin', 'hr']),
+    'hr_attendance'=> in_array($role, ['admin', 'hr']),
+    'hr_leave'     => in_array($role, ['admin', 'hr']),
+    'hr_requests'  => in_array($role, ['admin', 'hr']),
 ];
 ?>
 
@@ -58,7 +63,7 @@ $access = [
     <?php if ($access['menu_manager']): ?>
     <button class="nav-btn <?= $current === 'add_item.php' ? 'active' : '' ?>"
         onclick="window.location.href='add_item.php'">
-        Add Item
+        Manage Items
     </button>
     <?php endif; ?>
 
@@ -69,10 +74,42 @@ $access = [
     </button>
     <?php endif; ?>
 
+    <?php if ($access['hr_employees'] || $access['hr_attendance'] || $access['hr_leave'] || $access['hr_requests'] || $access['users']): ?>
+    <div class="sidebar-divider" title="Human Resources"></div>
+    <?php endif; ?>
+
+    <?php if ($access['hr_requests']): ?>
+    <button class="nav-btn <?= $current === 'hr_requests.php' ? 'active' : '' ?>"
+        onclick="window.location.href='hr_requests.php'">
+        Requests
+    </button>
+    <?php endif; ?>
+
     <?php if ($access['users']): ?>
     <button class="nav-btn <?= $current === 'manage_users.php' ? 'active' : '' ?>"
         onclick="window.location.href='manage_users.php'">
-        Manage Users
+        Accounts
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['hr_employees']): ?>
+    <button class="nav-btn <?= $current === 'employees.php' ? 'active' : '' ?>"
+        onclick="window.location.href='employees.php'">
+        Employees
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['hr_attendance']): ?>
+    <button class="nav-btn <?= $current === 'attendance.php' ? 'active' : '' ?>"
+        onclick="window.location.href='attendance.php'">
+        Attendance
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['hr_leave']): ?>
+    <button class="nav-btn <?= $current === 'leave_requests.php' ? 'active' : '' ?>"
+        onclick="window.location.href='leave_requests.php'">
+        Leave
     </button>
     <?php endif; ?>
 

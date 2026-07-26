@@ -24,14 +24,8 @@ function require_role(?string $role = null, ?string $redirect_to = null): void {
     
     // Check if user has the required role
     if ($role !== null && ($_SESSION['role'] ?? '') !== $role) {
-        // Redirect to appropriate dashboard based on current role
-        $current_role = $_SESSION['role'] ?? 'staff';
-        
-        if (in_array($current_role, ['admin', 'manager'])) {
-            header('Location: ../php/dashboard.php');
-        } else {
-            header('Location: ../php/menu.php');
-        }
+        // Redirect to wherever this user's actual permissions land them
+        header('Location: ' . get_dashboard_url());
         exit;
     }
 }
@@ -84,15 +78,38 @@ function is_logged_in(): bool {
 }
 
 /**
- * Get dashboard URL based on user role
- * 
+ * Get the best landing page for the CURRENT logged-in user, based on
+ * their actual permissions — not a hardcoded role name. This means a
+ * newly created role (or a role whose permissions you just edited in
+ * Manage Permissions) always lands somewhere it can actually see,
+ * instead of falling through to menu.php and getting bounced.
+ *
+ * Order below is a priority list of "most useful first" — reorder it
+ * if you want a different default landing page.
+ *
  * @return string Dashboard URL
  */
 function get_dashboard_url(): string {
-    if (in_array($_SESSION['role'] ?? '', ['admin', 'manager'])) {
-        return '../php/dashboard.php';
+    require_once __DIR__ . '/permissions.php';
+
+    $candidates = [
+        'dashboard.view' => '../php/dashboard.php',
+        'orders.new'     => '../php/menu.php',
+        'orders.pending' => '../php/pending_orders.php',
+        'inventory.view' => '../php/inventory.php',
+        'orders.history' => '../php/history.php',
+        'analytics.view' => '../php/analytics.php',
+        'users.manage'   => '../php/manage_users.php',
+        'menu.manage'    => '../php/add_item.php',
+    ];
+
+    foreach ($candidates as $perm => $url) {
+        if (has_permission($perm)) return $url;
     }
-    return '../php/menu.php';
+
+    // No permissions granted at all — send to a page that explains that,
+    // instead of menu.php, which they'd otherwise be able to fully use unchecked.
+    return '../php/no_access.php';
 }
 
 /**

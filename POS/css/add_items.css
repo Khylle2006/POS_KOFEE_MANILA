@@ -34,21 +34,7 @@ body {
   overflow: hidden;
 }
 
-.page-header {
-  padding: 22px 28px 0;
-  flex-shrink: 0;
-}
 
-.page-header h1 {
-  font-size: 22px;
-  font-weight: 800;
-}
-
-.page-header p {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
 
 /* ── Keep the background image from your original design ── */
 .page-body {

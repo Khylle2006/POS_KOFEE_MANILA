@@ -1,6 +1,8 @@
 <?php
 require_once '../includes/auth_check.php';
-require_role(); 
+require_once '../includes/permissions.php';
+require_role();
+require_permission('orders.new');
 
 include("../includes/sidebar.php");
 ?>
@@ -109,6 +111,40 @@ include("../includes/sidebar.php");
       <button class="btn-new-order" onclick="closeReceipt()">✅ New Order</button>
     </div>
 
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirm-overlay">
+  <div class="receipt-modal" style="max-width:360px">
+    <div class="receipt-head" style="padding:24px 24px 18px">
+      <div class="receipt-check" style="background:#8B5E3C">❓</div>
+      <h2>Confirm Order?</h2>
+    </div>
+    <div class="receipt-body" style="padding:18px 24px">
+      <div id="confirm-items-list" style="border-top:1px solid #ecddc8;border-bottom:1px solid #ecddc8;padding:8px 0;margin-bottom:12px;max-height:200px;overflow-y:auto"></div>
+      <div style="display:flex;justify-content:space-between;font-weight:800;font-size:16px;color:#2c1a0e">
+        <span>Total</span><span id="confirm-total" style="color:#c47d3e">₱0.00</span>
+      </div>
+      <div style="font-size:12px;color:#9a7e65;margin-top:6px" id="confirm-type"></div>
+    </div>
+    <div class="receipt-footer">
+      <button class="btn-print" onclick="closeConfirmOrder()">Cancel</button>
+      <button class="btn-new-order" id="confirm-order-btn" onclick="submitConfirmedOrder()">✅ Confirm & Place Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- No Items Modal -->
+<div class="modal-overlay" id="noitems-overlay">
+  <div class="receipt-modal" style="max-width:340px">
+    <div class="receipt-head" style="padding:24px 24px 18px">
+      <div class="receipt-check" style="background:#d4a056">⚠️</div>
+      <h2>No Items!</h2>
+      <p>Please add items first.</p>
+    </div>
+    <div class="receipt-footer" style="padding:0 24px 22px">
+      <button class="btn-new-order" style="flex:1" onclick="closeNoItems()">OK</button>
+    </div>
   </div>
 </div>
 

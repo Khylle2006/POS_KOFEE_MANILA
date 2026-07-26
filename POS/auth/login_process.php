@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────
 
 require_once '../includes/db.php';
+require_once '../includes/auth_check.php'; // for get_dashboard_url()
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
@@ -85,16 +86,11 @@ try {
     error_log('last_login update failed: ' . $e->getMessage());
 }
 
-// ── Redirect based on role from DB ───────────
-$destination = ($user['role'] === 'admin')
-    ? '../php/dashboard.php'
-    : '../php/menu.php';
 
-header('Location: ' . $destination);
+header('Location: ' . get_dashboard_url());
 exit;
-
 function redirect_error(string $msg): never {
     $_SESSION['login_error'] = $msg;
-    header('Location: login.php');
+    header('Location: ../login.php');
     exit;
 }

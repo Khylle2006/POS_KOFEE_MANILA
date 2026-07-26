@@ -1,16 +1,38 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
+require_once '../includes/permissions.php';
 require_role();
+require_permission('users.manage');
 
 $pdo = get_db();
 $toast = '';
 $toast_type = 'success';
 
-$allowed_roles = ['hr', 'finance', 'crew', 'manager', 'admin'];
+// ── Roles now come from the database, not a hardcoded list ───
+// Adding/removing a role in Manage Permissions shows up here automatically.
+$all_roles     = get_all_roles();                       // [{role_key, label, is_system}, ...]
+$allowed_roles = array_column($all_roles, 'role_key');
+
+// Fixed palette cycled by role position, used for avatars AND role badges
+// (CSS only had hand-picked colors for a few roles, so new/renamed roles
+// would otherwise render with no color at all).
+$role_colors = [];
+$palette     = ['#c47d3e','#2e7d32','#1565c0','#7b1fa2','#c62828','#00695c','#ad6800','#5d4037'];
+foreach ($all_roles as $i => $r) {
+    $role_colors[$r['role_key']] = $palette[$i % count($palette)];
+}
+$role_labels = array_column($all_roles, 'label', 'role_key');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    if (in_array($action, ['register', 'edit'], true)) {
+        require_permission('users.edit');
+    }
+    if ($action === 'set_status') {
+        require_permission('users.status');
+    }
 
     // ── Register ──────────────────────────────
     if ($action === 'register') {
@@ -192,11 +214,9 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
               <label class="field-label">Role <span style="color:var(--red)">*</span></label>
               <select class="field-input" name="role" required>
                 <option value="">— Select Role —</option>
-                <option value="hr">HR</option>
-                <option value="finance">Finance</option>
-                <option value="crew">Crew</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
+                <?php foreach ($all_roles as $r): ?>
+                  <option value="<?= htmlspecialchars($r['role_key']) ?>"><?= htmlspecialchars($r['label']) ?></option>
+                <?php endforeach; ?>
               </select>
             </div>
 
@@ -253,12 +273,12 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
                        value="<?= htmlspecialchars($search) ?>"/>
               </div>
               <select class="filter-select" name="filter" onchange="this.form.submit()">
-                <option value="all"     <?= $filter==='all'     ?'selected':'' ?>>All</option>
-                <option value="hr"      <?= $filter==='hr'      ?'selected':'' ?>>HR</option>
-                <option value="finance" <?= $filter==='finance' ?'selected':'' ?>>Finance</option>
-                <option value="crew"    <?= $filter==='crew'    ?'selected':'' ?>>Crew</option>
-                <option value="manager" <?= $filter==='manager' ?'selected':'' ?>>Manager</option>
-                <option value="admin"   <?= $filter==='admin'   ?'selected':'' ?>>Admin</option>
+                <option value="all" <?= $filter==='all' ?'selected':'' ?>>All</option>
+                <?php foreach ($all_roles as $r): ?>
+                  <option value="<?= htmlspecialchars($r['role_key']) ?>" <?= $filter===$r['role_key'] ?'selected':'' ?>>
+                    <?= htmlspecialchars($r['label']) ?>
+                  </option>
+                <?php endforeach; ?>
                 <option value="active"  <?= $filter==='active'  ?'selected':'' ?>>Active</option>
                 <option value="on_hold" <?= $filter==='on_hold' ?'selected':'' ?>>On Hold</option>
                 <option value="blocked" <?= $filter==='blocked' ?'selected':'' ?>>Blocked</option>
@@ -283,20 +303,25 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
             <?php if (empty($users)): ?>
               <tr class="empty-row"><td colspan="6">🫙 No users found.</td></tr>
             <?php else:
-              $colors = ['#c47d3e','#2e7d32','#1565c0','#7b1fa2','#c62828','#00695c'];
+              $avatar_colors = ['#c47d3e','#2e7d32','#1565c0','#7b1fa2','#c62828','#00695c'];
               foreach ($users as $i => $u):
                 $fullname = htmlspecialchars($u['firstname'] . ' ' . $u['lastname']);
                 $initials = strtoupper(substr($u['firstname'], 0, 1) . substr($u['lastname'], 0, 1));
-                $color    = $colors[$i % count($colors)];
+                $avColor  = $avatar_colors[$i % count($avatar_colors)];
                 $status   = $u['status'] ?? 'active';
                 $slabel   = ['active'=>'Active','blocked'=>'Blocked','on_hold'=>'On Hold'][$status] ?? $status;
                 $is_self  = ((int)$u['id'] === (int)$_SESSION['user_id']);
                 $lastlogin = $u['lastlogin'] ?? $u['last_login'] ?? null;
+
+                // Role label + color: falls back gracefully if a user's role
+                // was since deleted (shouldn't happen — delete_role() blocks that — but safe either way)
+                $roleColor = $role_colors[$u['role']] ?? '#757575';
+                $roleLabel = $role_labels[$u['role']] ?? ucfirst($u['role']);
             ?>
               <tr>
                 <td>
                   <div class="user-cell">
-                    <div class="avatar" style="background:<?= $color ?>"><?= $initials ?></div>
+                    <div class="avatar" style="background:<?= $avColor ?>"><?= $initials ?></div>
                     <div>
                       <div class="user-name">
                         <?= $fullname ?>
@@ -307,7 +332,11 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
                   </div>
                 </td>
                 <td style="color:var(--text-muted);font-size:12px">@<?= htmlspecialchars($u['username']) ?></td>
-                <td><span class="badge badge-<?= $u['role'] ?>"><?= ucfirst($u['role']) ?></span></td>
+                <td>
+                  <span class="badge" style="background:<?= $roleColor ?>22;color:<?= $roleColor ?>">
+                    <?= htmlspecialchars($roleLabel) ?>
+                  </span>
+                </td>
                 <td><span class="badge badge-<?= $status ?>"><?= $slabel ?></span></td>
                 <td style="color:var(--text-muted);font-size:12px">
                   <?= $lastlogin ? date('M d, Y g:i A', strtotime($lastlogin)) : '—' ?>
@@ -371,11 +400,9 @@ $on_hold = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'on_hol
       <div class="field-group mg-b">
         <label class="field-label">Role</label>
         <select class="field-input" name="role" id="edit-role" required>
-          <option value="hr">HR</option>
-          <option value="finance">Finance</option>
-          <option value="crew">Crew</option>
-          <option value="manager">Manager</option>
-          <option value="admin">Admin</option>
+          <?php foreach ($all_roles as $r): ?>
+            <option value="<?= htmlspecialchars($r['role_key']) ?>"><?= htmlspecialchars($r['label']) ?></option>
+          <?php endforeach; ?>
         </select>
       </div>
 

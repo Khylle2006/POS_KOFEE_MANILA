@@ -2,7 +2,7 @@
 
   :root {
 
-    --accent: ##ffffff;
+    
     --accent-light: #8B5E3C;
     --cream: #8B5E3C;
     --card-bg: #ffff;
@@ -31,7 +31,7 @@
   /* ── PAGE HEADER ── */
   .page-header {
     padding: 20px 28px 12px;
-    background: var(--cream);
+    background: #8B5E3C;
     border-bottom: 2px solid #000000;
     display: flex;
     align-items: center;

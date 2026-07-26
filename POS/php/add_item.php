@@ -1,9 +1,9 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
+require_once '../includes/permissions.php';
 require_role();
-
-include("../includes/sidebar.php");
+require_permission('menu.manage');
 
 $pdo = get_db();
 
@@ -11,6 +11,18 @@ $pdo = get_db();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'add';
     header('Content-Type: application/json');
+
+    // Writes/toggling need menu.edit; deletion needs the stronger menu.delete.
+    if (in_array($action, ['add', 'edit', 'toggle'], true) && !has_permission('menu.edit')) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'You do not have permission to edit menu items.']);
+        exit;
+    }
+    if ($action === 'delete' && !has_permission('menu.delete')) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'You do not have permission to delete menu items.']);
+        exit;
+    }
 
     // ── Add ───────────────────────────────────
     if ($action === 'add') {
@@ -110,6 +122,8 @@ $grouped = [];
 foreach ($products as $p) {
     $grouped[$p['category_name']][] = $p;
 }
+
+include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -229,8 +243,7 @@ foreach ($products as $p) {
                     "price_large" => $p["price_large"],
                     "category_id" => $p["category_id"],
                   ]), ENT_QUOTES) ?>)'>✏️ Edit</button>
-                <button class="btn-del-prod"
-                  onclick="confirmDelete(<?= $p['id'] ?>, '<?= htmlspecialchars($p['name'], ENT_QUOTES) ?>')">🗑️</button>
+              
               </div>
             </div>
             <?php endforeach; ?>
@@ -297,6 +310,19 @@ foreach ($products as $p) {
   </div>
 </div>
 
+<!-- Availability confirm modal -->
+<div class="modal-overlay" id="avail-modal">
+  <div class="modal del-modal">
+    <div style="font-size:46px;margin-bottom:12px" id="avail-icon">❓</div>
+    <h3 style="font-size:17px;margin-bottom:8px" id="avail-title">Change Availability?</h3>
+    <p id="avail-msg" style="font-size:13px;color:var(--text-muted);margin-bottom:22px"></p>
+    <div class="modal-actions">
+      <button class="btn-mcancel" onclick="closeAvail()">Cancel</button>
+      <button class="btn-msave" id="avail-confirm-btn" onclick="doToggleAvail()">Yes, Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast" style="display:none"></div>
 
@@ -334,33 +360,123 @@ function addMenuItem() {
   fd.append('price_large', pl);
 
   fetch(SELF, { method:'POST', body:fd })
-    .then(r => r.json())
-    .then(res => {
-      if (res.ok) {
-        msg.textContent = '✅ "' + res.name + '" added! Refresh to see it in the list.';
-        msg.className   = 'add-msg success';
-        // Reset form
-        document.getElementById('add-category').value    = '';
-        document.getElementById('add-name').value        = '';
-        document.getElementById('add-desc').value        = '';
-        document.getElementById('add-price-small').value = '';
-        document.getElementById('add-price-large').value = '';
-        showToast('✅ "' + res.name + '" added to menu!');
-        // Reload page to show new product
-        setTimeout(() => location.reload(), 1200);
-      } else {
-        msg.textContent = '⚠️ ' + res.error;
-        msg.className   = 'add-msg error';
-      }
-    })
-    .catch(() => {
-      msg.textContent = '⚠️ Network error. Try again.';
+  .then(r => r.json())
+  .then(res => {
+    if (res.ok) {
+      msg.textContent = '✅ "' + res.name + '" added!';
+      msg.className   = 'add-msg success';
+
+      addProductCardToDOM({
+        id: res.id,
+        name: res.name,
+        description: desc,
+        price_small: ps,
+        price_large: pl,
+        category_id: cat,
+      });
+
+      // Reset form
+      document.getElementById('add-category').value    = '';
+      document.getElementById('add-name').value        = '';
+      document.getElementById('add-desc').value        = '';
+      document.getElementById('add-price-small').value = '';
+      document.getElementById('add-price-large').value = '';
+      showToast('✅ "' + res.name + '" added to menu!');
+    } else {
+      msg.textContent = '⚠️ ' + res.error;
       msg.className   = 'add-msg error';
-    });
+    }
+  })
+  .catch(() => {
+    msg.textContent = '⚠️ Network error. Try again.';
+    msg.className   = 'add-msg error';
+  });
+}
+
+function addProductCardToDOM(p) {
+  const catSelect = document.getElementById('add-category');
+  const catName   = catSelect.options[catSelect.selectedIndex].textContent;
+  const icons     = { 'Ice Coffee':'🧊','Hot Coffee':'☕','Milk Tea':'🧋','Fruit Tea':'🍹' };
+  const icon      = icons[catName] || '🥤';
+
+  let section = document.querySelector(`.cat-section[data-cat="${CSS.escape(catName)}"]`);
+
+  if (!section) {
+    section = document.createElement('div');
+    section.className = 'cat-section';
+    section.dataset.cat = catName;
+    section.innerHTML = `<div class="cat-label">${icon} ${catName} (0)</div>`;
+    document.getElementById('product-list').appendChild(section);
+    document.querySelector('.empty-list')?.remove();
+  }
+
+  const card = document.createElement('div');
+  card.className = 'product-card';
+  card.id = 'pcard-' + p.id;
+  card.innerHTML = `
+    <div class="prod-icon">${icon}</div>
+    <div class="prod-info">
+      <div class="prod-name">${escapeHtml(p.name)}</div>
+      <div class="prod-cat">${escapeHtml(catName)}</div>
+      <div class="prod-price">Regular ₱${parseFloat(p.price_small).toFixed(2)} · Up Size ₱${parseFloat(p.price_large).toFixed(2)}</div>
+    </div>
+    <button class="avail-toggle on" id="toggle-${p.id}" onclick="toggleAvail(${p.id}, this)">✅ Available</button>
+    <div class="prod-actions">
+      <button class="btn-edit-prod" onclick='openEdit(${JSON.stringify(p)})'>✏️ Edit</button>
+      <button class="btn-del-prod" onclick="confirmDelete(${p.id}, ${JSON.stringify(p.name)})">🗑️</button>
+    </div>
+  `;
+  section.appendChild(card);
+
+  // Update count badge
+  const count = section.querySelectorAll('.product-card').length;
+  section.querySelector('.cat-label').textContent = `${icon} ${catName} (${count})`;
+
+  const totalCount = document.querySelectorAll('.product-card').length;
+  document.getElementById('product-count').textContent = `(${totalCount} items)`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 // ── Toggle availability ───────────────────────
+// ── Toggle availability ───────────────────────
+let pendingToggle = null; // { id, btn, makingAvailable }
+
 function toggleAvail(id, btn) {
+  const makingAvailable = btn.classList.contains('off'); // currently off -> about to turn on
+
+  pendingToggle = { id, btn, makingAvailable };
+
+  const card     = document.getElementById('pcard-' + id);
+  const itemName = card.querySelector('.prod-name').textContent;
+
+  document.getElementById('avail-icon').textContent  = makingAvailable ? '✅' : '❌';
+  document.getElementById('avail-title').textContent = makingAvailable
+    ? 'Mark as Available?'
+    : 'Mark as Unavailable?';
+  document.getElementById('avail-msg').textContent = makingAvailable
+    ? `"${itemName}" will be visible and orderable again.`
+    : `"${itemName}" will be hidden from ordering until re-enabled.`;
+
+  const confirmBtn = document.getElementById('avail-confirm-btn');
+  confirmBtn.style.background = makingAvailable ? '' : 'var(--red)';
+
+  document.getElementById('avail-modal').classList.add('open');
+}
+
+function closeAvail() {
+  document.getElementById('avail-modal').classList.remove('open');
+  pendingToggle = null;
+}
+
+function doToggleAvail() {
+  if (!pendingToggle) return;
+  const { id, btn } = pendingToggle;
+
   const fd = new FormData();
   fd.append('action', 'toggle');
   fd.append('id', id);
@@ -381,9 +497,14 @@ function toggleAvail(id, btn) {
           card.classList.add('unavailable');
           showToast('❌ Item set to Unavailable', 'error');
         }
+      } else {
+        showToast('⚠️ ' + res.error, 'error');
       }
-    });
+    })
+    .catch(() => showToast('⚠️ Network error.', 'error'))
+    .finally(closeAvail);
 }
+
 
 // ── Edit modal ────────────────────────────────
 function openEdit(p) {
@@ -398,9 +519,10 @@ function openEdit(p) {
 function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); }
 
 function saveEdit() {
+  const id = document.getElementById('e-id').value;
   const fd = new FormData();
   fd.append('action',      'edit');
-  fd.append('id',          document.getElementById('e-id').value);
+  fd.append('id',          id);
   fd.append('category_id', document.getElementById('e-category').value);
   fd.append('name',        document.getElementById('e-name').value);
   fd.append('description', document.getElementById('e-desc').value);
@@ -413,13 +535,29 @@ function saveEdit() {
       if (res.ok) {
         closeEdit();
         showToast('✅ Item updated!');
-        setTimeout(() => location.reload(), 1000);
+        updateProductCardInDOM(id, {
+          name: document.getElementById('e-name').value,
+          price_small: document.getElementById('e-price-small').value,
+          price_large: document.getElementById('e-price-large').value,
+        });
       } else {
         showToast('⚠️ ' + res.error, 'error');
       }
     });
 }
 
+function updateProductCardInDOM(id, p) {
+  const card = document.getElementById('pcard-' + id);
+  if (!card) return;
+  card.querySelector('.prod-name').textContent = p.name;
+  card.querySelector('.prod-price').textContent =
+    `Regular ₱${parseFloat(p.price_small).toFixed(2)} · Up Size ₱${parseFloat(p.price_large).toFixed(2)}`;
+  // Update the edit button's stored data too
+  const editBtn = card.querySelector('.btn-edit-prod');
+  const currentData = JSON.parse(editBtn.getAttribute('onclick').match(/openEdit\((.*)\)/)[1]);
+  Object.assign(currentData, p);
+  editBtn.setAttribute('onclick', `openEdit(${JSON.stringify(currentData).replace(/"/g, '&quot;')})`);
+}
 // ── Delete ────────────────────────────────────
 let deleteId = null;
 function confirmDelete(id, name) {
@@ -465,13 +603,14 @@ function filterProducts(val) {
 }
 
 // Close modals on backdrop / Escape
+
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) { closeEdit(); closeDelete(); }
+    if (e.target === el) { closeEdit(); closeDelete(); closeAvail(); }
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeEdit(); closeDelete(); }
+  if (e.key === 'Escape') { closeEdit(); closeDelete(); closeAvail(); }
 });
 
 // Product count

@@ -1,176 +1,288 @@
 <?php
-require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
+require_once '../includes/permissions.php';
 require_role();
+require_permission('orders.history');
+
+
+include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Analytics — Kofee POS</title>
+  <title>Order History — Kofee POS</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
-  <link rel="stylesheet" href="../css/analytics.css">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-  
+  <link rel="stylesheet" href="../css/history.css"/>
+  <style>
+    /* ── Payment badges ── */
+    .pm-badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .badge-dine     { background: #e3f2fd; color: #1565c0; }
+    .badge-take     { background: #e8f5e9; color: #2e7d32; }
+    .badge-delivery { background: #fff3e0; color: #e65100; }
+    .badge-complete { background: #e8f5e9; color: #2e7d32; }
+    .badge-pending  { background: #fff3e0; color: #e65100; }
+
+    
+
+    /* ── Receipt modal overlay ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(44,26,14,.45);
+      z-index: 99999;
+      backdrop-filter: blur(3px);
+    }
+    .modal-overlay.open {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Receipt card ── */
+    .receipt-card {
+      background: #fff;
+      border-radius: 24px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 24px 64px rgba(44,26,14,.22);
+      overflow: hidden;
+      animation: popIn .22s cubic-bezier(.34,1.56,.64,1);
+      margin: 20px;
+    }
+    @keyframes popIn {
+      from { opacity:0; transform:scale(.9); }
+      to   { opacity:1; transform:scale(1); }
+    }
+
+    /* receipt header */
+    .receipt-head {
+      background: linear-gradient(135deg,#fff3e0,#ffe0b2);
+      padding: 28px 28px 20px;
+      text-align: center;
+      border-bottom: 1.5px solid #ecddc8;
+    }
+    .receipt-logo {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: #fff; display: flex; align-items: center;
+      justify-content: center; font-size: 28px;
+      margin: 0 auto 12px;
+      box-shadow: 0 2px 12px rgba(196,125,62,.2);
+    }
+    .receipt-head h2 { font-size: 17px; font-weight: 800; color: #2c1a0e; }
+    .receipt-head p  { font-size: 12px; color: #9a7e65; margin-top: 3px; }
+    .receipt-num {
+      display: inline-block; margin-top: 10px;
+      padding: 4px 16px; background: #c47d3e; color: #fff;
+      border-radius: 20px; font-size: 13px; font-weight: 700;
+    }
+
+    /* receipt body */
+    .receipt-body { padding: 20px 24px; }
+
+    .receipt-meta {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: #9a7e65; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: 14px; align-items: center;
+    }
+    .r-status-badge {
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-cancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+    /* items table */
+    .r-items-table {
+      width: 100%; border-collapse: collapse;
+      margin-bottom: 14px;
+    }
+    .r-items-table th {
+      font-size: 10px; font-weight: 700; color: #9a7e65;
+      text-transform: uppercase; letter-spacing: .05em;
+      padding: 6px 0; border-bottom: 1.5px solid #ecddc8;
+      text-align: left;
+    }
+    .r-items-table th:nth-child(2) { text-align: center; }
+    .r-items-table th:last-child   { text-align: right; }
+    .r-items-table td {
+      padding: 8px 0; font-size: 13px;
+      border-bottom: 1px solid #f5ede0;
+    }
+    .r-items-table td:nth-child(2) { text-align: center; color: #9a7e65; }
+    .r-items-table td:last-child   { text-align: right; font-weight: 700; color: #c47d3e; }
+    .r-items-table tr:last-child td { border-bottom: none; }
+
+    /* totals */
+    .r-totals {
+      border-top: 1.5px dashed #ecddc8;
+      padding-top: 12px;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .r-row { display: flex; justify-content: space-between; font-size: 12px; color: #9a7e65; }
+    .r-row.grand {
+      font-size: 17px; font-weight: 800; color: #2c1a0e;
+      margin-top: 8px; padding-top: 10px;
+      border-top: 1.5px solid #ecddc8;
+    }
+    .r-row.grand span:last-child { color: #c47d3e; }
+
+    /* footer buttons */
+    .receipt-footer {
+      padding: 0 24px 22px;
+      display: flex; gap: 10px;
+    }
+    .btn-print {
+      flex: 1; padding: 11px;
+      border: 1.5px solid #ecddc8; border-radius: 12px;
+      background: none; font-family: 'Poppins',sans-serif;
+      font-size: 13px; font-weight: 600; color: #9a7e65;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-print:hover { border-color: #c47d3e; color: #c47d3e; }
+    .btn-close-receipt {
+      flex: 2; padding: 11px;
+      background: #c47d3e; color: #fff; border: none;
+      border-radius: 12px; font-family: 'Poppins',sans-serif;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .btn-close-receipt:hover { background: #7a4e2e; }
+
+    /* ── Print styles ── */
+    @media print {
+      body * { visibility: hidden; }
+      .receipt-card, .receipt-card * { visibility: visible; }
+      .receipt-card {
+        position: fixed; top: 0; left: 0;
+        width: 80mm; /* thermal receipt width */
+        border-radius: 0; box-shadow: none;
+        margin: 0; border: none;
+      }
+      .receipt-footer { display: none; }
+      .modal-overlay  { background: none; backdrop-filter: none; }
+    }
+  </style>
 </head>
 <body>
 
-<?php include("../includes/sidebar.php"); ?>
-
-<div id="page-analytics" class="page active">
+<div id="page-history" class="page active">
   <div class="page-header">
     <div>
-      <h1>Analytics</h1>
-      <p>Sales performance — last 7 days</p>
+      <h1>Order History</h1>
+      <p>All past transactions</p>
     </div>
   </div>
 
   <div class="page-body">
 
-    <div class="analytics-top">
-      <div class="stat-card">
-        <div class="stat-icon" style="background:#fff3e0">💰</div>
-        <div class="stat-label">Weekly Sales</div>
-        <div class="stat-value" id="s-weekly-sales">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon" style="background:#e8f5e9">📦</div>
-        <div class="stat-label">Weekly Orders</div>
-        <div class="stat-value" id="s-weekly-orders">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon" style="background:#e3f2fd">🥤</div>
-        <div class="stat-label">Cups Sold</div>
-        <div class="stat-value" id="s-cups">—</div>
-        <div class="stat-sub">This week</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon" style="background:#fce4ec">⭐</div>
-        <div class="stat-label">Best Category</div>
-        <div class="stat-value" id="s-best-cat" style="font-size:16px">—</div>
-      </div>
+    <div class="filter-bar">
+      <input class="filter-input" type="text"
+             placeholder="🔍 Search by order # or item…"
+             oninput="filterHistory(this.value)"/>
+
+      <select class="filter-select" onchange="filterType(this.value)">
+        <option value="">All Types</option>
+        <option value="Dine In">Dine In</option>
+        <option value="Take Out">Take Out</option>
+        <option value="Delivery">Delivery</option>
+      </select>
     </div>
 
-    <div class="chart-section">
-      <div class="chart-card">
-        <h3>Daily Sales This Week (₱)</h3>
-        <div class="bar-chart" id="bar-chart"><div class="loading">Loading…</div></div>
-      </div>
-      <div class="chart-card">
-        <h3>Sales by Category</h3>
-        <div class="donut-wrap">
-          <svg class="donut-svg" viewBox="0 0 120 120" id="donut-svg"></svg>
-          <div class="legend" id="donut-legend"><div class="loading">Loading…</div></div>
-        </div>
-      </div>
+    <div class="history-table-wrapper">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Order #</th>
+          <th>Date</th>
+          <th>Items</th>
+          <th>Type</th>
+          <th>Total</th>
+          <th>Receipt</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="history-tbody">
+        <tr>
+          <td colspan="7" style="text-align:center;padding:40px;color:#9a7e65">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+</div>
+
+  </div>
+</div>
+
+<!-- Receipt Modal -->
+<div class="modal-overlay" id="receipt-overlay">
+  <div class="receipt-card">
+
+    <div class="receipt-head">
+      <div class="receipt-logo">🧋</div>
+      <h2>Kofee POS</h2>
+      <p>Official Order Receipt</p>
+      <span class="receipt-num" id="r-order-num">#0001</span>
     </div>
 
-    <div class="top-items-card">
-      <h3>Top Selling Items</h3>
-      <div id="top-items-list"><div class="loading">Loading…</div></div>
+    <div class="receipt-body">
+
+      <div class="receipt-meta">
+        <span id="r-type">🍽️ Dine In</span>
+        <span id="r-date"></span>
+        <span class="r-status-badge status-pending" id="r-status">Pending</span>
+      </div>
+
+      <table class="r-items-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Price</th>
+          </tr>
+        </thead>
+        <tbody id="r-items"></tbody>
+      </table>
+
+      <div class="r-totals">
+        <div class="r-row"><span>Subtotal</span><span id="r-subtotal">₱0.00</span></div>
+        <div class="r-row"><span>Tax (12%)</span><span id="r-tax">₱0.00</span></div>
+        <div class="r-row grand"><span>Total</span><span id="r-total">₱0.00</span></div>
+      </div>
+
+    </div>
+
+    <div class="receipt-footer">
+      <button class="btn-print" onclick="printReceipt()">🖨️ Print</button>
+      <button class="btn-close-receipt" onclick="closeReceipt()">✕ Close</button>
     </div>
 
   </div>
 </div>
 
-<script>
-fetch('get_analytics.php')
-  .then(r => r.json())
-  .then(data => {
-
-    // ── Stat cards ──────────────────────────────
-    document.getElementById('s-weekly-sales').textContent   = '₱' + data.weekly_sales.toLocaleString();
-    document.getElementById('s-weekly-orders').textContent  = data.weekly_orders;
-    document.getElementById('s-cups').textContent           = data.cups;
-    document.getElementById('s-best-cat').textContent       = data.best_category;
-
-    // ── Bar chart ───────────────────────────────
-    const barChart = document.getElementById('bar-chart');
-    const vals     = data.daily_sales.map(d => d.total);
-    const max      = Math.max(...vals, 1);
-
-    if (vals.every(v => v === 0)) {
-      barChart.innerHTML = '<div class="bar-empty">🫙 No sales data this week</div>';
-    } else {
-      barChart.innerHTML = data.daily_sales.map(d => `
-        <div class="bar-col">
-          <div class="bar-val">${d.total > 0 ? '₱'+d.total.toLocaleString() : ''}</div>
-          <div class="bar" style="height:${Math.max((d.total/max)*120,d.total>0?6:2)}px;
-               opacity:${d.total>0?1:.2}"></div>
-          <div class="bar-label">${d.date}</div>
-        </div>`).join('');
-    }
-
-    // ── Donut chart ─────────────────────────────
-    const cats   = data.categories;
-    const r = 40, cx = 60, cy = 60;
-    let offset   = -Math.PI / 2;
-    let paths    = '';
-    const colors = ['#8B5E3C','#C9A96E','#e07b5a','#d4b896','#c47d3e'];
-
-    const hasData = cats.some(c => c.total_sales > 0);
-
-    if (!hasData) {
-      document.getElementById('donut-svg').innerHTML =
-        `<circle cx="60" cy="60" r="40" fill="#ecddc8"/>
-         <text x="60" y="65" text-anchor="middle" font-size="10" fill="#9a7e65">No data</text>`;
-      document.getElementById('donut-legend').innerHTML =
-        '<div style="color:#9a7e65;font-size:12px">No sales yet</div>';
-    } else {
-      const total = cats.reduce((s,c) => s + +c.total_sales, 0) || 1;
-      cats.forEach((c, i) => {
-        const angle = (+c.total_sales / total) * Math.PI * 2;
-        const x1 = cx + r * Math.cos(offset);
-        const y1 = cy + r * Math.sin(offset);
-        offset += angle;
-        const x2 = cx + r * Math.cos(offset);
-        const y2 = cy + r * Math.sin(offset);
-        const large = angle > Math.PI ? 1 : 0;
-        const color = colors[i % colors.length];
-        paths += `<path d="M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large},1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${color}" stroke="#fff" stroke-width="2"/>`;
-      });
-      document.getElementById('donut-svg').innerHTML = paths +
-        `<circle cx="${cx}" cy="${cy}" r="24" fill="white"/>
-         <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="10" font-weight="800" fill="#2c1a0e">Sales</text>`;
-
-      document.getElementById('donut-legend').innerHTML = cats.map((c,i) => `
-        <div class="legend-item">
-          <div class="legend-dot" style="background:${colors[i%colors.length]}"></div>
-          ${c.label}
-          <span class="legend-pct">${c.pct}%</span>
-        </div>`).join('');
-    }
-
-    // ── Top items ───────────────────────────────
-    const topEl   = document.getElementById('top-items-list');
-    const icons   = ['🧋','🍵','🧊','🍹','☕'];
-    const topMax  = data.top_items[0]?.total_sold || 1;
-
-    if (!data.top_items.length) {
-      topEl.innerHTML = '<div class="loading">🫙 No items sold yet</div>';
-    } else {
-      topEl.innerHTML = data.top_items.map((t, i) => `
-        <div class="top-item-row">
-          <div class="ti-rank">${i+1}</div>
-          <div class="ti-icon">${icons[i] || '🥤'}</div>
-          <div class="ti-info">
-            <div class="ti-name">${t.name}</div>
-            <div class="ti-count">${t.total_sold} cups sold</div>
-          </div>
-          <div class="ti-bar-wrap">
-            <div class="ti-bar-fill" style="width:${(t.total_sold/topMax)*100}%"></div>
-          </div>
-        </div>`).join('');
-    }
-
-  })
-  .catch(err => {
-    console.error('Analytics error:', err);
-    document.getElementById('bar-chart').innerHTML = '<div class="bar-empty">⚠️ Failed to load data</div>';
-  });
-</script>
+<script src="../js/history.js"></script>
 
 </body>
 </html>

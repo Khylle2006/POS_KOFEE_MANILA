@@ -1,7 +1,9 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
+require_once '../includes/permissions.php';
 require_role();
+require_permission('dashboard.view');
 
 $pdo  = get_db();
 $user = current_user();

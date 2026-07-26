@@ -1,6 +1,9 @@
 <?php
 require_once '../includes/auth_check.php';
+require_once '../includes/permissions.php';
 require_role();
+require_permission('orders.history');
+
 
 include("../includes/sidebar.php");
 ?>
@@ -280,11 +283,6 @@ include("../includes/sidebar.php");
 </div>
 
 <script src="../js/history.js"></script>
-
-
-
-
-
 
 </body>
 </html>

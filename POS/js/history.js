@@ -74,19 +74,12 @@ function openReceipt(order) {
                  : pm.toLowerCase().includes('take')     ? '🛍️'
                  : pm.toLowerCase().includes('delivery') ? '🚗' : '🍽️';
 
-  const itemsArr = (order.items || '').split(', ').filter(Boolean);
+  const itemsArr = (order.items_detail || '').split(';;').filter(Boolean);
 
-  // Build item rows for receipt
-  const itemRows = itemsArr.map(item => {
-    // format: "Product Name x3"
-    const match = item.match(/^(.+)\s+x(\d+)$/i);
-    if (match) {
-      const name = match[1].trim();
-      const qty  = parseInt(match[2]);
-      return { name, qty };
-    }
-    return { name: item, qty: 1 };
-  });
+const itemRows = itemsArr.map(item => {
+  const [name, qty, price] = item.split('||');
+  return { name, qty: parseInt(qty), price: parseFloat(price) };
+});
 
   document.getElementById('r-order-num').textContent = '#' + String(order.id).padStart(4,'0');
   document.getElementById('r-date').textContent      = order.created_at;
@@ -100,7 +93,7 @@ function openReceipt(order) {
     <tr>
       <td>🧋 ${i.name}</td>
       <td style="text-align:center">×${i.qty}</td>
-      <td style="text-align:right">—</td>
+      <td style="text-align:right">₱${(i.price * i.qty).toFixed(2)}</td>
     </tr>
   `).join('');
 

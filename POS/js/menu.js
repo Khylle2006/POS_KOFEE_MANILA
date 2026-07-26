@@ -175,22 +175,12 @@ function clearOrder() {
 }
 
 // ── Checkout ──────────────────────────────────
+// ── Checkout ──────────────────────────────────
+let pendingCheckout = null;
+
 function checkout() {
     if (orderItems.length === 0) {
-        Swal.fire({
-            title: "No Items!",
-            text: "Please add items first.",
-            icon: "warning",
-            confirmButtonText: "OK",
-            customClass: {
-                popup: 'swal-cafe-popup',
-                title: 'swal-cafe-title',
-                htmlContainer: 'swal-cafe-text',
-                confirmButton: 'swal-cafe-confirm',
-                icon: 'swal-cafe-icon'
-            },
-            buttonsStyling: false
-        });
+        document.getElementById('noitems-overlay').classList.add('open');
         return;
     }
 
@@ -199,10 +189,46 @@ function checkout() {
     const typeMap  = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
     const snapshot = [...orderItems];
 
+    pendingCheckout = { subtotal, vat, total, snapshot, typeMap };
+
+    const itemsListHtml = orderItems.map(o => `
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0">
+            <span>${o.name} (${o.size}) ×${o.qty}</span>
+            <span>₱${(o.price * o.qty).toFixed(2)}</span>
+        </div>
+    `).join('');
+
+    document.getElementById('confirm-items-list').innerHTML = itemsListHtml;
+    document.getElementById('confirm-total').textContent    = '₱' + total.toFixed(2);
+    document.getElementById('confirm-type').textContent     = typeMap[orderType] || "Dine In";
+
+    document.getElementById('confirm-order-btn').disabled = false;
+    document.getElementById('confirm-order-btn').textContent = '✅ Confirm & Place Order';
+
+    document.getElementById('confirm-overlay').classList.add('open');
+}
+
+function closeNoItems() {
+    document.getElementById('noitems-overlay').classList.remove('open');
+}
+
+function closeConfirmOrder() {
+    document.getElementById('confirm-overlay').classList.remove('open');
+    pendingCheckout = null;
+}
+
+function submitConfirmedOrder() {
+    if (!pendingCheckout) return;
+
+    const { subtotal, vat, total, snapshot, typeMap } = pendingCheckout;
+    const btn = document.getElementById('confirm-order-btn');
+    btn.disabled = true;
+    btn.textContent = 'Placing order…';
+
     const payload = {
         total,
         payment_method: typeMap[orderType] || "Dine In",
-        items: orderItems.map(o => ({
+        items: snapshot.map(o => ({
             id:    o.id,
             qty:   o.qty,
             price: o.price,
@@ -217,39 +243,35 @@ function checkout() {
     })
     .then(r => r.json())
     .then(res => {
+        closeConfirmOrder();
+
         if (!res.success) {
-            Swal.fire({
-                title: "Error!",
-                text: res.error ?? "Unknown error",
-                icon: "error",
-                customClass: {
-                    popup: 'swal-cafe-popup',
-                    title: 'swal-cafe-title',
-                    htmlContainer: 'swal-cafe-text',
-                    confirmButton: 'swal-cafe-confirm',
-                    icon: 'swal-cafe-icon-error'
-                },
-                buttonsStyling: false
-            });
+            showSimpleError(res.error ?? "Unknown error");
             return;
         }
 
         showReceipt(res.order_id, subtotal, vat, total, snapshot);
     })
     .catch(err => {
-        Swal.fire({
-            title: "Request Failed!",
-            text: err.message,
-            icon: "error",
-            customClass: {
-                popup: 'swal-cafe-popup',
-                title: 'swal-cafe-title',
-                htmlContainer: 'swal-cafe-text',
-                confirmButton: 'swal-cafe-confirm',
-                icon: 'swal-cafe-icon-error'
-            },
-            buttonsStyling: false
-        });
+        closeConfirmOrder();
+        showSimpleError(err.message);
+    });
+}
+
+function showSimpleError(message) {
+    document.getElementById('confirm-total').textContent; // no-op safeguard
+    Swal.fire({
+        title: "Error!",
+        text: message,
+        icon: "error",
+        customClass: {
+            popup: 'swal-cafe-popup',
+            title: 'swal-cafe-title',
+            htmlContainer: 'swal-cafe-text',
+            confirmButton: 'swal-cafe-confirm',
+            icon: 'swal-cafe-icon-error'
+        },
+        buttonsStyling: false
     });
 }
 
@@ -306,12 +328,26 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('receipt-overlay')?.addEventListener('click', function(e) {
         if (e.target === this) closeReceipt();
     });
+    document.getElementById('confirm-overlay')?.addEventListener('click', function(e) {
+        if (e.target === this) closeConfirmOrder();
+    });
+    document.getElementById('noitems-overlay')?.addEventListener('click', function(e) {
+        if (e.target === this) closeNoItems();
+    });
 
     const el = document.getElementById('receipt-overlay');
     if (el) document.body.appendChild(el);
 });
 
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeReceipt(); closeConfirmOrder(); closeNoItems(); }
+});
+
+
 // ── Exports ───────────────────────────────────
+window.closeConfirmOrder    = closeConfirmOrder;
+window.submitConfirmedOrder = submitConfirmedOrder;
+window.closeNoItems         = closeNoItems;
 window.clearOrder      = clearOrder;
 window.checkout        = checkout;
 window.closeReceipt    = closeReceipt;
