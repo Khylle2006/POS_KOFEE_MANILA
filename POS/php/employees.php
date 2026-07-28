@@ -247,7 +247,6 @@ include("../includes/sidebar.php");
                   <?php else: ?>
                     <button class="act-btn act-activate" onclick="setStatus(<?= $e['id'] ?>,'active')">✅ Activate</button>
                   <?php endif; ?>
-                  <button class="act-btn act-delete" onclick="confirmDelete(<?= $e['id'] ?>, <?= json_encode($full) ?>)">🗑️</button>
                 </div>
               </td>
             </tr>
@@ -353,21 +352,6 @@ include("../includes/sidebar.php");
 </div>
 
 <!-- Delete confirm modal -->
-<div class="modal-bg" id="del-modal" onclick="closeModalBg(event)">
-  <div class="modal" style="max-width:360px;text-align:center">
-    <div style="font-size:44px;margin-bottom:12px">🗑️</div>
-    <h3 style="margin-bottom:8px">Delete Employee?</h3>
-    <p id="del-msg" style="font-size:13px;color:var(--text-muted);margin-bottom:20px"></p>
-    <form method="POST">
-      <input type="hidden" name="action" value="delete"/>
-      <input type="hidden" name="id" id="del-id"/>
-      <div class="modal-actions">
-        <button type="button" class="btn-cancel" onclick="closeDelete()">Cancel</button>
-        <button type="submit" class="btn-save" style="background:var(--red)">Yes, Delete</button>
-      </div>
-    </form>
-  </div>
-</div>
 
 <!-- Status change form (hidden, submitted via JS) -->
 <form method="POST" id="status-form" style="display:none">

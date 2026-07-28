@@ -225,11 +225,6 @@ include("../includes/sidebar.php");
                   <button type="submit" class="act-btn act-block" style="width:100%">❌ Reject</button>
                 </form>
               <?php else: ?>
-                <form method="POST" style="display:inline;flex:1" onsubmit="return confirm('Delete this request?')">
-                  <input type="hidden" name="action" value="delete"/>
-                  <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
-                  <button type="submit" class="act-btn act-delete" style="width:100%">🗑️ Remove</button>
-                </form>
               <?php endif; ?>
             <?php else: ?>
               <?php if ($l['status'] === 'pending'): ?>

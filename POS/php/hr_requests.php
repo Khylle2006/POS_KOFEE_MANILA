@@ -210,11 +210,6 @@ include("../includes/sidebar.php");
                         <button type="submit" class="act-btn act-hold">📦 Mark Completed</button>
                       </form>
                     <?php endif; ?>
-                    <form method="POST" style="display:inline" onsubmit="return confirm('Delete this request?')">
-                      <input type="hidden" name="action" value="delete"/>
-                      <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
-                      <button type="submit" class="act-btn act-delete">🗑️</button>
-                    </form>
                   <?php else: ?>
                     <?php if ($r['status'] === 'pending'): ?>
                       <form method="POST" style="display:inline" onsubmit="return confirm('Cancel this request?')">

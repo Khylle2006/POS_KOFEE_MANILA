@@ -6,7 +6,6 @@
 // ─────────────────────────────────────────────
 
 require_once '../includes/db.php';
-require_once '../includes/auth_check.php'; // for get_dashboard_url()
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
@@ -75,8 +74,16 @@ $_SESSION['username']  = $user['username'];
 $_SESSION['firstname'] = $user['firstname'];
 $_SESSION['lastname']  = $user['lastname'];
 $_SESSION['email']     = $user['email'];
-$_SESSION['role']      = $user['role'];   // 'staff' or 'admin' — from DB
+$_SESSION['role']      = $user['role'];   // primary role — kept for legacy code
 $_SESSION['logged_in'] = true;
+
+// A user can now hold multiple roles (see includes/manage_users.php's
+// user_roles table). Load ALL of them into the session; fall back to the
+// single legacy role if this account hasn't been assigned any yet.
+$role_stmt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :id ORDER BY role');
+$role_stmt->execute([':id' => $user['id']]);
+$all_roles = $role_stmt->fetchAll(PDO::FETCH_COLUMN);
+$_SESSION['roles'] = $all_roles ?: [$user['role']];
 
 // ── Update last_login ─────────────────────────
 try {
@@ -87,7 +94,15 @@ try {
 }
 
 
-header('Location: ' . get_dashboard_url());
+if (in_array('admin', $all_roles) || $user['role'] === 'admin') {
+    header('location: ../php/dashboard.php');
+} elseif (in_array('hr', $all_roles) || $user['role'] === 'hr') {
+    header('location: ../php/manage_users.php');
+} else {
+    header('location: ../php/menu.php');
+}
+
+
 exit;
 function redirect_error(string $msg): never {
     $_SESSION['login_error'] = $msg;

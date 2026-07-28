@@ -1,5 +1,4 @@
-
-    :root {
+:root {
       --accent:     #99582a;
       --accent-lt:  #f0e4d8;
       --card-bg:    #bb9457;
@@ -444,3 +443,58 @@
             grid-template-columns: 1fr;
         }
     }
+
+/* ── Additions for combined Staff (Accounts + Employees) page ── */
+
+/* Full role badge set (was previously only badge-staff / badge-admin) */
+.badge-hr      { background: #ede7f6; color: #5e35b1; }
+.badge-finance { background: #e0f2f1; color: #00695c; }
+.badge-crew    { background: var(--blue-lt);   color: var(--blue); }
+.badge-manager { background: #fff3e0; color: #e65100; }
+.badge-admin   { background: var(--accent-lt); color: var(--accent); }
+
+/* Toggle rows for the Login Account / Employee Profile sections */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: #fdf6ec;
+  border-radius: 10px;
+}
+.toggle-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+#account-fields, #employee-fields {
+  border-left: 2.5px solid var(--border);
+  padding-left: 14px;
+  margin: 0 0 16px 4px;
+}
+
+/* Multi-role checkbox group (Add/Edit staff modal) */
+.role-checks {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+}
+.role-check-opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.role-check-opt input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}

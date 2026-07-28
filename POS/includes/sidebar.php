@@ -54,17 +54,17 @@ $access = [
     </button>
     <?php endif; ?>
 
-    <?php if ($access['pending']): ?>
-    <button class="nav-btn <?= $current === 'pending_orders.php' ? 'active' : '' ?>"
-        onclick="window.location.href='pending_orders.php'">
-        <span class="nav-label">Pending</span>
-    </button>
-    <?php endif; ?>
-
     <?php if ($access['inventory']): ?>
     <button class="nav-btn <?= $current === 'inventory.php' ? 'active' : '' ?>"
         onclick="window.location.href='inventory.php'">
         <span class="nav-label">Inventory</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['pending']): ?>
+    <button class="nav-btn <?= $current === 'pending_orders.php' ? 'active' : '' ?>"
+        onclick="window.location.href='pending_orders.php'">
+        <span class="nav-label">Pending</span>
     </button>
     <?php endif; ?>
 
@@ -103,21 +103,7 @@ $access = [
     <?php if ($access['users']): ?>
     <button class="nav-btn <?= $current === 'manage_users.php' ? 'active' : '' ?>"
         onclick="window.location.href='manage_users.php'">
-        <span class="nav-label">Accounts</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['hr_employees']): ?>
-    <button class="nav-btn <?= $current === 'employees.php' ? 'active' : '' ?>"
-        onclick="window.location.href='employees.php'">
-        <span class="nav-label">Employees</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['hr_attendance']): ?>
-    <button class="nav-btn <?= $current === 'attendance.php' ? 'active' : '' ?>"
-        onclick="window.location.href='attendance.php'">
-        <span class="nav-label">Attendance</span>
+        <span class="nav-label">Manage Employees</span>
     </button>
     <?php endif; ?>
 

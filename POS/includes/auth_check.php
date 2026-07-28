@@ -24,8 +24,14 @@ function require_role(?string $role = null, ?string $redirect_to = null): void {
     
     // Check if user has the required role
     if ($role !== null && ($_SESSION['role'] ?? '') !== $role) {
-        // Redirect to wherever this user's actual permissions land them
-        header('Location: ' . get_dashboard_url());
+        // Redirect to appropriate dashboard based on current role
+        $current_role = $_SESSION['role'] ?? 'staff';
+        
+        if (in_array($current_role, ['admin', 'manager'])) {
+            header('Location: ../php/dashboard.php');
+        } else {
+            header('Location: ../php/menu.php');
+        }
         exit;
     }
 }
@@ -42,7 +48,8 @@ function current_user(): array {
         'firstname' => $_SESSION['firstname'] ?? '',
         'lastname'  => $_SESSION['lastname']  ?? '',
         'email'     => $_SESSION['email']     ?? '',
-        'role'      => $_SESSION['role']      ?? 'staff',
+        'role'      => $_SESSION['role']      ?? 'staff', // primary role — legacy single-role code
+        'roles'     => $_SESSION['roles']     ?? [$_SESSION['role'] ?? 'staff'], // ALL assigned roles
         'status'    => $_SESSION['status']    ?? 'active',
         // Full name convenience
         'name'      => trim(($_SESSION['firstname'] ?? '') . ' ' . ($_SESSION['lastname'] ?? '')),
@@ -51,12 +58,24 @@ function current_user(): array {
 }
 
 /**
+ * Check if the current user holds ANY of the given roles
+ * (a user can now have more than one role at once).
+ *
+ * @param string ...$roles Roles to check for
+ * @return bool True if the user has at least one of them
+ */
+function has_any_role(string ...$roles): bool {
+    $mine = $_SESSION['roles'] ?? [$_SESSION['role'] ?? ''];
+    return (bool) array_intersect($mine, $roles);
+}
+
+/**
  * Check if current user is admin or manager
  * 
  * @return bool True if admin or manager
  */
 function is_admin(): bool {
-    return in_array($_SESSION['role'] ?? '', ['admin', 'manager']);
+    return has_any_role('admin', 'manager');
 }
 
 /**
@@ -78,38 +97,15 @@ function is_logged_in(): bool {
 }
 
 /**
- * Get the best landing page for the CURRENT logged-in user, based on
- * their actual permissions — not a hardcoded role name. This means a
- * newly created role (or a role whose permissions you just edited in
- * Manage Permissions) always lands somewhere it can actually see,
- * instead of falling through to menu.php and getting bounced.
- *
- * Order below is a priority list of "most useful first" — reorder it
- * if you want a different default landing page.
- *
+ * Get dashboard URL based on user role
+ * 
  * @return string Dashboard URL
  */
 function get_dashboard_url(): string {
-    require_once __DIR__ . '/permissions.php';
-
-    $candidates = [
-        'dashboard.view' => '../php/dashboard.php',
-        'orders.new'     => '../php/menu.php',
-        'orders.pending' => '../php/pending_orders.php',
-        'inventory.view' => '../php/inventory.php',
-        'orders.history' => '../php/history.php',
-        'analytics.view' => '../php/analytics.php',
-        'users.manage'   => '../php/manage_users.php',
-        'menu.manage'    => '../php/add_item.php',
-    ];
-
-    foreach ($candidates as $perm => $url) {
-        if (has_permission($perm)) return $url;
+    if (in_array($_SESSION['role'] ?? '', ['admin', 'manager'])) {
+        return '../php/dashboard.php';
     }
-
-    // No permissions granted at all — send to a page that explains that,
-    // instead of menu.php, which they'd otherwise be able to fully use unchecked.
-    return '../php/no_access.php';
+    return '../php/menu.php';
 }
 
 /**
