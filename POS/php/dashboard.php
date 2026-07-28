@@ -8,6 +8,7 @@ require_permission('dashboard.view');
 $pdo  = get_db();
 $user = current_user();
 
+
 // ── Today's stats ─────────────────────────────
 $today_sales = $pdo->query("
     SELECT COALESCE(SUM(total_amount),0) AS total, COUNT(*) AS cnt

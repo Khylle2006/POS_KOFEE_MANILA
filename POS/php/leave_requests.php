@@ -5,70 +5,100 @@ require_role();
 
 $pdo   = get_db();
 $user  = current_user();
+$role  = $user['role'] ?? 'crew';
 $toast = '';
 $toast_type = 'success';
 
+// Admin/HR = reviewers only. Everyone else = requesters only.
+$is_reviewer = in_array($role, ['admin', 'hr']);
+
 $leave_types = ['Vacation','Sick','Emergency','Unpaid','Other'];
+
+// ── Resolve the logged-in user's own employee profile (for self-service filing) ──
+$my_employee = null;
+if (!$is_reviewer) {
+    $stmt = $pdo->prepare('SELECT * FROM employees WHERE user_id = :uid LIMIT 1');
+    $stmt->execute([':uid' => $user['id']]);
+    $my_employee = $stmt->fetch() ?: null;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
+    // ── File leave — requesters only, always tied to THEIR OWN employee record ──
     if ($action === 'file') {
-        $emp_id = (int)($_POST['employee_id'] ?? 0);
-        $type   = in_array($_POST['leave_type'] ?? '', $leave_types) ? $_POST['leave_type'] : 'Vacation';
-        $start  = $_POST['start_date'] ?? '';
-        $end    = $_POST['end_date']   ?? '';
-        $reason = trim($_POST['reason'] ?? '');
-
-        if (!$emp_id || !$start || !$end) {
-            $toast = '⚠️ Employee, start date, and end date are required.'; $toast_type = 'error';
-        } elseif (strtotime($end) < strtotime($start)) {
-            $toast = '⚠️ End date cannot be before start date.'; $toast_type = 'error';
+        if ($is_reviewer) {
+            $toast = '⚠️ HR/Admin accounts review leave and cannot file new requests.'; $toast_type = 'error';
+        } elseif (!$my_employee) {
+            $toast = "⚠️ Your account isn't linked to an employee profile yet. Ask HR to link it first."; $toast_type = 'error';
         } else {
-            $days = (strtotime($end) - strtotime($start)) / 86400 + 1;
-            $pdo->prepare(
-                'INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, days_count, reason, status)
-                 VALUES (:e,:t,:s,:en,:d,:r,"pending")'
-            )->execute([':e'=>$emp_id, ':t'=>$type, ':s'=>$start, ':en'=>$end, ':d'=>$days, ':r'=>$reason]);
-            $toast = '✅ Leave request filed.';
+            $type   = in_array($_POST['leave_type'] ?? '', $leave_types) ? $_POST['leave_type'] : 'Vacation';
+            $start  = $_POST['start_date'] ?? '';
+            $end    = $_POST['end_date']   ?? '';
+            $reason = trim($_POST['reason'] ?? '');
+
+            if (!$start || !$end) {
+                $toast = '⚠️ Start date and end date are required.'; $toast_type = 'error';
+            } elseif (strtotime($end) < strtotime($start)) {
+                $toast = '⚠️ End date cannot be before start date.'; $toast_type = 'error';
+            } else {
+                $days = (strtotime($end) - strtotime($start)) / 86400 + 1;
+                $pdo->prepare(
+                    'INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, days_count, reason, status)
+                     VALUES (:e,:t,:s,:en,:d,:r,"pending")'
+                )->execute([':e'=>$my_employee['id'], ':t'=>$type, ':s'=>$start, ':en'=>$end, ':d'=>$days, ':r'=>$reason]);
+                $toast = '✅ Leave request filed.';
+            }
         }
     }
 
+    // ── Approve / Reject — reviewers only ──
     if ($action === 'review') {
-        $id     = (int)($_POST['id'] ?? 0);
-        $status = $_POST['status'] ?? '';
-        if ($id && in_array($status, ['approved','rejected'])) {
-            $pdo->prepare('UPDATE leave_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
-                ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
+        if (!$is_reviewer) {
+            $toast = '⚠️ Only HR/Admin can review leave requests.'; $toast_type = 'error';
+        } else {
+            $id     = (int)($_POST['id'] ?? 0);
+            $status = $_POST['status'] ?? '';
+            if ($id && in_array($status, ['approved','rejected'])) {
+                $pdo->prepare('UPDATE leave_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
+                    ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
 
-            // If approved, mark attendance as on_leave for each day in range
-            if ($status === 'approved') {
-                $lr = $pdo->prepare('SELECT * FROM leave_requests WHERE id=:id');
-                $lr->execute([':id'=>$id]);
-                $row = $lr->fetch();
-                if ($row) {
-                    $cur = strtotime($row['start_date']);
-                    $end = strtotime($row['end_date']);
-                    $ins = $pdo->prepare("
-                        INSERT INTO attendance (employee_id, attendance_date, status)
-                        VALUES (:e,:d,'on_leave')
-                        ON DUPLICATE KEY UPDATE status='on_leave'
-                    ");
-                    while ($cur <= $end) {
-                        $ins->execute([':e'=>$row['employee_id'], ':d'=>date('Y-m-d',$cur)]);
-                        $cur = strtotime('+1 day', $cur);
+                if ($status === 'approved') {
+                    $lr = $pdo->prepare('SELECT * FROM leave_requests WHERE id=:id');
+                    $lr->execute([':id'=>$id]);
+                    $row = $lr->fetch();
+                    if ($row) {
+                        $cur = strtotime($row['start_date']);
+                        $end = strtotime($row['end_date']);
+                        $ins = $pdo->prepare("
+                            INSERT INTO attendance (employee_id, attendance_date, status)
+                            VALUES (:e,:d,'on_leave')
+                            ON DUPLICATE KEY UPDATE status='on_leave'
+                        ");
+                        while ($cur <= $end) {
+                            $ins->execute([':e'=>$row['employee_id'], ':d'=>date('Y-m-d',$cur)]);
+                            $cur = strtotime('+1 day', $cur);
+                        }
                     }
                 }
+                $toast = $status === 'approved' ? '✅ Leave approved.' : '❌ Leave rejected.';
             }
-            $toast = $status === 'approved' ? '✅ Leave approved.' : '❌ Leave rejected.';
         }
     }
 
+    // ── Delete — reviewers can remove any; requesters can cancel their OWN pending request ──
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         if ($id) {
-            $pdo->prepare('DELETE FROM leave_requests WHERE id=:id')->execute([':id'=>$id]);
-            $toast = '🗑️ Leave request deleted.';
+            if ($is_reviewer) {
+                $pdo->prepare('DELETE FROM leave_requests WHERE id=:id')->execute([':id'=>$id]);
+                $toast = '🗑️ Leave request deleted.';
+            } elseif ($my_employee) {
+                $del = $pdo->prepare("DELETE FROM leave_requests WHERE id=:id AND employee_id=:e AND status='pending'");
+                $del->execute([':id'=>$id, ':e'=>$my_employee['id']]);
+                $toast = $del->rowCount() ? '🗑️ Leave request cancelled.' : '⚠️ Only your own pending requests can be cancelled.';
+                if (!$del->rowCount()) $toast_type = 'error';
+            }
         }
     }
 
@@ -83,10 +113,15 @@ if (isset($_GET['toast'])) {
 }
 
 $filter = $_GET['status'] ?? 'all';
-$employees = $pdo->query("SELECT id, employee_code, firstname, lastname FROM employees WHERE status='active' ORDER BY firstname")->fetchAll();
 
-$where = '1=1';
+$where  = '1=1';
 $params = [];
+
+if (!$is_reviewer) {
+    $where .= ' AND lr.employee_id = :myid';
+    $params[':myid'] = $my_employee['id'] ?? 0;
+}
+
 if (in_array($filter, ['pending','approved','rejected'])) {
     $where .= ' AND lr.status = :st';
     $params[':st'] = $filter;
@@ -128,12 +163,20 @@ include("../includes/sidebar.php");
   <div class="page-header">
     <div>
       <h1>Leave Requests</h1>
-      <p>Review and file employee leave</p>
+      <p><?= $is_reviewer ? 'Review and approve employee leave' : 'File and track your leave requests' ?></p>
     </div>
-    <button class="btn-add" onclick="openFile()">➕ File Leave</button>
+    <?php if (!$is_reviewer && $my_employee): ?>
+      <button class="btn-add" onclick="openFile()">➕ File Leave</button>
+    <?php endif; ?>
   </div>
 
   <div class="page-body">
+
+    <?php if (!$is_reviewer && !$my_employee): ?>
+      <div class="notice-banner">
+        ⚠️ Your account isn't linked to an employee profile yet, so you can't file leave. Ask HR to link your account on the Employees page.
+      </div>
+    <?php endif; ?>
 
     <div class="stat-row">
       <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0">⏳</div><div><div class="mini-stat-val"><?= $pending_c ?></div><div class="mini-stat-lbl">Pending</div></div></div>
@@ -167,25 +210,37 @@ include("../includes/sidebar.php");
             <?php if ($l['reason']): ?><div class="lc-reason">"<?= htmlspecialchars($l['reason']) ?>"</div><?php endif; ?>
           </div>
           <div class="lc-actions">
-            <?php if ($l['status'] === 'pending'): ?>
-              <form method="POST" style="display:inline;flex:1">
-                <input type="hidden" name="action" value="review"/>
-                <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
-                <input type="hidden" name="status" value="approved"/>
-                <button type="submit" class="act-btn act-activate" style="width:100%">✅ Approve</button>
-              </form>
-              <form method="POST" style="display:inline;flex:1">
-                <input type="hidden" name="action" value="review"/>
-                <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
-                <input type="hidden" name="status" value="rejected"/>
-                <button type="submit" class="act-btn act-block" style="width:100%">❌ Reject</button>
-              </form>
+            <?php if ($is_reviewer): ?>
+              <?php if ($l['status'] === 'pending'): ?>
+                <form method="POST" style="display:inline;flex:1">
+                  <input type="hidden" name="action" value="review"/>
+                  <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
+                  <input type="hidden" name="status" value="approved"/>
+                  <button type="submit" class="act-btn act-activate" style="width:100%">✅ Approve</button>
+                </form>
+                <form method="POST" style="display:inline;flex:1">
+                  <input type="hidden" name="action" value="review"/>
+                  <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
+                  <input type="hidden" name="status" value="rejected"/>
+                  <button type="submit" class="act-btn act-block" style="width:100%">❌ Reject</button>
+                </form>
+              <?php else: ?>
+                <form method="POST" style="display:inline;flex:1" onsubmit="return confirm('Delete this request?')">
+                  <input type="hidden" name="action" value="delete"/>
+                  <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
+                  <button type="submit" class="act-btn act-delete" style="width:100%">🗑️ Remove</button>
+                </form>
+              <?php endif; ?>
             <?php else: ?>
-              <form method="POST" style="display:inline;flex:1" onsubmit="return confirm('Delete this request?')">
-                <input type="hidden" name="action" value="delete"/>
-                <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
-                <button type="submit" class="act-btn act-delete" style="width:100%">🗑️ Remove</button>
-              </form>
+              <?php if ($l['status'] === 'pending'): ?>
+                <form method="POST" style="display:inline;flex:1" onsubmit="return confirm('Cancel this leave request?')">
+                  <input type="hidden" name="action" value="delete"/>
+                  <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
+                  <button type="submit" class="act-btn act-block" style="width:100%">✕ Cancel</button>
+                </form>
+              <?php else: ?>
+                <span style="color:var(--text-muted);font-size:12px;padding:8px 0">No actions available</span>
+              <?php endif; ?>
             <?php endif; ?>
           </div>
         </div>
@@ -194,7 +249,8 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
-<!-- File leave modal -->
+<?php if (!$is_reviewer && $my_employee): ?>
+<!-- File leave modal (requesters only) -->
 <div class="modal-bg" id="file-modal" onclick="if(event.target===this) closeFile()">
   <div class="modal">
     <div class="modal-header">
@@ -205,13 +261,8 @@ include("../includes/sidebar.php");
       <input type="hidden" name="action" value="file"/>
 
       <div class="field-group mg-b">
-        <label class="field-label">Employee <span class="req">*</span></label>
-        <select class="field-input" name="employee_id" required>
-          <option value="">Select employee…</option>
-          <?php foreach ($employees as $e): ?>
-            <option value="<?= $e['id'] ?>"><?= htmlspecialchars($e['firstname'].' '.$e['lastname']) ?> (#<?= htmlspecialchars($e['employee_code']) ?>)</option>
-          <?php endforeach; ?>
-        </select>
+        <label class="field-label">Filing as</label>
+        <input class="field-input" type="text" value="<?= htmlspecialchars($my_employee['firstname'].' '.$my_employee['lastname'].' (#'.$my_employee['employee_code'].')') ?>" disabled/>
       </div>
 
       <div class="field-group mg-b">
@@ -244,6 +295,7 @@ include("../includes/sidebar.php");
     </form>
   </div>
 </div>
+<?php endif; ?>
 
 <?php if ($toast): ?>
 <div class="toast toast-<?= $toast_type ?>" id="toast-msg"><?= $toast ?></div>
@@ -251,8 +303,8 @@ include("../includes/sidebar.php");
 <?php endif; ?>
 
 <script>
-function openFile()  { document.getElementById('file-modal').classList.add('open'); }
-function closeFile() { document.getElementById('file-modal').classList.remove('open'); }
+function openFile()  { document.getElementById('file-modal')?.classList.add('open'); }
+function closeFile() { document.getElementById('file-modal')?.classList.remove('open'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFile(); });
 </script>
 

@@ -8,34 +8,52 @@ $user  = current_user();
 $toast = '';
 $toast_type = 'success';
 
-$departments = ['Kitchen','Front of House','Inventory','Finance','HR','Management','General'];
-$emp_types   = ['Full-time','Part-time','Contract'];
+// Same role set as manage_users.php — keeps Employees and Accounts consistent.
+// value => display label
+$roles = [
+    'hr'      => 'HR',
+    'finance' => 'Finance',
+    'crew'    => 'Crew',
+    'manager' => 'Manager',
+    'admin'   => 'Admin',
+];
+$emp_types = ['Full-time','Part-time','Contract'];
 
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'add') {
-        $code   = trim($_POST['employee_code'] ?? '');
-        $fn     = trim($_POST['firstname']     ?? '');
-        $ln     = trim($_POST['lastname']      ?? '');
-        $pos    = trim($_POST['position']      ?? '');
-        $dept   = trim($_POST['department']    ?? 'General');
-        $phone  = trim($_POST['contact_number']?? '');
-        $email  = trim($_POST['email']         ?? '');
-        $hire   = $_POST['hire_date']          ?? null;
-        $etype  = in_array($_POST['employment_type'] ?? '', $emp_types) ? $_POST['employment_type'] : 'Full-time';
-        $salary = (float)($_POST['base_salary'] ?? 0);
+        $code    = trim($_POST['employee_code'] ?? '');
+        $fn      = trim($_POST['firstname']     ?? '');
+        $ln      = trim($_POST['lastname']      ?? '');
+        $pos     = trim($_POST['position']      ?? '');
+        $dept    = array_key_exists($_POST['department'] ?? '', $roles) ? $_POST['department'] : 'crew';
+        $phone   = trim($_POST['contact_number']?? '');
+        $email   = trim($_POST['email']         ?? '');
+        $hire    = $_POST['hire_date']          ?? null;
+        $etype   = in_array($_POST['employment_type'] ?? '', $emp_types) ? $_POST['employment_type'] : 'Full-time';
+        $salary  = (float)($_POST['base_salary'] ?? 0);
+        $user_id = (int)($_POST['user_id'] ?? 0) ?: null;
+
+        $link_taken = false;
+        if ($user_id) {
+            $chk = $pdo->prepare('SELECT id FROM employees WHERE user_id = :u');
+            $chk->execute([':u' => $user_id]);
+            $link_taken = (bool)$chk->fetch();
+        }
 
         if (!$code || !$fn || !$ln || !$pos) {
             $toast = '⚠️ Employee code, name, and position are required.'; $toast_type = 'error';
+        } elseif ($link_taken) {
+            $toast = '⚠️ That login account is already linked to another employee.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->prepare(
-                    'INSERT INTO employees (employee_code, firstname, lastname, position, department, contact_number, email, hire_date, employment_type, base_salary, status)
-                     VALUES (:c,:f,:l,:p,:d,:ph,:e,:h,:et,:s,"active")'
+                    'INSERT INTO employees (user_id, employee_code, firstname, lastname, position, department, contact_number, email, hire_date, employment_type, base_salary, status)
+                     VALUES (:uid,:c,:f,:l,:p,:d,:ph,:e,:h,:et,:s,"active")'
                 )->execute([
-                    ':c'=>$code, ':f'=>$fn, ':l'=>$ln, ':p'=>$pos, ':d'=>$dept,
+                    ':uid'=>$user_id, ':c'=>$code, ':f'=>$fn, ':l'=>$ln, ':p'=>$pos, ':d'=>$dept,
                     ':ph'=>$phone, ':e'=>$email ?: null, ':h'=>$hire ?: null, ':et'=>$etype, ':s'=>$salary,
                 ]);
                 $toast = '✅ Employee "' . htmlspecialchars($fn . ' ' . $ln) . '" added!';
@@ -47,29 +65,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'edit') {
-        $id     = (int)($_POST['id'] ?? 0);
-        $fn     = trim($_POST['firstname']     ?? '');
-        $ln     = trim($_POST['lastname']      ?? '');
-        $pos    = trim($_POST['position']      ?? '');
-        $dept   = trim($_POST['department']    ?? 'General');
-        $phone  = trim($_POST['contact_number']?? '');
-        $email  = trim($_POST['email']         ?? '');
-        $hire   = $_POST['hire_date']          ?? null;
-        $etype  = in_array($_POST['employment_type'] ?? '', $emp_types) ? $_POST['employment_type'] : 'Full-time';
-        $salary = (float)($_POST['base_salary'] ?? 0);
+        $id      = (int)($_POST['id'] ?? 0);
+        $fn      = trim($_POST['firstname']     ?? '');
+        $ln      = trim($_POST['lastname']      ?? '');
+        $pos     = trim($_POST['position']      ?? '');
+        $dept    = array_key_exists($_POST['department'] ?? '', $roles) ? $_POST['department'] : 'crew';
+        $phone   = trim($_POST['contact_number']?? '');
+        $email   = trim($_POST['email']         ?? '');
+        $hire    = $_POST['hire_date']          ?? null;
+        $etype   = in_array($_POST['employment_type'] ?? '', $emp_types) ? $_POST['employment_type'] : 'Full-time';
+        $salary  = (float)($_POST['base_salary'] ?? 0);
+        $user_id = (int)($_POST['user_id'] ?? 0) ?: null;
 
-        if ($id && $fn && $ln && $pos) {
+        $link_taken = false;
+        if ($user_id) {
+            $chk = $pdo->prepare('SELECT id FROM employees WHERE user_id = :u AND id != :id');
+            $chk->execute([':u' => $user_id, ':id' => $id]);
+            $link_taken = (bool)$chk->fetch();
+        }
+
+        if (!$id || !$fn || !$ln || !$pos) {
+            $toast = '⚠️ Missing required fields.'; $toast_type = 'error';
+        } elseif ($link_taken) {
+            $toast = '⚠️ That login account is already linked to another employee.'; $toast_type = 'error';
+        } else {
             $pdo->prepare(
-                'UPDATE employees SET firstname=:f, lastname=:l, position=:p, department=:d,
+                'UPDATE employees SET user_id=:uid, firstname=:f, lastname=:l, position=:p, department=:d,
                  contact_number=:ph, email=:e, hire_date=:h, employment_type=:et, base_salary=:s
                  WHERE id=:id'
             )->execute([
-                ':f'=>$fn, ':l'=>$ln, ':p'=>$pos, ':d'=>$dept, ':ph'=>$phone,
+                ':uid'=>$user_id, ':f'=>$fn, ':l'=>$ln, ':p'=>$pos, ':d'=>$dept, ':ph'=>$phone,
                 ':e'=>$email ?: null, ':h'=>$hire ?: null, ':et'=>$etype, ':s'=>$salary, ':id'=>$id,
             ]);
             $toast = '✅ Employee updated!';
-        } else {
-            $toast = '⚠️ Missing required fields.'; $toast_type = 'error';
         }
     }
 
@@ -101,8 +129,8 @@ if (isset($_GET['toast'])) {
 }
 
 // ── Fetch ──────────────────────────────────────
-$search = trim($_GET['search'] ?? '');
-$dept_f = $_GET['dept'] ?? '';
+$search  = trim($_GET['search'] ?? '');
+$role_f  = $_GET['role'] ?? '';
 
 $where  = '1=1';
 $params = [];
@@ -110,9 +138,9 @@ if ($search) {
     $where .= ' AND (firstname LIKE :s OR lastname LIKE :s2 OR employee_code LIKE :s3 OR position LIKE :s4)';
     $params[':s'] = $params[':s2'] = $params[':s3'] = $params[':s4'] = "%$search%";
 }
-if ($dept_f) {
-    $where .= ' AND department = :dept';
-    $params[':dept'] = $dept_f;
+if ($role_f && array_key_exists($role_f, $roles)) {
+    $where .= ' AND department = :role';
+    $params[':role'] = $role_f;
 }
 
 $stmt = $pdo->prepare("SELECT * FROM employees WHERE $where ORDER BY status ASC, lastname ASC");
@@ -123,6 +151,11 @@ $total    = count($employees);
 $active   = count(array_filter($employees, fn($e) => $e['status'] === 'active'));
 $inactive = $total - $active;
 $fulltime = count(array_filter($employees, fn($e) => $e['employment_type'] === 'Full-time'));
+
+// Login accounts available to link (full list kept so the currently-linked
+// account still shows correctly when editing)
+$login_accounts = $pdo->query("SELECT id, username, firstname, lastname, role FROM users ORDER BY firstname")->fetchAll();
+$linked_ids     = array_filter(array_column($employees, 'user_id'));
 
 include("../includes/sidebar.php");
 ?>
@@ -165,10 +198,10 @@ include("../includes/sidebar.php");
             <span class="s-icon">🔍</span>
             <input type="text" name="search" placeholder="Name, code, position…" value="<?= htmlspecialchars($search) ?>"/>
           </div>
-          <select class="filter-select" name="dept" onchange="this.form.submit()">
-            <option value="">All Departments</option>
-            <?php foreach ($departments as $d): ?>
-              <option value="<?= $d ?>" <?= $dept_f === $d ? 'selected' : '' ?>><?= $d ?></option>
+          <select class="filter-select" name="role" onchange="this.form.submit()">
+            <option value="">All Roles</option>
+            <?php foreach ($roles as $val => $label): ?>
+              <option value="<?= $val ?>" <?= $role_f === $val ? 'selected' : '' ?>><?= $label ?></option>
             <?php endforeach; ?>
           </select>
           <button type="submit" class="act-btn act-activate">Search</button>
@@ -178,7 +211,7 @@ include("../includes/sidebar.php");
       <div class="table-scroll-wrapper">
         <table>
           <thead>
-            <tr><th>Employee</th><th>Code</th><th>Position</th><th>Department</th><th>Type</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>Employee</th><th>Code</th><th>Position</th><th>Role</th><th>Type</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
           <?php if (empty($employees)): ?>
@@ -189,6 +222,7 @@ include("../includes/sidebar.php");
               $full = htmlspecialchars($e['firstname'].' '.$e['lastname']);
               $initials = strtoupper(substr($e['firstname'],0,1).substr($e['lastname'],0,1));
               $color = $colors[$i % count($colors)];
+              $role_label = $roles[$e['department']] ?? htmlspecialchars($e['department']);
           ?>
             <tr id="row-<?= $e['id'] ?>">
               <td>
@@ -202,7 +236,7 @@ include("../includes/sidebar.php");
               </td>
               <td style="font-weight:700">#<?= htmlspecialchars($e['employee_code']) ?></td>
               <td><?= htmlspecialchars($e['position']) ?></td>
-              <td><?= htmlspecialchars($e['department']) ?></td>
+              <td><span class="badge badge-role-<?= htmlspecialchars($e['department']) ?>"><?= $role_label ?></span></td>
               <td><?= htmlspecialchars($e['employment_type']) ?></td>
               <td><span class="badge badge-<?= $e['status'] ?>"><?= ucfirst($e['status']) ?></span></td>
               <td>
@@ -259,9 +293,9 @@ include("../includes/sidebar.php");
 
       <div class="field-row mg-b">
         <div class="field-group">
-          <label class="field-label">Department</label>
+          <label class="field-label">Role</label>
           <select class="field-input" name="department" id="f-dept">
-            <?php foreach ($departments as $d): ?><option value="<?= $d ?>"><?= $d ?></option><?php endforeach; ?>
+            <?php foreach ($roles as $val => $label): ?><option value="<?= $val ?>"><?= $label ?></option><?php endforeach; ?>
           </select>
         </div>
         <div class="field-group">
@@ -292,6 +326,22 @@ include("../includes/sidebar.php");
           <label class="field-label">Base Salary (₱)</label>
           <input class="field-input" type="number" step="0.01" min="0" name="base_salary" id="f-salary"/>
         </div>
+      </div>
+
+      <div class="field-group mg-b">
+        <label class="field-label">Linked Login Account
+          <span style="color:var(--text-muted);font-weight:400;text-transform:none;font-size:10px"> — lets this person file their own requests/leave</span>
+        </label>
+        <select class="field-input" name="user_id" id="f-user">
+          <option value="">— Not linked —</option>
+          <?php foreach ($login_accounts as $u):
+            $already_linked = in_array($u['id'], $linked_ids);
+          ?>
+            <option value="<?= $u['id'] ?>" data-linked="<?= $already_linked ? '1' : '0' ?>" data-role="<?= htmlspecialchars($u['role']) ?>">
+              <?= htmlspecialchars($u['firstname'].' '.$u['lastname']) ?> (@<?= htmlspecialchars($u['username']) ?> · <?= htmlspecialchars($u['role']) ?>)<?= $already_linked ? ' — already linked' : '' ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
       </div>
 
       <div class="modal-actions">
@@ -340,6 +390,7 @@ function openAdd() {
   document.getElementById('emp-form').reset();
   document.getElementById('code-field').style.display = '';
   document.getElementById('f-code').required = true;
+  document.getElementById('f-user').value = '';
   document.getElementById('emp-modal').classList.add('open');
 }
 
@@ -357,6 +408,7 @@ function openEdit(e) {
   document.getElementById('f-email').value  = e.email || '';
   document.getElementById('f-hire').value   = e.hire_date || '';
   document.getElementById('f-salary').value = e.base_salary;
+  document.getElementById('f-user').value   = e.user_id || '';
   document.getElementById('code-field').style.display = 'none';
   document.getElementById('f-code').required = false;
   document.getElementById('emp-modal').classList.add('open');
@@ -379,6 +431,15 @@ function closeDelete() { document.getElementById('del-modal').classList.remove('
 
 function closeModalBg(e) { if (e.target === e.currentTarget) { closeModal(); closeDelete(); } }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeDelete(); } });
+
+// Auto-suggest matching Role when a login account is linked (still editable — just a convenience default)
+document.getElementById('f-user').addEventListener('change', function() {
+  const opt = this.options[this.selectedIndex];
+  const role = opt?.getAttribute('data-role');
+  if (role && document.getElementById('f-dept').querySelector(`option[value="${role}"]`)) {
+    document.getElementById('f-dept').value = role;
+  }
+});
 </script>
 
 </body>

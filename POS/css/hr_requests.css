@@ -81,6 +81,12 @@ tr:hover td { background: #fffaf5; }
 .status-rejected  { background: var(--red-lt);   color: var(--red); }
 .status-completed { background: var(--blue-lt);  color: var(--blue); }
 
+.notice-banner {
+  background: var(--amber-lt); border: 1.5px solid #ffe0b2; color: var(--amber);
+  padding: 12px 16px; border-radius: 12px; font-size: 13px; font-weight: 600;
+}
+.btn-add:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ── filter pills ── */
 .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
 .filter-pill {
@@ -91,6 +97,12 @@ tr:hover td { background: #fffaf5; }
 }
 .filter-pill:hover  { border-color: var(--accent); color: var(--accent); }
 .filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── notice banner ── */
+.notice-banner {
+  background: var(--amber-lt); color: var(--amber); border: 1.5px solid #ffe0b2;
+  border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 600;
+}
 
 /* ── action buttons ── */
 .act-group { display: flex; gap: 6px; flex-wrap: wrap; }

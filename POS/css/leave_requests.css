@@ -92,6 +92,11 @@ tr:hover td { background: #fffaf5; }
 .filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* ── leave card grid ── */
+.notice-banner {
+  background: var(--amber-lt); color: var(--amber); border: 1.5px solid #ffe0b2;
+  border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 600;
+}
+
 .leave-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .leave-card { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
 .lc-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 18px 10px; border-bottom: 1px solid #f5ede0; }

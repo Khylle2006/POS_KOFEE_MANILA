@@ -10,6 +10,8 @@
     flex-shrink: 0;
     z-index: 100;
     border-right: 2px solid #000000;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .sidebar-logo {
@@ -22,6 +24,15 @@
     justify-content: center;
     font-size: 22px;
     margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-divider {
+    width: 32px;
+    height: 1px;
+    background: rgba(255,255,255,.25);
+    margin: 6px 0;
+    flex-shrink: 0;
   }
 
   .nav-btn {
@@ -39,13 +50,14 @@
     color: #000000;
     gap: 3px;
     position: relative;
+    flex-shrink: 0;
   }
 
   .nav-btn:hover { background: rgba(255,255,255,0.07); color: #432818; }
   .nav-btn.active { background: var(--accent); color: #fff; }
 
-  .nav-btn svg { width: 22px; height: 22px; }
-  .nav-btn span { font-size: 8px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .nav-icon { font-size: 20px; line-height: 1; }
+  .nav-label { font-size: 8px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1; }
 
   .sidebar-spacer { flex: 1; }
 
@@ -54,13 +66,71 @@
     height: 52px;
     border-radius: 14px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     background: transparent;
     border: none;
     color: #000000;
+    gap: 3px;
     transition: background 0.18s, color 0.18s;
+    flex-shrink: 0;
   }
   .logout-btn:hover { background: #000000; color: var(--danger); }
-  .logout-btn svg { width: 22px; height: 22px; }
+
+  /* ── Mobile toggle button (hidden on desktop) ── */
+  .sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 250;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: none;
+    background: #8B5E3C;
+    color: #fff;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,.28);
+  }
+
+  /* ── Backdrop overlay behind the drawer ── */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 149;
+  }
+  .sidebar-overlay.open { display: block; }
+
+  /* ── Responsive: off-canvas drawer on tablet/mobile ── */
+  @media (max-width: 900px) {
+    .sidebar-toggle { display: flex; }
+
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 88px;
+      transform: translateX(-100%);
+      transition: transform .25s ease;
+      z-index: 150;
+      box-shadow: 4px 0 24px rgba(0,0,0,.25);
+      padding-top: 68px; /* clear the toggle button */
+    }
+    .sidebar.open { transform: translateX(0); }
+  }
+
+  @media (max-width: 480px) {
+    .sidebar { width: 76px; }
+    .nav-btn, .logout-btn { width: 48px; height: 48px; }
+    .nav-icon { font-size: 18px; }
+  }

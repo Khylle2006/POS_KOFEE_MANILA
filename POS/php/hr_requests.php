@@ -5,45 +5,72 @@ require_role();
 
 $pdo   = get_db();
 $user  = current_user();
+$role  = $user['role'] ?? 'crew';
 $toast = '';
 $toast_type = 'success';
 
+// Admin/HR = reviewers only. Everyone else = requesters only.
+$is_reviewer = in_array($role, ['admin', 'hr']);
+
 $request_types = ['Certificate of Employment','ID Replacement','Schedule Change','Payslip Copy','Document Correction','Other'];
+
+// ── Resolve the logged-in user's own employee profile (for self-service filing) ──
+$my_employee = null;
+if (!$is_reviewer) {
+    $stmt = $pdo->prepare('SELECT * FROM employees WHERE user_id = :uid LIMIT 1');
+    $stmt->execute([':uid' => $user['id']]);
+    $my_employee = $stmt->fetch() ?: null;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
+    // ── File a request — requesters only, always tied to THEIR OWN employee record ──
     if ($action === 'file') {
-        $emp_id = (int)($_POST['employee_id'] ?? 0);
-        $type   = trim($_POST['request_type'] ?? '');
-        $type   = in_array($type, $request_types) ? $type : ($type ?: 'Other');
-        $details = trim($_POST['details'] ?? '');
-
-        if (!$emp_id || !$type) {
-            $toast = '⚠️ Employee and request type are required.'; $toast_type = 'error';
+        if ($is_reviewer) {
+            $toast = '⚠️ HR/Admin accounts review requests and cannot file new ones.'; $toast_type = 'error';
+        } elseif (!$my_employee) {
+            $toast = "⚠️ Your account isn't linked to an employee profile yet. Ask HR to link it first."; $toast_type = 'error';
         } else {
+            $type    = trim($_POST['request_type'] ?? '');
+            $type    = $type ?: 'Other';
+            $details = trim($_POST['details'] ?? '');
+
             $pdo->prepare('INSERT INTO hr_requests (employee_id, request_type, details, status) VALUES (:e,:t,:d,"pending")')
-                ->execute([':e'=>$emp_id, ':t'=>$type, ':d'=>$details]);
+                ->execute([':e' => $my_employee['id'], ':t' => $type, ':d' => $details]);
             $toast = '✅ Request filed.';
         }
     }
 
+    // ── Approve / Reject / Complete — reviewers only ──
     if ($action === 'review') {
-        $id     = (int)($_POST['id'] ?? 0);
-        $status = $_POST['status'] ?? '';
-        if ($id && in_array($status, ['approved','rejected','completed'])) {
-            $pdo->prepare('UPDATE hr_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
-                ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
-            $labels = ['approved'=>'✅ Request approved.', 'rejected'=>'❌ Request rejected.', 'completed'=>'📦 Request marked completed.'];
-            $toast = $labels[$status];
+        if (!$is_reviewer) {
+            $toast = '⚠️ Only HR/Admin can review requests.'; $toast_type = 'error';
+        } else {
+            $id     = (int)($_POST['id'] ?? 0);
+            $status = $_POST['status'] ?? '';
+            if ($id && in_array($status, ['approved','rejected','completed'])) {
+                $pdo->prepare('UPDATE hr_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
+                    ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
+                $labels = ['approved'=>'✅ Request approved.', 'rejected'=>'❌ Request rejected.', 'completed'=>'📦 Request marked completed.'];
+                $toast  = $labels[$status];
+            }
         }
     }
 
+    // ── Delete — reviewers can remove any; requesters can cancel their OWN pending request ──
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         if ($id) {
-            $pdo->prepare('DELETE FROM hr_requests WHERE id=:id')->execute([':id'=>$id]);
-            $toast = '🗑️ Request deleted.';
+            if ($is_reviewer) {
+                $pdo->prepare('DELETE FROM hr_requests WHERE id=:id')->execute([':id'=>$id]);
+                $toast = '🗑️ Request deleted.';
+            } elseif ($my_employee) {
+                $del = $pdo->prepare("DELETE FROM hr_requests WHERE id=:id AND employee_id=:e AND status='pending'");
+                $del->execute([':id'=>$id, ':e'=>$my_employee['id']]);
+                $toast = $del->rowCount() ? '🗑️ Request cancelled.' : '⚠️ Only your own pending requests can be cancelled.';
+                if (!$del->rowCount()) $toast_type = 'error';
+            }
         }
     }
 
@@ -57,11 +84,17 @@ if (isset($_GET['toast'])) {
     $toast_type = $_GET['type'] ?? 'success';
 }
 
-$filter    = $_GET['status'] ?? 'all';
-$employees = $pdo->query("SELECT id, employee_code, firstname, lastname FROM employees WHERE status='active' ORDER BY firstname")->fetchAll();
+$filter = $_GET['status'] ?? 'all';
 
-$where = '1=1';
+$where  = '1=1';
 $params = [];
+
+if (!$is_reviewer) {
+    // Requesters only ever see their own requests
+    $where .= ' AND r.employee_id = :myid';
+    $params[':myid'] = $my_employee['id'] ?? 0;
+}
+
 if (in_array($filter, ['pending','approved','rejected','completed'])) {
     $where .= ' AND r.status = :st';
     $params[':st'] = $filter;
@@ -91,7 +124,7 @@ include("../includes/sidebar.php");
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>HR Requests — Kofee POS</title>
+<title>Requests — Kofee POS</title>
 <link rel="stylesheet" href="../css/style.css"/>
 <link rel="stylesheet" href="../css/sidebar.css"/>
 <link rel="stylesheet" href="../css/hr_requests.css"/>
@@ -103,12 +136,20 @@ include("../includes/sidebar.php");
   <div class="page-header">
     <div>
       <h1>Requests</h1>
-      <p>Employee document & administrative requests</p>
+      <p><?= $is_reviewer ? 'Review employee document & administrative requests' : 'File and track your requests' ?></p>
     </div>
-    <button class="btn-add" onclick="openFile()">➕ New Request</button>
+    <?php if (!$is_reviewer && $my_employee): ?>
+      <button class="btn-add" onclick="openFile()">➕ New Request</button>
+    <?php endif; ?>
   </div>
 
   <div class="page-body">
+
+    <?php if (!$is_reviewer && !$my_employee): ?>
+      <div class="notice-banner">
+        ⚠️ Your account isn't linked to an employee profile yet, so you can't file requests. Ask HR to link your account on the Employees page.
+      </div>
+    <?php endif; ?>
 
     <div class="stat-row">
       <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0">⏳</div><div><div class="mini-stat-val"><?= $pending_c ?></div><div class="mini-stat-lbl">Pending</div></div></div>
@@ -127,45 +168,64 @@ include("../includes/sidebar.php");
     <div class="table-card">
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>Employee</th><th>Request Type</th><th>Details</th><th>Filed</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead>
+            <tr>
+              <?php if ($is_reviewer): ?><th>Employee</th><?php endif; ?>
+              <th>Request Type</th><th>Details</th><th>Filed</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
           <tbody>
           <?php if (empty($requests)): ?>
-            <tr class="empty-row"><td colspan="6">🫙 No requests found.</td></tr>
+            <tr class="empty-row"><td colspan="<?= $is_reviewer ? 6 : 5 ?>">🫙 No requests found.</td></tr>
           <?php else: foreach ($requests as $r): ?>
             <tr>
-              <td style="font-weight:700"><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
+              <?php if ($is_reviewer): ?>
+                <td style="font-weight:700"><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
+              <?php endif; ?>
               <td><?= htmlspecialchars($r['request_type']) ?></td>
               <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)"><?= htmlspecialchars($r['details'] ?: '—') ?></td>
               <td style="color:var(--text-muted);font-size:12px"><?= date('M d, Y', strtotime($r['created_at'])) ?></td>
               <td><span class="status-badge status-<?= $r['status'] ?>"><?= ucfirst($r['status']) ?></span></td>
               <td>
                 <div class="act-group">
-                  <?php if ($r['status'] === 'pending'): ?>
-                    <form method="POST" style="display:inline">
-                      <input type="hidden" name="action" value="review"/>
+                  <?php if ($is_reviewer): ?>
+                    <?php if ($r['status'] === 'pending'): ?>
+                      <form method="POST" style="display:inline">
+                        <input type="hidden" name="action" value="review"/>
+                        <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
+                        <input type="hidden" name="status" value="approved"/>
+                        <button type="submit" class="act-btn act-activate">✅ Approve</button>
+                      </form>
+                      <form method="POST" style="display:inline">
+                        <input type="hidden" name="action" value="review"/>
+                        <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
+                        <input type="hidden" name="status" value="rejected"/>
+                        <button type="submit" class="act-btn act-block">❌ Reject</button>
+                      </form>
+                    <?php elseif ($r['status'] === 'approved'): ?>
+                      <form method="POST" style="display:inline">
+                        <input type="hidden" name="action" value="review"/>
+                        <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
+                        <input type="hidden" name="status" value="completed"/>
+                        <button type="submit" class="act-btn act-hold">📦 Mark Completed</button>
+                      </form>
+                    <?php endif; ?>
+                    <form method="POST" style="display:inline" onsubmit="return confirm('Delete this request?')">
+                      <input type="hidden" name="action" value="delete"/>
                       <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
-                      <input type="hidden" name="status" value="approved"/>
-                      <button type="submit" class="act-btn act-activate">✅ Approve</button>
+                      <button type="submit" class="act-btn act-delete">🗑️</button>
                     </form>
-                    <form method="POST" style="display:inline">
-                      <input type="hidden" name="action" value="review"/>
-                      <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
-                      <input type="hidden" name="status" value="rejected"/>
-                      <button type="submit" class="act-btn act-block">❌ Reject</button>
-                    </form>
-                  <?php elseif ($r['status'] === 'approved'): ?>
-                    <form method="POST" style="display:inline">
-                      <input type="hidden" name="action" value="review"/>
-                      <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
-                      <input type="hidden" name="status" value="completed"/>
-                      <button type="submit" class="act-btn act-hold">📦 Mark Completed</button>
-                    </form>
+                  <?php else: ?>
+                    <?php if ($r['status'] === 'pending'): ?>
+                      <form method="POST" style="display:inline" onsubmit="return confirm('Cancel this request?')">
+                        <input type="hidden" name="action" value="delete"/>
+                        <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
+                        <button type="submit" class="act-btn act-block">✕ Cancel</button>
+                      </form>
+                    <?php else: ?>
+                      <span style="color:var(--text-muted);font-size:12px">—</span>
+                    <?php endif; ?>
                   <?php endif; ?>
-                  <form method="POST" style="display:inline" onsubmit="return confirm('Delete this request?')">
-                    <input type="hidden" name="action" value="delete"/>
-                    <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
-                    <button type="submit" class="act-btn act-delete">🗑️</button>
-                  </form>
                 </div>
               </td>
             </tr>
@@ -177,24 +237,20 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
-<!-- File request modal -->
+<?php if (!$is_reviewer && $my_employee): ?>
+<!-- File request modal (requesters only) -->
 <div class="modal-bg" id="file-modal" onclick="if(event.target===this) closeFile()">
   <div class="modal">
     <div class="modal-header">
-      <h3>➕ New HR Request</h3>
+      <h3>➕ New Request</h3>
       <button class="modal-close" onclick="closeFile()">✕</button>
     </div>
     <form method="POST">
       <input type="hidden" name="action" value="file"/>
 
       <div class="field-group mg-b">
-        <label class="field-label">Employee <span class="req">*</span></label>
-        <select class="field-input" name="employee_id" required>
-          <option value="">Select employee…</option>
-          <?php foreach ($employees as $e): ?>
-            <option value="<?= $e['id'] ?>"><?= htmlspecialchars($e['firstname'].' '.$e['lastname']) ?> (#<?= htmlspecialchars($e['employee_code']) ?>)</option>
-          <?php endforeach; ?>
-        </select>
+        <label class="field-label">Filing as</label>
+        <input class="field-input" type="text" value="<?= htmlspecialchars($my_employee['firstname'].' '.$my_employee['lastname'].' (#'.$my_employee['employee_code'].')') ?>" disabled/>
       </div>
 
       <div class="field-group mg-b">
@@ -216,6 +272,7 @@ include("../includes/sidebar.php");
     </form>
   </div>
 </div>
+<?php endif; ?>
 
 <?php if ($toast): ?>
 <div class="toast toast-<?= $toast_type ?>" id="toast-msg"><?= $toast ?></div>
@@ -223,8 +280,8 @@ include("../includes/sidebar.php");
 <?php endif; ?>
 
 <script>
-function openFile()  { document.getElementById('file-modal').classList.add('open'); }
-function closeFile() { document.getElementById('file-modal').classList.remove('open'); }
+function openFile()  { document.getElementById('file-modal')?.classList.add('open'); }
+function closeFile() { document.getElementById('file-modal')?.classList.remove('open'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFile(); });
 </script>
 
