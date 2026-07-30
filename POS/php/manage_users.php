@@ -276,7 +276,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
       <h1>Staff</h1>
       <p>Manage login accounts and employee profiles in one place</p>
     </div>
-    <button class="submit-btn" style="width:auto;padding:11px 22px;margin-top:0" onclick="openAdd()">➕ Add Staff Member</button>
+    <button class="btn-add-staff" onclick="openAdd()">➕ Add Staff Member</button>
   </div>
 
   <div class="page-body">
@@ -340,13 +340,14 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
             <?php if (empty($filtered)): ?>
               <tr class="empty-row"><td colspan="9">🫙 No staff found.</td></tr>
             <?php else:
-              $colors = ['#c47d3e','#2e7d32','#1565c0','#7b1fa2','#c62828','#00695c'];
-              $i = 0;
+              // Avatar tint matches the role badge colors — a glance at the
+              // left edge of the table now tells you who's what.
+              $role_colors = ['hr'=>'#6a3fa0','finance'=>'#00695c','crew'=>'#1565c0','manager'=>'#e65100','admin'=>'#c47d3e'];
               foreach ($filtered as $r):
-                $i++;
                 $full     = htmlspecialchars($r['fn'].' '.$r['ln']);
                 $initials = strtoupper(substr($r['fn'],0,1).substr($r['ln'],0,1)) ?: '?';
-                $color    = $colors[$i % count($colors)];
+                $primary  = $r['role_array'][0] ?? $r['department'] ?? null;
+                $color    = $role_colors[$primary] ?? '#9a7e65';
                 $is_self  = ((int)$r['user_id'] === (int)$_SESSION['user_id']) && $r['user_id'];
             ?>
               <tr>
@@ -360,14 +361,14 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
                   </div>
                 </td>
                 <td>
-                  <?= $r['username'] ? '@'.htmlspecialchars($r['username']) : '<span style="color:var(--text-muted)">— No account</span>' ?>
+                  <?= $r['username'] ? '@'.htmlspecialchars($r['username']) : '<span class="muted-cell">— No account</span>' ?>
                 </td>
                 <td style="font-weight:700"><?= $r['employee_code'] ? '#'.htmlspecialchars($r['employee_code']) : '—' ?></td>
                 <td><?= htmlspecialchars($r['position'] ?: '—') ?></td>
                 <td><?= $r['department'] ? htmlspecialchars($roles[$r['department']] ?? $r['department']) : '—' ?></td>
                 <td>
                   <?php if (empty($r['role_array'])): ?>
-                    <span style="color:var(--text-muted);font-size:12px">—</span>
+                    <span class="muted-cell">—</span>
                   <?php else: foreach ($r['role_array'] as $rl): ?>
                     <span class="badge badge-<?= htmlspecialchars($rl) ?>"><?= htmlspecialchars($roles[$rl] ?? $rl) ?></span>
                   <?php endforeach; endif; ?>
@@ -376,14 +377,14 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
                   <?php if ($r['account_status']): ?>
                     <span class="badge badge-<?= $r['account_status'] ?>"><?= ucfirst(str_replace('_',' ',$r['account_status'])) ?></span>
                   <?php else: ?>
-                    <span style="color:var(--text-muted);font-size:12px">—</span>
+                    <span class="muted-cell">—</span>
                   <?php endif; ?>
                 </td>
                 <td>
                   <?php if ($r['emp_status']): ?>
                     <span class="badge badge-<?= $r['emp_status']==='active'?'active':'blocked' ?>"><?= ucfirst($r['emp_status']) ?></span>
                   <?php else: ?>
-                    <span style="color:var(--text-muted);font-size:12px">—</span>
+                    <span class="muted-cell">—</span>
                   <?php endif; ?>
                 </td>
                 <td>
@@ -455,11 +456,11 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 
       <div class="field-row mg-b">
         <div class="field-group">
-          <label class="field-label">First Name <span style="color:var(--red)">*</span></label>
+          <label class="field-label">First Name <span class="req">*</span></label>
           <input class="field-input" type="text" name="firstname" id="f-fn" required/>
         </div>
         <div class="field-group">
-          <label class="field-label">Last Name <span style="color:var(--red)">*</span></label>
+          <label class="field-label">Last Name <span class="req">*</span></label>
           <input class="field-input" type="text" name="lastname" id="f-ln" required/>
         </div>
       </div>
@@ -470,20 +471,22 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
       </div>
 
       <!-- ── Login account section (toggle) ── -->
-      <div class="toggle-row" style="margin-bottom:12px">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer">
-          <input type="checkbox" name="want_account" id="f-want-account" checked onchange="toggleSection('account')"/>
-          🔑 Login Account
-        </label>
-      </div>
-      <div id="account-fields">
+      <label class="section-toggle" for="f-want-account">
+        <input type="checkbox" name="want_account" id="f-want-account" checked onchange="toggleSection('account')"/>
+        <span class="section-toggle-icon">🔑</span>
+        <span class="section-toggle-text">
+          <strong>Login Account</strong>
+          <small>Lets this person sign in to the POS</small>
+        </span>
+      </label>
+      <div id="account-fields" class="section-body">
         <div class="field-group mg-b">
           <label class="field-label">Username</label>
           <input class="field-input" type="text" name="username" id="f-username"/>
         </div>
         <div class="field-group mg-b">
-          <label class="field-label">Roles <span style="color:var(--red)">*</span>
-            <span style="color:var(--text-muted);font-weight:400;text-transform:none;font-size:10px"> — select all that apply</span>
+          <label class="field-label">Roles <span class="req">*</span>
+            <span class="field-hint"> — select all that apply</span>
           </label>
           <div class="role-checks" id="f-roles">
             <?php foreach ($roles as $val=>$label): ?>
@@ -495,7 +498,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
         </div>
         <div class="field-row mg-b">
           <div class="field-group">
-            <label class="field-label">Password <span id="pw-hint" style="color:var(--text-muted);font-weight:400;font-size:10px"></span></label>
+            <label class="field-label">Password <span id="pw-hint" class="field-hint"></span></label>
             <div class="pw-wrap">
               <input class="field-input" type="password" name="password" id="f-password"/>
               <button type="button" class="pw-eye" onclick="togglePw('f-password',this)">👁️</button>
@@ -512,19 +515,21 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
       </div>
 
       <!-- ── Employee profile section (toggle) ── -->
-      <div class="toggle-row" style="margin-bottom:12px">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer">
-          <input type="checkbox" name="want_employee" id="f-want-employee" checked onchange="toggleSection('employee')"/>
-          🪪 Employee Profile
-        </label>
-      </div>
-      <div id="employee-fields">
+      <label class="section-toggle" for="f-want-employee">
+        <input type="checkbox" name="want_employee" id="f-want-employee" checked onchange="toggleSection('employee')"/>
+        <span class="section-toggle-icon">🪪</span>
+        <span class="section-toggle-text">
+          <strong>Employee Profile</strong>
+          <small>Position, pay, and HR details</small>
+        </span>
+      </label>
+      <div id="employee-fields" class="section-body">
         <div class="field-group mg-b" id="code-field">
-          <label class="field-label">Employee Code <span style="color:var(--red)">*</span></label>
+          <label class="field-label">Employee Code <span class="req">*</span></label>
           <input class="field-input" type="text" name="employee_code" id="f-code" placeholder="e.g. EMP-0001"/>
         </div>
         <div class="field-group mg-b">
-          <label class="field-label">Position <span style="color:var(--red)">*</span></label>
+          <label class="field-label">Position <span class="req">*</span></label>
           <input class="field-input" type="text" name="position" id="f-pos" placeholder="e.g. Barista"/>
         </div>
         <div class="field-group mg-b">
