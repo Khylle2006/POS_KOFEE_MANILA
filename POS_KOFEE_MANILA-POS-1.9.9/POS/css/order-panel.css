@@ -1,0 +1,54 @@
+/* ============================================================
+   Kofee Manila — Order panel (right-hand ticket)
+   ============================================================ */
+
+.order-panel {
+  width: 340px; flex-shrink: 0;
+  background: var(--card-bg);
+  border-left: 1.5px solid var(--border);
+  display: flex; flex-direction: column;
+  height: 100%; min-height: 0;
+}
+
+.order-type-bar { display: flex; gap: 8px; padding: 20px 20px 14px; border-bottom: 1.5px solid var(--border); }
+.order-type-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+  border: 1.5px solid var(--border); background: #fff; color: var(--text-muted);
+  border-radius: var(--radius-sm); padding: 10px; font-size: 12.5px; font-weight: 600;
+}
+.order-type-btn svg { width: 15px; height: 15px; }
+.order-type-btn.active { background: var(--espresso); color: #fff; border-color: var(--espresso); }
+
+.order-items { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.order-empty { text-align: center; padding: 60px 16px; color: var(--text-muted); }
+.oe-icon { font-size: 36px; margin-bottom: 10px; }
+.order-empty p { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.order-empty small { font-size: 11.5px; }
+
+.order-item-row {
+  display: flex; align-items: center; gap: 10px;
+  background: #FBF6EF; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+}
+.oi-icon { font-size: 22px; width: 34px; text-align: center; flex-shrink: 0; }
+.oi-info { flex: 1; min-width: 0; }
+.oi-name { font-size: 12.5px; font-weight: 700; color: var(--espresso); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oi-size { font-size: 10.5px; color: var(--text-muted); }
+.oi-controls { display: flex; align-items: center; gap: 6px; }
+.qty-btn {
+  width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--border); background: #fff;
+  font-size: 13px; font-weight: 700; color: var(--caramel); display: flex; align-items: center; justify-content: center;
+}
+.qty-btn:hover { background: var(--accent-lt); border-color: var(--caramel); }
+.qty-num { font-size: 12.5px; font-weight: 700; min-width: 16px; text-align: center; }
+.oi-price { font-size: 12.5px; font-weight: 800; color: var(--espresso); min-width: 56px; text-align: right; }
+
+.order-footer { border-top: 1.5px solid var(--border); padding: 16px 20px 20px; }
+.order-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-muted); padding: 4px 0; }
+.order-row.total { border-top: 1.5px dashed var(--border); margin-top: 6px; padding-top: 10px; font-size: 16px; color: var(--espresso); }
+.order-row.total strong:last-child { color: var(--caramel); }
+
+@media (max-width: 1100px) {
+  .order-panel { width: 100%; height: auto; position: static; border-left: none; border-top: 1.5px solid var(--border); }
+  .order-items { max-height: 300px; }
+}

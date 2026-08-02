@@ -1,0 +1,226 @@
+/* ============================================================
+   Pending Orders — page-specific styles
+   Loaded after style.css / sidebar.css, so it can freely
+   override shared classes (.filter-btn, .refresh-btn, etc.)
+   without touching how those classes render on other pages.
+   ============================================================ */
+
+/* ── Header right block: Refresh + live meta text ─────────── */
+#page-pending .page-header {
+  align-items: center;
+}
+.pending-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  color: var(--text-main);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: var(--shadow-card);
+  transition: border-color .15s ease, color .15s ease, transform .12s ease;
+}
+.refresh-btn:hover { border-color: var(--caramel); color: var(--caramel); }
+.refresh-btn:active { transform: translateY(1px); }
+.refresh-ic { display: inline-block; font-size: 13px; }
+.refresh-btn.spin .refresh-ic { animation: refresh-spin .6s linear; }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
+
+.pending-meta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Filter pills: dark "All" active state + Pending dot ──── */
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.filter-btn.active {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: #fff;
+}
+.filter-btn .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--amber);
+  display: inline-block;
+}
+
+/* ── Grid ───────────────────────────────────────────────────*/
+#orders-grid {
+  padding: 18px 32px 32px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+/* ── Card ───────────────────────────────────────────────────*/
+.order-card {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow .15s ease, transform .12s ease;
+}
+.order-card:hover {
+  box-shadow: 0 12px 28px -12px rgba(43,33,48,.18);
+  transform: translateY(-1px);
+}
+.order-card.large-order {
+  border-color: var(--caramel);
+  box-shadow: 0 0 0 1.5px var(--caramel-light) inset, var(--shadow-card);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1.5px solid #F2E6D6;
+}
+.card-order-num {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--espresso);
+}
+
+.card-type {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.large-tag { color: var(--caramel); font-weight: 700; }
+
+.card-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.card-item-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-main);
+}
+.card-item-row span:last-child {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.card-total-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  padding-top: 8px;
+  border-top: 1.5px dashed #F2E6D6;
+}
+.card-total-amount {
+  font-family: 'Playfair Display', serif;
+  font-weight: 800;
+  font-size: 23px;
+  color: var(--espresso);
+  margin-top: -4px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.action-btn {
+  flex: 1;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  transition: transform .12s ease, box-shadow .12s ease, background .15s ease;
+}
+.action-btn:active { transform: translateY(1px); }
+.action-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.btn-complete { background: var(--green-lt); color: var(--green); }
+.btn-complete:hover { background: #d7ecd8; }
+
+.btn-cancel { background: var(--red-lt); color: var(--red); }
+.btn-cancel:hover { background: #fbdcd8; }
+
+/* ── Empty / loading states ─────────────────────────────────*/
+.loading-wrap, .empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 70px 20px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+.empty-icon { font-size: 34px; margin-bottom: 10px; }
+.empty-state p { font-size: 14px; font-weight: 600; color: var(--text-main); margin-bottom: 4px; }
+
+/* ── Confirmation modal (custom card, sits inside .modal-overlay) ──*/
+.confirm-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 360px;
+  padding: 30px 26px 26px;
+  text-align: center;
+  box-shadow: var(--shadow-pop);
+  transform: translateY(14px) scale(.98);
+  transition: transform .2s ease;
+}
+.modal-overlay.open .confirm-card { transform: translateY(0) scale(1); }
+
+.confirm-icon { font-size: 38px; margin-bottom: 12px; }
+#conf-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--espresso);
+  margin-bottom: 6px;
+}
+#conf-message { font-size: 13px; color: var(--text-muted); margin-bottom: 22px; line-height: 1.5; }
+
+.confirm-actions { display: flex; gap: 10px; }
+.btn-conf-cancel, .btn-conf-ok {
+  flex: 1;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 11px;
+  font-size: 13px;
+  font-weight: 700;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.btn-conf-cancel:active, .btn-conf-ok:active { transform: translateY(1px); }
+.btn-conf-cancel { background: #fff; border: 1.5px solid var(--border); color: var(--text-main); }
+.btn-conf-cancel:hover { border-color: var(--caramel); color: var(--caramel); }
+
+.btn-conf-ok { color: #fff; }
+.btn-conf-ok.ok-pending  { background: linear-gradient(135deg, var(--amber), #8a5313); }
+.btn-conf-ok.ok-complete { background: linear-gradient(135deg, var(--green), #1b5e20); }
+.btn-conf-ok.ok-cancel   { background: linear-gradient(135deg, var(--red), #8e1c1c); }
+
+/* ── Responsive ─────────────────────────────────────────────*/
+@media (max-width: 900px) {
+  #orders-grid { padding: 16px 20px 28px; grid-template-columns: 1fr; }
+  .pending-header-right { align-items: flex-start; }
+}
