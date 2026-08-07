@@ -1,9 +1,7 @@
 <?php
-// php/save_permissions.php — toggle one permission for one role (admin only)
-require_once '../includes/db.php';
-require_once '../includes/auth_check.php';
+require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
-require_role();
+require_login();
 
 header('Content-Type: application/json');
 

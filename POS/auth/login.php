@@ -2,7 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 if (!empty($_SESSION['user_id'])) {
-    header('Location: ' . ($_SESSION['role'] === 'admin' ? 'php/dashboard.php' : 'php/menu.php'));
+    header('Location: ' . ($_SESSION['role'] === 'admin' ? '../php/dashboard.php' : '../php/menu.php'));
     exit;
 }
 

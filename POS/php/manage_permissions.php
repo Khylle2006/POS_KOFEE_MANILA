@@ -136,17 +136,37 @@ include("../includes/sidebar.php");
       <button type="button" class="btn-save" onclick="addRole()">➕ Create Role</button>
     </div>
   </div>
+  
+
 </div>
 
-<script>
-    // ✅ Create CONFIG in PHP file
-    window.CONFIG = {
-        role: <?= json_encode($selected) ?>,
-        userId: <?= json_encode($user_id) ?>,
-        permissions: <?= json_encode($user_perms) ?>,
-        apiUrl: '../api/'
-    };
-</script>
+<!-- Save changes confirm modal -->
+  <div class="modal-bg" id="save-confirm-modal" onclick="if(event.target===this) closeSaveConfirm()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <h3>💾 Save Permission Changes?</h3>
+      <button class="modal-close" onclick="closeSaveConfirm()">✕</button>
+    </div>
+    <div class="section-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+        You're about to update permissions for <strong id="save-confirm-role"></strong>:
+      </p>
+      <div id="save-confirm-list"
+           style="max-height:220px;overflow-y:auto;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 0;margin-bottom:6px"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" onclick="closeSaveConfirm()">Cancel</button>
+      <button type="button" class="btn-save" id="save-confirm-btn" onclick="doSaveChanges()">✔ Confirm &amp; Save</button>
+    </div>
+  </div>
+</div>
+
+window.CONFIG = {
+    role: <?= json_encode($selected) ?>,
+    userId: <?= json_encode($user['id']) ?>,
+    permissions: <?= json_encode($grants[$selected] ?? []) ?>,
+    apiUrl: '../api/'
+};
 
 
 <script src="../js/manage_permissions.js"></script>
