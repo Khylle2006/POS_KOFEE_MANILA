@@ -1,0 +1,55 @@
+/* ============================================================
+   Kofee Manila — Leave Requests (php/leave_requests.php)
+   Page-specific styles. Buttons, inputs, badges, and toasts
+   already come from style.css — this file only adds what's
+   unique to this page.
+   ============================================================ */
+
+/* ── Stat cards row (3 cards: Pending / Approved / Rejected) ─ */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 700px) { .stat-row { grid-template-columns: 1fr; } }
+
+/* ── Notice banner (account not linked to an employee profile) ─ */
+.notice-banner {
+  background: var(--amber-lt); color: var(--amber);
+  border: 1.5px solid #f2ddb8; border-radius: var(--radius);
+  padding: 12px 16px; font-size: 12.5px; font-weight: 600;
+}
+
+/* ── Leave cards grid ───────────────────────── */
+.leave-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center; padding: 40px 20px;
+  color: var(--text-muted); font-size: 13px;
+  background: var(--card-bg); border: 1.5px solid var(--border); border-radius: var(--radius);
+}
+
+.leave-card {
+  background: var(--card-bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-card);
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;
+}
+
+.lc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.lc-name { font-size: 14px; font-weight: 700; color: var(--espresso); }
+.lc-sub  { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+.lc-body { display: flex; flex-direction: column; gap: 6px; }
+.lc-row { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; }
+.lc-row span { color: var(--text-muted); }
+.lc-row strong { color: var(--text-main); font-weight: 700; }
+.lc-reason {
+  font-size: 12px; color: var(--text-muted); font-style: italic;
+  padding-top: 4px; border-top: 1px dashed var(--border);
+}
+
+.lc-actions { display: flex; gap: 8px; }

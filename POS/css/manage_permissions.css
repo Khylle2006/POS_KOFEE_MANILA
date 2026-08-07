@@ -1,0 +1,114 @@
+/* ============================================================
+   Kofee Manila — Manage Permissions (php/manage_permissions.php)
+   Page-specific styles. Buttons, inputs, toasts, and the modal
+   already come from style.css — this file only adds what's
+   unique to this page.
+   ============================================================ */
+
+/* ── Roles card ─────────────────────────────── */
+.roles-card {
+  background: var(--card-bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-card);
+  padding: 20px 22px;
+}
+.roles-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 18px;
+}
+.roles-card-head h2 {
+  font-size: 17px; font-weight: 700; color: var(--espresso);
+  font-family: 'Playfair Display', serif;
+}
+.btn-add-role {
+  border: none; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--caramel) 0%, var(--espresso) 160%);
+  color: #fff; font-size: 12.5px; font-weight: 700;
+  padding: 9px 16px; box-shadow: 0 8px 18px -8px rgba(201,123,61,.55);
+}
+.btn-add-role:hover { transform: translateY(-1px); }
+
+.role-picker-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.role-picker {
+  flex: 1; padding: 12px 14px; border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--accent-lt);
+  font-size: 14px; font-weight: 600; color: var(--text-main);
+  cursor: pointer;
+}
+.role-picker:focus { border-color: var(--caramel); }
+.btn-remove-role {
+  white-space: nowrap;
+  background: #fff; color: var(--red); border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); padding: 11px 16px;
+  font-size: 12.5px; font-weight: 700;
+}
+.btn-remove-role:hover { border-color: var(--red); background: var(--red-lt); }
+
+/* ── Permissions card ───────────────────────── */
+.perms-card {
+  background: var(--card-bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.perms-card-head {
+  background: var(--latte); color: var(--text-muted);
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  padding: 12px 22px;
+}
+.perm-empty { padding: 30px 22px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+.perm-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 16px 22px; border-bottom: 1px solid #F2E6D6;
+}
+.perm-row:last-child { border-bottom: none; }
+.perm-row:hover { background: #FEFAF4; }
+.perm-label { font-size: 14px; font-weight: 700; color: var(--espresso); }
+.perm-desc  { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+.perm-toggle {
+  flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1.5px solid var(--border); background: #fff; color: transparent;
+  font-size: 15px; font-weight: 800; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s ease;
+}
+.perm-toggle:hover { border-color: var(--caramel); }
+.perm-toggle.on {
+  background: linear-gradient(135deg, var(--caramel) 0%, var(--espresso) 160%);
+  border-color: transparent; color: #fff;
+  box-shadow: 0 4px 10px -4px rgba(201,123,61,.6);
+}
+
+/* ── Save changes ───────────────────────────── */
+.save-row { display: flex; justify-content: flex-end; }
+.btn-save-changes {
+  border: none; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--caramel) 0%, var(--espresso) 160%);
+  color: #fff; font-size: 13.5px; font-weight: 700;
+  padding: 12px 26px; box-shadow: 0 8px 18px -8px rgba(201,123,61,.55);
+}
+.btn-save-changes:hover { transform: translateY(-1px); }
+.btn-save-changes:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+/* ── Add-role modal extras ─────────────────── */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(24,17,32,.55);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .18s ease;
+  z-index: 300; padding: 20px;
+}
+.modal-bg.open { opacity: 1; pointer-events: all; }
+.modal-bg .modal {
+  background: #fff; border-radius: var(--radius-lg); width: 100%; max-width: 420px;
+  box-shadow: var(--shadow-pop);
+  transform: translateY(14px) scale(.98); transition: transform .2s ease;
+}
+.modal-bg.open .modal { transform: translateY(0) scale(1); }
+.section-body { padding: 18px 22px 4px; }
+.req { color: var(--red); font-weight: 700; }
+.field-hint { font-weight: 500; text-transform: none; color: var(--text-muted); letter-spacing: 0; font-size: 11px; }
+.ar-msg { display: block; font-size: 12px; font-weight: 600; margin-top: 4px; }
+.ar-msg.error   { color: var(--red); }
+.ar-msg.success { color: var(--green); }
