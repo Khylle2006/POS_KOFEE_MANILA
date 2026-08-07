@@ -1,7 +1,7 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
-require_role();
+require_login();
 
 $user = current_user();
 ?>

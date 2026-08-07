@@ -16,18 +16,55 @@ function togglePerm(el) {
 
 // ── Save changes: diff every row against its original state,
 //    then push each change through the existing per-permission endpoint ──
+// ── Save changes: preview step ──
+// ── Save changes: preview step ──
 function saveChanges() {
-  const CONFIG = window.CONFIG || {};
-
-    const role = CONFIG.role;        // Works! Gets 'admin'
-    const userId = CONFIG.userId;    // Works! Gets 123
-    const apiUrl = CONFIG.apiUrl;    // Works! Gets '../api/'
-
-    console.log('Role:', role);
   const rows = [...document.querySelectorAll('.perm-toggle')];
   const changed = rows.filter(el => (el.classList.contains('on') ? '1' : '0') !== el.dataset.original);
 
   if (!changed.length) { showToast('Nothing to save.'); return; }
+
+  const roleSelect = document.getElementById('role-picker');
+  const role = roleSelect ? roleSelect.value : (window.CONFIG?.role || '');
+
+  if (!role) {
+    showToast('⚠️ No role selected — cannot save.', 'error');
+    return;
+  }
+
+  const roleLabel = roleSelect ? roleSelect.options[roleSelect.selectedIndex].textContent.trim() : role;
+  document.getElementById('save-confirm-role').textContent = roleLabel;
+
+  document.getElementById('save-confirm-list').innerHTML = changed.map(el => {
+    const row     = el.closest('.perm-row');
+    const label   = row ? row.querySelector('.perm-label').textContent : el.dataset.perm;
+    const granted = el.classList.contains('on');
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:12.5px">
+      <span>${label}</span>
+      <span style="font-weight:700;color:${granted ? 'var(--green)' : 'var(--red)'}">
+        ${granted ? '✅ Grant' : '❌ Revoke'}
+      </span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('save-confirm-modal').classList.add('open');
+}
+
+function closeSaveConfirm() {
+  document.getElementById('save-confirm-modal').classList.remove('open');
+}
+
+// ── Save changes: actual commit ──
+function doSaveChanges() {
+  const roleSelect = document.getElementById('role-picker');
+  const role = roleSelect ? roleSelect.value : (window.CONFIG?.role || '');
+
+  const rows    = [...document.querySelectorAll('.perm-toggle')];
+  const changed = rows.filter(el => (el.classList.contains('on') ? '1' : '0') !== el.dataset.original);
+
+  closeSaveConfirm();
+  if (!changed.length) { showToast('Nothing to save.'); return; }
+  if (!role) { showToast('⚠️ No role selected — cannot save.', 'error'); return; }
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true;
@@ -35,7 +72,7 @@ function saveChanges() {
 
   Promise.all(changed.map(el => {
     const granted = el.classList.contains('on');
-    return fetch('save_permissions.php', {
+    return fetch('../api/save_permissions.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role, perm_key: el.dataset.perm, granted })
@@ -43,17 +80,19 @@ function saveChanges() {
   }))
   .then(results => {
     let failed = 0;
+    let firstError = '';
     results.forEach(({ el, granted, res }) => {
       if (res.ok) {
         el.dataset.original = granted ? '1' : '0';
       } else {
         failed++;
+        firstError = firstError || res.error || 'Unknown error';
         el.classList.toggle('on'); // revert this one
       }
     });
     btn.disabled = false;
     btn.textContent = 'Save changes';
-    if (failed) showToast('⚠️ ' + failed + ' change(s) failed to save.', 'error');
+    if (failed) showToast('⚠️ ' + failed + ' change(s) failed: ' + firstError, 'error');
     else showToast('✅ Changes saved!');
   })
   .catch(() => {
@@ -63,6 +102,13 @@ function saveChanges() {
   });
 }
 
+function closeSaveConfirm() {
+  document.getElementById('save-confirm-modal').classList.remove('open');
+}
+
+// ── Save changes: actual commit (was the old saveChanges body) ──
+
+
 // ── Add role ──
 function openAddRole() {
   document.getElementById('new-role-key').value = '';
@@ -71,7 +117,9 @@ function openAddRole() {
   document.getElementById('add-role-modal').classList.add('open');
 }
 function closeAddRole() { document.getElementById('add-role-modal').classList.remove('open'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAddRole(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeAddRole(); closeSaveConfirm(); }
+}); 
 
 function addRole() {
   const key   = document.getElementById('new-role-key').value.trim();

@@ -97,26 +97,24 @@ function logout_user(): void {
 
 function require_login(): void {
     if (empty($_SESSION['user_id'])) {
-        header('Location: ../login.php?reason=unauthenticated');
+        header('Location: ../auth/login.php?reason=unauthenticated');
         exit;
     }
-    
-    // Check if user is terminated
+
     try {
         $pdo = get_db();
         $stmt = $pdo->prepare("SELECT status FROM users WHERE id = :id");
         $stmt->execute(['id' => $_SESSION['user_id']]);
         $status = $stmt->fetchColumn();
-        
+
         if ($status === 'terminated') {
             session_destroy();
-            header('Location: ../login.php?reason=terminated');
+            header('Location: ../auth/login.php?reason=terminated');
             exit;
         }
     } catch (Exception $e) {
-        // If database error, logout to be safe
         session_destroy();
-        header('Location: ../login.php?reason=error');
+        header('Location: ../auth/login.php?reason=error');
         exit;
     }
 }
@@ -181,7 +179,7 @@ function get_dashboard_url(): string {
 // ═══════════════════════════════════════════════
 
 function redirect_to_login(string $reason = ''): void {
-    $url = '../login.php';
+    $url = '../auth/login.php';
     if ($reason) {
         $url .= '?reason=' . urlencode($reason);
     }

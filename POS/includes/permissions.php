@@ -163,79 +163,76 @@ function set_role_permission(string $role, string $perm_key, bool $granted): arr
  */
 function has_permission(string $perm_key): bool {
     static $cache = array();
-    static $role_cache = array();
 
-    // 1. Check if user is logged in
+    // 1. Must be logged in
     if (!isset($_SESSION['user_id'])) {
         return false;
     }
 
-    // 2. Get role from session or database
-    $role = '';
-    if (isset($_SESSION['role']) && !empty($_SESSION['role'])) {
-        $role = $_SESSION['role'];
+    // 2. Prefer the full multi-role list set at login; fall back to the
+    //    single legacy role for older sessions that predate user_roles.
+    $roles = [];
+    if (!empty($_SESSION['roles']) && is_array($_SESSION['roles'])) {
+        $roles = $_SESSION['roles'];
+    } elseif (!empty($_SESSION['role'])) {
+        $roles = [$_SESSION['role']];
     }
-    
-    // 3. If role is not in session, fetch it from database
-    if (empty($role)) {
-        // Check if we've already fetched this user's role
+
+    // 3. Session has neither — recover from the database.
+    if (empty($roles)) {
         $user_id = $_SESSION['user_id'];
-        if (!isset($role_cache[$user_id])) {
-            try {
-                $pdo = get_db();
+        try {
+            $pdo = get_db();
+
+            $stmt = $pdo->prepare("SELECT role FROM user_roles WHERE user_id = ?");
+            $stmt->execute([$user_id]);
+            $db_roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+            if ($db_roles) {
+                $roles = $db_roles;
+            } else {
                 $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
-                $stmt->execute(array($user_id));
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($user && !empty($user['role'])) {
-                    $role = $user['role'];
-                    // Save to session for next time
-                    $_SESSION['role'] = $role;
-                    $role_cache[$user_id] = $role;
-                } else {
-                    // User has no role assigned
-                    error_log("User {$user_id} has no role assigned in database");
-                    return false;
-                }
-            } catch (Exception $e) {
-                error_log("Error fetching user role: " . $e->getMessage());
+                $stmt->execute([$user_id]);
+                $single = $stmt->fetchColumn();
+                if ($single) $roles = [$single];
+            }
+
+            if ($roles) {
+                $_SESSION['roles'] = $roles;
+                $_SESSION['role']  = $roles[0];
+            } else {
+                error_log("User {$user_id} has no role assigned");
                 return false;
             }
-        } else {
-            $role = $role_cache[$user_id];
-        }
-    }
-
-    // 4. If still no role, deny
-    if (empty($role)) {
-        return false;
-    }
-
-    // 5. Admin has ALL permissions
-    if ($role === 'admin') {
-        return true;
-    }
-
-    // 6. Check cached permissions for this role
-    if (!isset($cache[$role])) {
-        try {
-            $cache[$role] = get_role_permissions($role);
         } catch (Exception $e) {
-            error_log("Error fetching role permissions: " . $e->getMessage());
+            error_log("Error fetching user roles: " . $e->getMessage());
             return false;
         }
     }
 
-    // 7. Check if the role has this specific permission
-    $has_permission = in_array($perm_key, $cache[$role], true);
-    
-    // Debug logging (remove in production)
-    if (!$has_permission) {
-        $username = isset($_SESSION['username']) ? $_SESSION['username'] : 'unknown';
-        error_log("Permission denied: User '{$username}' (role: {$role}) needs '{$perm_key}'");
+    // 4. Admin in ANY held role grants full access.
+    if (in_array('admin', $roles, true)) {
+        return true;
     }
-    
-    return $has_permission;
+
+    // 5. Check every held role — first one that grants it wins.
+    foreach ($roles as $role) {
+        if (!isset($cache[$role])) {
+            try {
+                $cache[$role] = get_role_permissions($role);
+            } catch (Exception $e) {
+                error_log("Error fetching role permissions for '{$role}': " . $e->getMessage());
+                continue;
+            }
+        }
+        if (in_array($perm_key, $cache[$role], true)) {
+            return true;
+        }
+    }
+
+    $username = $_SESSION['username'] ?? 'unknown';
+    error_log("Permission denied: User '{$username}' (roles: " . implode(',', $roles) . ") needs '{$perm_key}'");
+    return false;
 }
 
 /**
@@ -243,20 +240,16 @@ function has_permission(string $perm_key): bool {
  * IMPROVED: Better error handling and logging
  */
 function require_permission(string $perm_key): void {
-    // Check if user is logged in first
     if (!isset($_SESSION['user_id'])) {
         error_log("require_permission: User not logged in, redirecting to login");
-        header('Location: ../login.php');
+        header('Location: ../auth/login.php');
         exit;
     }
-    
-    // Check permission
+
     if (!has_permission($perm_key)) {
-        // Log the attempt
         $username = isset($_SESSION['username']) ? $_SESSION['username'] : 'unknown';
         error_log("require_permission: User {$_SESSION['user_id']} ('{$username}') denied for '{$perm_key}'");
-        
-        // Clear session
+
         $_SESSION = array();
         if (ini_get("session.use_cookies")) {
             $params = session_get_cookie_params();
@@ -266,8 +259,8 @@ function require_permission(string $perm_key): void {
             );
         }
         session_destroy();
-        
-        // Redirect with reason
+
+        header('Location: ../auth/login.php?reason=forbidden');
         exit;
     }
 }
