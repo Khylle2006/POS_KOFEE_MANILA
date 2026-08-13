@@ -2,14 +2,7 @@ let selectedId = null;
 
 // Sample data for items
 const items = {
-  1: { id: 1, name: 'Espresso Beans', brand: 'Lavazza', unit: 'kg', quantity: 2.5, reorder_at: 1.0, cat_icon: '☕', cat_name: 'Coffee' },
-  2: { id: 2, name: 'Dark Roast', brand: 'Starbucks', unit: 'kg', quantity: 1.8, reorder_at: 2.0, cat_icon: '☕', cat_name: 'Coffee' },
-  3: { id: 3, name: 'Fresh Milk', brand: 'Nestle', unit: 'L', quantity: 4.0, reorder_at: 2.0, cat_icon: '🥛', cat_name: 'Milk' },
-  4: { id: 4, name: 'Almond Milk', brand: 'Alpro', unit: 'L', quantity: 0.5, reorder_at: 1.0, cat_icon: '🥛', cat_name: 'Milk' },
-  5: { id: 5, name: 'Oat Milk', brand: 'Oatly', unit: 'L', quantity: 2.0, reorder_at: 1.0, cat_icon: '🥛', cat_name: 'Milk' },
-  6: { id: 6, name: 'Vanilla Syrup', brand: 'Monin', unit: 'L', quantity: 0.8, reorder_at: 1.0, cat_icon: '🧊', cat_name: 'Syrups' },
-  7: { id: 7, name: 'Caramel Syrup', brand: 'Torani', unit: 'L', quantity: 1.2, reorder_at: 0.5, cat_icon: '🧊', cat_name: 'Syrups' }
-};
+  };
 
 // ── Select item → fill right panel ───────────
 function selectItem(id) {

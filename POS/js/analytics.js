@@ -61,7 +61,7 @@
         `).join('');
         }
 
-fetch('get_analytics.php')
+fetch('../api/get_analytics.php')
 .then(r => r.json())
 .then(data => {
 

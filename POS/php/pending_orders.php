@@ -72,7 +72,7 @@ async function loadOrders() {
   document.getElementById('orders-grid').innerHTML =
     '<div class="loading-wrap">Loading orders…</div>';
   try {
-    const res  = await fetch('get_orders.php');
+    const res  = await fetch('../api/get_orders.php');
     const data = await res.json();
     allOrders  = data;
     lastLoadTime = Date.now();
@@ -219,7 +219,7 @@ async function confirmAction() {
   closeConfirm();
 
   try {
-    const res  = await fetch('updated_order_status.php', {
+    const res  = await fetch('../api/updated_order_status.php', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ order_id: orderId, status })

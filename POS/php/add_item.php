@@ -220,7 +220,20 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
-
+<!-- Add Item confirm modal -->
+<div class="modal-overlay" id="add-confirm-modal">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <div class="modal-body" style="text-align:center">
+      <div style="font-size:44px;margin-bottom:12px">➕</div>
+      <h3 style="font-size:17px;margin-bottom:8px">Add This Item?</h3>
+      <div id="add-confirm-summary" style="font-size:13px;color:var(--text-muted);text-align:left;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:12px 0;margin-top:8px"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-mcancel" onclick="closeAddConfirm()">Cancel</button>
+      <button type="button" class="btn-msave" id="add-confirm-btn" onclick="doAddMenuItem()">✅ Yes, Add Item</button>
+    </div>
+  </div>
+</div>
 
 <!-- Delete confirm modal -->
 <div class="modal-overlay" id="delete-modal">
@@ -267,47 +280,61 @@ function openAdd() {
 }
 function closeAdd() { document.getElementById('add-modal').classList.remove('open'); }
 
+// ── Add: preview step ──
 function addMenuItem() {
   const name = document.getElementById('add-name').value.trim();
   if (!name) { showToast('⚠️ Name is required.', 'error'); return; }
 
+  const priceSmall = document.getElementById('add-price-small').value;
+  const priceLarge = document.getElementById('add-price-large').value;
+  if (!priceSmall || parseFloat(priceSmall) <= 0) { showToast('⚠️ Enter a valid Regular Price.', 'error'); return; }
+  if (!priceLarge || parseFloat(priceLarge) <= 0) { showToast('⚠️ Enter a valid Up Size Price.', 'error'); return; }
+
+  const catSelect = document.getElementById('add-category');
+  const catName   = catSelect.options[catSelect.selectedIndex]?.textContent || '—';
+  const desc      = document.getElementById('add-desc').value.trim();
+
+  document.getElementById('add-confirm-summary').innerHTML = `
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Name</span><strong>${escapeHtml(name)}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Category</span><strong>${escapeHtml(catName)}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Regular Price</span><strong>₱${parseFloat(priceSmall).toFixed(2)}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Up Size Price</span><strong>₱${parseFloat(priceLarge).toFixed(2)}</strong></div>
+    ${desc ? `<div style="padding:6px 0 0;color:var(--text-muted);font-style:italic">"${escapeHtml(desc)}"</div>` : ''}
+  `;
+
+  document.getElementById('add-confirm-modal').classList.add('open');
+}
+
+function closeAddConfirm() {
+  document.getElementById('add-confirm-modal').classList.remove('open');
+}
+
+// ── Add: actual commit (was the old addMenuItem body) ──
+function doAddMenuItem() {
+  closeAddConfirm();
+
   const fd = new FormData();
   fd.append('action',      'add');
   fd.append('category_id', document.getElementById('add-category').value);
-  fd.append('name',        name);
+  fd.append('name',        document.getElementById('add-name').value.trim());
   fd.append('description', document.getElementById('add-desc').value);
   fd.append('price_small', document.getElementById('add-price-small').value);
   fd.append('price_large', document.getElementById('add-price-large').value);
 
-  fetch("../api/add_item.php", {
-    method: "POST",
-    body: fd
-})
+  const btn = document.getElementById('add-confirm-btn');
+  fetch("../api/add_item.php", { method: "POST", body: fd })
     .then(r => r.json())
     .then(res => {
       if (res.ok) {
         showToast('✅ Item added!');
         closeAdd();
-        location.reload(); // simplest way to show the new row with correct id/data
+        location.reload();
       } else {
         showToast('⚠️ ' + res.error, 'error');
       }
     })
     .catch(() => showToast('⚠️ Network error.', 'error'));
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 const SELF = window.location.pathname; // posts back to same file
 const CAT_ICONS = { 'Ice Coffee':'🧊','Hot Coffee':'☕','Milk Tea':'🧋','Fruit Tea':'🍹' };
@@ -479,11 +506,11 @@ function updateRowInDOM(id, p) {
 // ── Close modals on backdrop / Escape ──────────
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); }
+    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); }
+  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
 });
 
 

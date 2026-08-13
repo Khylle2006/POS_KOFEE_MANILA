@@ -26,7 +26,7 @@ function guessIcon(name, categoryKey) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const res  = await fetch("get_menu.php");
+    const res  = await fetch("../api/get_menu.php");
     const data = await res.json();
 
     menuData = {
@@ -290,7 +290,7 @@ function submitConfirmedOrder() {
         }))
     };
 
-    fetch('checkout.php', {
+    fetch('../api/checkout.php', {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(payload)

@@ -47,10 +47,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Add or Edit a person (account +/- employee profile) ──
     if ($action === 'save') {
-        $emp_id          = (int)($_POST['emp_id'] ?? 0);
-        $existing_user_id = (int)($_POST['existing_user_id'] ?? 0);
-        $want_account    = isset($_POST['want_account']);
-        $want_employee   = isset($_POST['want_employee']);
+        $emp_id            = (int)($_POST['emp_id'] ?? 0);
+        $existing_user_id  = (int)($_POST['existing_user_id'] ?? 0);
+        $want_account      = isset($_POST['want_account']);
+        $want_employee     = isset($_POST['want_employee']);
 
         $firstname = trim($_POST['firstname'] ?? '');
         $lastname  = trim($_POST['lastname']  ?? '');
@@ -156,13 +156,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $toast = '⚠️ ' . $msg; $toast_type = 'error';
             }
         }
+
+        // AJAX callers (the Add/Edit Staff modal) get JSON back so the
+        // modal can show the error inline instead of losing the form
+        // on a full-page redirect.
+        $is_ajax = (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest');
+        if ($is_ajax) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'ok'      => $toast_type !== 'error',
+                'message' => $toast,
+            ]);
+            exit;
+        }
     }
 
     // ── Account status (active / blocked / on_hold) ──
     if ($action === 'set_account_status') {
         $id     = (int)($_POST['user_id'] ?? 0);
         $status = $_POST['status'] ?? '';
-        if ($id && in_array($status, ['active','blocked','on_hold'])) {
+        if ($id && in_array($status, ['active','blocked','on_hold'], true)) {
             $pdo->prepare('UPDATE users SET status=:s, updated_at=NOW() WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
             $labels = ['active'=>'Activated','blocked'=>'Blocked','on_hold'=>'Put on Hold'];
             $toast  = '✅ Account ' . $labels[$status] . '.';
@@ -173,12 +186,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'set_employee_status') {
         $id     = (int)($_POST['emp_id'] ?? 0);
         $status = $_POST['status'] ?? '';
-        if ($id && in_array($status, ['active','inactive'])) {
+        if ($id && in_array($status, ['active','inactive'], true)) {
             $pdo->prepare('UPDATE employees SET status=:s WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
             $toast = $status === 'active' ? '✅ Employee reactivated.' : '🚫 Employee marked inactive.';
         }
     }
 
+    // Single redirect point for every non-AJAX POST action.
     $q = $toast ? '?toast=' . urlencode($toast) . '&type=' . $toast_type : '';
     header('Location: ' . basename($_SERVER['PHP_SELF']) . $q);
     exit;
@@ -344,7 +358,9 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
               // left edge of the table now tells you who's what.
               $role_colors = ['hr'=>'#6a3fa0','finance'=>'#00695c','crew'=>'#1565c0','manager'=>'#e65100','admin'=>'#c47d3e'];
               foreach ($filtered as $r):
-                $full     = htmlspecialchars($r['fn'].' '.$r['ln']);
+                $full     = $r['fn'].' '.$r['ln'];
+                $full_esc = htmlspecialchars($full);
+                $full_js  = htmlspecialchars(json_encode($full), ENT_QUOTES);
                 $initials = strtoupper(substr($r['fn'],0,1).substr($r['ln'],0,1)) ?: '?';
                 $primary  = $r['role_array'][0] ?? $r['department'] ?? null;
                 $color    = $role_colors[$primary] ?? '#9a7e65';
@@ -355,7 +371,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
                   <div class="user-cell">
                     <div class="avatar" style="background:<?= $color ?>"><?= $initials ?></div>
                     <div>
-                      <div class="user-name"><?= $full ?><?= $is_self ? ' <span class="user-you">(you)</span>' : '' ?></div>
+                      <div class="user-name"><?= $full_esc ?><?= $is_self ? ' <span class="user-you">(you)</span>' : '' ?></div>
                       <div class="user-meta"><?= htmlspecialchars($r['display_email'] ?: '—') ?></div>
                     </div>
                   </div>
@@ -396,38 +412,22 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 
                     <?php if ($r['user_id'] && !$is_self): ?>
                       <?php if ($r['account_status'] !== 'active'): ?>
-                        <form method="POST" style="display:inline">
-                          <input type="hidden" name="action" value="set_account_status"/>
-                          <input type="hidden" name="user_id" value="<?= $r['user_id'] ?>"/>
-                          <input type="hidden" name="status" value="active"/>
-                          <button type="submit" class="act-btn act-activate">✅ Activate</button>
-                        </form>
+                        <button type="button" class="act-btn act-activate"
+                          onclick="askStatusConfirm('set_account_status', <?= (int)$r['user_id'] ?>, 'active', <?= $full_js ?>, 'account')">✅ Activate</button>
                       <?php endif; ?>
                       <?php if ($r['account_status'] !== 'blocked'): ?>
-                        <form method="POST" style="display:inline">
-                          <input type="hidden" name="action" value="set_account_status"/>
-                          <input type="hidden" name="user_id" value="<?= $r['user_id'] ?>"/>
-                          <input type="hidden" name="status" value="blocked"/>
-                          <button type="submit" class="act-btn act-block">🚫 Block</button>
-                        </form>
+                        <button type="button" class="act-btn act-block"
+                          onclick="askStatusConfirm('set_account_status', <?= (int)$r['user_id'] ?>, 'blocked', <?= $full_js ?>, 'account')">🚫 Block</button>
                       <?php endif; ?>
                     <?php endif; ?>
 
                     <?php if ($r['emp_id']): ?>
                       <?php if ($r['emp_status'] === 'active'): ?>
-                        <form method="POST" style="display:inline">
-                          <input type="hidden" name="action" value="set_employee_status"/>
-                          <input type="hidden" name="emp_id" value="<?= $r['emp_id'] ?>"/>
-                          <input type="hidden" name="status" value="inactive"/>
-                          <button type="submit" class="act-btn act-hold">⏸️ Deactivate</button>
-                        </form>
+                        <button type="button" class="act-btn act-hold"
+                          onclick="askStatusConfirm('set_employee_status', <?= (int)$r['emp_id'] ?>, 'inactive', <?= $full_js ?>, 'employee')">⏸️ Deactivate</button>
                       <?php else: ?>
-                        <form method="POST" style="display:inline">
-                          <input type="hidden" name="action" value="set_employee_status"/>
-                          <input type="hidden" name="emp_id" value="<?= $r['emp_id'] ?>"/>
-                          <input type="hidden" name="status" value="active"/>
-                          <button type="submit" class="act-btn act-activate">✅ Reactivate</button>
-                        </form>
+                        <button type="button" class="act-btn act-activate"
+                          onclick="askStatusConfirm('set_employee_status', <?= (int)$r['emp_id'] ?>, 'active', <?= $full_js ?>, 'employee')">✅ Reactivate</button>
                       <?php endif; ?>
                     <?php endif; ?>
                   </div>
@@ -455,6 +455,8 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
       <input type="hidden" name="action" value="save"/>
       <input type="hidden" name="emp_id" id="f-emp-id" value=""/>
       <input type="hidden" name="existing_user_id" id="f-user-id" value=""/>
+
+      <div id="staff-form-error" style="display:none;margin:14px 22px 0;padding:11px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
 
       <div class="modal-top-fields">
       <div class="field-row mg-b">
@@ -564,7 +566,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
         </div>
         <div class="field-row mg-b">
           <div class="field-group">
-            <label class="field-label">Hire Date</label>
+            <label class>="field-label">Hire Date</label>
             <input class="field-input" type="date" name="hire_date" id="f-hire"/>
           </div>
           <div class="field-group">
@@ -582,105 +584,32 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
   </div>
 </div>
 
+<!-- ── Status change confirm modal ── -->
+<div class="modal-bg" id="status-confirm-modal" onclick="if(event.target===this) closeStatusConfirm()">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <div style="padding:26px 22px 6px">
+      <div id="sc-icon" style="font-size:44px;margin-bottom:12px">❓</div>
+      <h3 id="sc-title" style="margin-bottom:8px">Confirm Action</h3>
+      <p id="sc-message" style="font-size:13px;color:var(--text-muted)"></p>
+    </div>
+    <form method="POST" id="status-confirm-form">
+      <input type="hidden" name="action" id="sc-action"/>
+      <input type="hidden" name="user_id" id="sc-user-id"/>
+      <input type="hidden" name="emp_id" id="sc-emp-id"/>
+      <input type="hidden" name="status" id="sc-status"/>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" onclick="closeStatusConfirm()">Cancel</button>
+        <button type="submit" class="btn-save" id="sc-confirm-btn">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <?php if ($toast): ?>
 <div class="toast toast-<?= $toast_type ?>" id="toast-msg"><?= $toast ?></div>
 <script>setTimeout(() => { const t = document.getElementById('toast-msg'); if(t) t.style.opacity='0'; }, 3500);</script>
 <?php endif; ?>
 
-<script>
-function togglePw(id, btn) {
-  const inp = document.getElementById(id);
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-  btn.textContent = inp.type === 'password' ? '👁️' : '🙈';
-}
-
-function toggleSection(kind) {
-  const on = document.getElementById('f-want-' + kind).checked;
-  document.getElementById(kind + '-fields').style.display = on ? '' : 'none';
-}
-
-function resetModal() {
-  document.getElementById('staff-form').reset();
-  document.getElementById('f-emp-id').value  = '';
-  document.getElementById('f-user-id').value = '';
-  document.getElementById('f-want-account').checked  = true;
-  document.getElementById('f-want-employee').checked = true;
-  document.getElementById('f-want-account').disabled  = false;
-  document.getElementById('f-want-employee').disabled = false;
-  document.querySelectorAll('#f-roles input[type=checkbox]').forEach(cb => cb.checked = false);
-  toggleSection('account');
-  toggleSection('employee');
-  document.getElementById('code-field').style.display = '';
-  document.getElementById('pw-hint').textContent = '';
-}
-
-function openAdd() {
-  resetModal();
-  document.getElementById('modal-title').textContent = '➕ Add Staff Member';
-  document.getElementById('save-btn').textContent     = '➕ Add Staff Member';
-  document.getElementById('staff-modal').classList.add('open');
-}
-
-function openEdit(r) {
-  resetModal();
-  document.getElementById('modal-title').textContent = '✏️ Edit Staff Member';
-  document.getElementById('save-btn').textContent     = '💾 Save Changes';
-
-  document.getElementById('f-emp-id').value  = r.emp_id  || '';
-  document.getElementById('f-user-id').value = r.user_id || '';
-  document.getElementById('f-fn').value      = r.fn;
-  document.getElementById('f-ln').value      = r.ln;
-  document.getElementById('f-email').value   = r.display_email || '';
-
-  // Account section
-  const hasAccount = !!r.user_id;
-  document.getElementById('f-want-account').checked = hasAccount;
-  if (hasAccount) {
-    document.getElementById('f-username').value = r.username || '';
-    document.getElementById('pw-hint').textContent = '— leave blank to keep current';
-    // Already has an account: don't let them uncheck it away here
-    document.getElementById('f-want-account').disabled = true;
-
-    // Check every role box this account currently holds
-    const currentRoles = (r.role_array || []);
-    document.querySelectorAll('#f-roles input[type=checkbox]').forEach(cb => {
-      cb.checked = currentRoles.includes(cb.value);
-    });
-  }
-  toggleSection('account');
-
-  // Employee section
-  const hasProfile = !!r.emp_id;
-  document.getElementById('f-want-employee').checked = hasProfile;
-  if (hasProfile) {
-    document.getElementById('f-code').value       = r.employee_code || '';
-    document.getElementById('f-pos').value        = r.position || '';
-    document.getElementById('f-department').value = r.department || 'crew';
-    document.getElementById('f-etype').value       = r.employment_type || 'Full-time';
-    document.getElementById('f-phone').value       = r.contact_number || '';
-    document.getElementById('f-hire').value        = r.hire_date || '';
-    document.getElementById('f-salary').value      = r.base_salary || '';
-    document.getElementById('code-field').style.display = 'none'; // code is immutable once set
-    document.getElementById('f-want-employee').disabled = true;
-  }
-  toggleSection('employee');
-
-  document.getElementById('staff-modal').classList.add('open');
-}
-
-function closeModal() { document.getElementById('staff-modal').classList.remove('open'); }
-function closeModalBg(e) { if (e.target === e.currentTarget) closeModal(); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-
-document.getElementById('staff-form').addEventListener('submit', function(e) {
-  const wantAccount = document.getElementById('f-want-account').checked;
-  const anyRole = [...document.querySelectorAll('#f-roles input[type=checkbox]')].some(cb => cb.checked);
-  if (wantAccount && !anyRole) {
-    e.preventDefault();
-    alert('Select at least one role for the login account.');
-  }
-});
-</script>
-
+<script src="../js/manage_users.js"></script>
 </body>
 </html>
