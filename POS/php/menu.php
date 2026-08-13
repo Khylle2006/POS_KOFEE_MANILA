@@ -6,7 +6,7 @@ require_permission('menu.manage');
 
 include("../includes/sidebar.php");
 ?>
-<!DOCTYPE html>C
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">

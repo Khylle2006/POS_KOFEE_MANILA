@@ -190,7 +190,7 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 
     <?php if ($access['new_order']): ?>
     <button class="<?= navBtnClasses($current === 'menu.php') ?>" onclick="window.location.href='menu.php'">
-        <?= icon('order') ?><span class="flex-1 truncate">Order</span>
+        <?= icon('order') ?><span class="flex-1 truncate">POS</span>
     </button>
     <?php endif; ?>
 

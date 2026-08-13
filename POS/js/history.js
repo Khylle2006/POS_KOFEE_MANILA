@@ -4,7 +4,7 @@ let allOrders = [];
 const filters = { search: '', type: '', status: '', date: '' };
 
 // ── Load history ──────────────────────────────
-fetch('get_history.php')
+fetch('../api/get_history.php')
   .then(r => r.json())
   .then(data => {
     allOrders = data;

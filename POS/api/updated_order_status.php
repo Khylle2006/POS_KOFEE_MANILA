@@ -1,11 +1,10 @@
 <?php
-require_once '../includes/db.php';
-require_once '../includes/auth_check.php';
-require_role();
+require_once '../includes/auth.php';
+require_once '../includes/permissions.php';
+require_login();
+require_permission('orders.pending');
 
 header('Content-Type: application/json');
-
-if (session_status() === PHP_SESSION_NONE) session_start();
 
 $data   = json_decode(file_get_contents('php://input'), true);
 $id     = (int)($data['order_id'] ?? 0);
