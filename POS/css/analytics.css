@@ -1,0 +1,210 @@
+/* ============================================================
+   Kofee Manila — Analytics (php/analytics.php)
+   Page-specific styles. Stat cards, buttons, and tables already
+   come from style.css — this file covers the bar chart, donut
+   chart, and top-items list that are unique to this page.
+   ============================================================ */
+
+/* ── Top stat row ────────────────────────────────────────────*/
+.analytics-top {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+@media (max-width: 1000px) { .analytics-top { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px)  { .analytics-top { grid-template-columns: 1fr; } }
+
+/* ── Chart section: bar chart + donut side by side ──────────*/
+.chart-section {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 18px;
+}
+@media (max-width: 1000px) { .chart-section { grid-template-columns: 1fr; } }
+
+.chart-card {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 20px 22px;
+}
+.chart-card h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--espresso);
+  margin-bottom: 18px;
+}
+
+/* ── Bar chart ───────────────────────────────────────────────*/
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  height: 180px;
+  padding-top: 10px;
+}
+.bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 6px;
+}
+.bar-val {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.bar {
+  width: 26px;
+  border-radius: 7px 7px 3px 3px;
+  background: linear-gradient(180deg, var(--caramel-light) 0%, var(--caramel) 55%, var(--espresso) 160%);
+  box-shadow: 0 6px 14px -8px rgba(201,123,61,.5);
+  transition: height .3s ease;
+  min-height: 2px;
+}
+.bar-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.bar-empty {
+  width: 100%;
+  text-align: center;
+  padding: 50px 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ── Donut chart ─────────────────────────────────────────────*/
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.donut-svg {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+.legend {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--text-main);
+  font-weight: 600;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.legend-pct {
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--espresso);
+}
+
+/* ── Top selling items ──────────────────────────────────────*/
+.top-items-card {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 20px 22px;
+}
+.top-items-card h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--espresso);
+  margin-bottom: 14px;
+}
+
+.top-item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #F2E6D6;
+}
+.top-item-row:last-child { border-bottom: none; }
+
+.ti-rank {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--accent-lt);
+  color: var(--caramel);
+  font-size: 11.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ti-icon {
+  font-size: 20px;
+  width: 30px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.ti-info {
+  min-width: 120px;
+  flex-shrink: 0;
+}
+.ti-name {
+  font-size: 12.8px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.ti-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.ti-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: #F2E6D6;
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 60px;
+}
+.ti-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--caramel-light), var(--caramel));
+  transition: width .4s ease;
+}
+
+/* ── Generic loading state (shared by chart-card / top-items) ─*/
+.loading {
+  text-align: center;
+  padding: 30px 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ── Responsive ──────────────────────────────────────────────*/
+@media (max-width: 900px) {
+  .chart-card, .top-items-card { padding: 16px 18px; }
+  .donut-wrap { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .ti-info { min-width: 100px; }
+}

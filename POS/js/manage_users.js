@@ -23,6 +23,8 @@ function resetModal() {
   document.getElementById('f-want-employee').checked = true;
   document.getElementById('f-want-account').disabled  = false;
   document.getElementById('f-want-employee').disabled = false;
+  document.getElementById('f-want-account').dataset.locked  = '';
+  document.getElementById('f-want-employee').dataset.locked = '';
   document.querySelectorAll('#f-roles input[type=checkbox]').forEach(cb => cb.checked = false);
   toggleSection('account');
   toggleSection('employee');
@@ -50,12 +52,15 @@ function openEdit(r) {
 
   // Account section
   const hasAccount = !!r.user_id;
-  document.getElementById('f-want-account').checked = hasAccount;
+  const acctCb = document.getElementById('f-want-account');
+  acctCb.checked = hasAccount;
+  // IMPORTANT: do NOT disable this checkbox — disabled fields are excluded
+  // from form submission entirely, which silently breaks saving (roles
+  // never sync). Use a "locked" flag instead so it stays submittable.
+  acctCb.dataset.locked = hasAccount ? '1' : '';
   if (hasAccount) {
     document.getElementById('f-username').value = r.username || '';
     document.getElementById('pw-hint').textContent = '— leave blank to keep current';
-    // Already has an account: don't let them uncheck it away here
-    document.getElementById('f-want-account').disabled = true;
 
     // Check every role box this account currently holds
     const currentRoles = (r.role_array || []);
@@ -67,7 +72,9 @@ function openEdit(r) {
 
   // Employee section
   const hasProfile = !!r.emp_id;
-  document.getElementById('f-want-employee').checked = hasProfile;
+  const empCb = document.getElementById('f-want-employee');
+  empCb.checked = hasProfile;
+  empCb.dataset.locked = hasProfile ? '1' : '';
   if (hasProfile) {
     document.getElementById('f-code').value       = r.employee_code || '';
     document.getElementById('f-pos').value        = r.position || '';
@@ -77,7 +84,6 @@ function openEdit(r) {
     document.getElementById('f-hire').value        = r.hire_date || '';
     document.getElementById('f-salary').value      = r.base_salary || '';
     document.getElementById('code-field').style.display = 'none'; // code is immutable once set
-    document.getElementById('f-want-employee').disabled = true;
   }
   toggleSection('employee');
 
@@ -86,6 +92,21 @@ function openEdit(r) {
 
 function closeModal() { document.getElementById('staff-modal').classList.remove('open'); }
 function closeModalBg(e) { if (e.target === e.currentTarget) closeModal(); }
+
+// A "locked" account/employee toggle stays enabled (so it still submits
+// with the form) but can't be switched off — reverts and explains why.
+['f-want-account', 'f-want-employee'].forEach(id => {
+  document.getElementById(id).addEventListener('change', function () {
+    if (this.dataset.locked === '1' && !this.checked) {
+      this.checked = true;
+      const errBox = document.getElementById('staff-form-error');
+      errBox.textContent = id === 'f-want-account'
+        ? "This account already has a login and can't be removed here — use Block instead."
+        : "This person already has an employee profile and it can't be removed here — use Deactivate instead.";
+      errBox.style.display = 'block';
+    }
+  });
+});
 
 // ── Save (Add/Edit) — AJAX so errors show inline without wiping the form ──
 document.getElementById('staff-form').addEventListener('submit', function (e) {

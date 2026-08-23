@@ -82,6 +82,7 @@ include("../includes/sidebar.php");
 
     <?php if ($selected): ?>
     <!-- ── Permissions for selected role ── -->
+      
     <div class="perms-card">
       <div class="perms-card-head">Permissions for <?= htmlspecialchars(strtoupper($selectedLabel)) ?></div>
 
@@ -161,13 +162,14 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
-window.CONFIG = {
-    role: <?= json_encode($selected) ?>,
-    userId: <?= json_encode($user['id']) ?>,
-    permissions: <?= json_encode($grants[$selected] ?? []) ?>,
-    apiUrl: '../api/'
-};
-
+<script>
+    window.CONFIG = {
+        role: <?= json_encode($selected) ?>,
+        userId: <?= json_encode($user['id']) ?>,
+        permissions: <?= json_encode($grants[$selected] ?? []) ?>,
+        apiUrl: '../api/'
+    };
+</script>
 
 <script src="../js/manage_permissions.js"></script>
 </body>

@@ -34,7 +34,8 @@ if (!function_exists('icon')) {
 }
 
 $user    = current_user();
-$role    = $user['role'] ?? 'crew';
+$role    = $user['role']  ?? 'crew';   // primary role — used only for the display badge
+$roles   = $user['roles'] ?? [$role];  // ALL roles this account holds — used for access checks
 $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
@@ -46,11 +47,11 @@ $access = [
     'menu_manager' => has_permission('menu.manage'),
     'inventory'    => has_permission('inventory.view'),
     'users'        => has_permission('users.manage'),
-    'hr_employees' => in_array($role, ['admin', 'hr'], true),
-    'hr_attendance'=> in_array($role, ['admin', 'hr'], true),
+    'hr_employees' => (bool)array_intersect(['admin', 'hr'], $roles),
+    'hr_attendance'=> (bool)array_intersect(['admin', 'hr'], $roles),
     'hr_leave'     => true,
     'hr_requests'  => true,
-    'manage_permissions' => ($role === 'admin'),
+    'manage_permissions' => in_array('admin', $roles, true),
 ];
 
 // ── Live badge counts (best-effort; never break the sidebar if a
@@ -279,7 +280,9 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
             <div class="text-[12.5px] font-semibold text-[var(--cream,#fbf3e9)] truncate">
                 <?= htmlspecialchars($user['firstname'] ?: $user['username']) ?>
             </div>
-            <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] capitalize"><?= htmlspecialchars($role) ?></div>
+            <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] capitalize truncate" title="<?= htmlspecialchars(implode(', ', $roles)) ?>">
+                <?= htmlspecialchars(implode(' + ', $roles)) ?>
+            </div>
         </div>
     </div>
 
