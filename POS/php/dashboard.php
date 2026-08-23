@@ -45,6 +45,19 @@ $all_permissions = get_all_permissions();     // perm_key, label, category, desc
 $role_perm_map   = get_all_role_permissions(); // role_key => [perm_key, ...]
 $total_perms     = count($all_permissions);
 
+// ── Quick Access shortcuts — only show what this user can actually open ──
+$shortcut_defs = [
+    ['perm' => 'orders.new',     'href' => 'menu.php',          'icon' => 'order',     'title' => 'New Order',     'desc' => 'Start taking an order now'],
+    ['perm' => 'orders.pending', 'href' => 'pending_orders.php','icon' => 'pending',   'title' => 'Pending Orders','desc' => 'Manage active order queue'],
+    ['perm' => 'orders.history', 'href' => 'history.php',       'icon' => 'history',   'title' => 'Order History', 'desc' => 'View all past transactions'],
+    ['perm' => 'inventory.view', 'href' => 'inventory.php',     'icon' => 'inventory', 'title' => 'Inventory',     'desc' => 'Manage ingredient stocks'],
+    ['perm' => 'menu.manage',    'href' => 'add_item.php',      'icon' => 'menu',      'title' => 'Menu Manager',  'desc' => 'Edit drinks and prices'],
+    ['perm' => 'analytics.view', 'href' => 'analytics.php',     'icon' => 'analytics', 'title' => 'Analytics',     'desc' => 'Sales performance overview'],
+    ['perm' => 'users.manage',   'href' => 'manage_users.php',  'icon' => 'employees', 'title' => 'Manage Staff',  'desc' => 'Add and manage user accounts'],
+];
+$shortcuts = array_values(array_filter($shortcut_defs, fn($s) => has_permission($s['perm'])));
+$shortcuts = array_slice($shortcuts, 0, 8);
+
 // ── Greeting ──────────────────────────────────
 $hour = (int)date('G');
 $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
@@ -112,27 +125,19 @@ $initials = strtoupper(substr($fname, 0, 1));
     </div>
 
     <!-- Quick access -->
+    <?php if (!empty($shortcuts)): ?>
     <div>
       <div class="section-title">Quick Access</div>
       <div class="home-shortcuts">
-        <a href="menu.php" class="shortcut-card">
-          <div class="shortcut-icon"><?= icon('order') ?></div>
-          <div><h3>New Order</h3><p>Start taking an order now</p></div>
+        <?php foreach ($shortcuts as $s): ?>
+        <a href="<?= htmlspecialchars($s['href']) ?>" class="shortcut-card">
+          <div class="shortcut-icon"><?= icon($s['icon']) ?></div>
+          <div><h3><?= htmlspecialchars($s['title']) ?></h3><p><?= htmlspecialchars($s['desc']) ?></p></div>
         </a>
-        <a href="history.php" class="shortcut-card">
-          <div class="shortcut-icon"><?= icon('history') ?></div>
-          <div><h3>Order History</h3><p>View all past transactions</p></div>
-        </a>
-        <a href="analytics.php" class="shortcut-card">
-          <div class="shortcut-icon"><?= icon('analytics') ?></div>
-          <div><h3>Analytics</h3><p>Sales performance overview</p></div>
-        </a>
-        <a href="manage_users.php" class="shortcut-card">
-          <div class="shortcut-icon"><?= icon('employees') ?></div>
-          <div><h3>Manage Staff</h3><p>Add and manage user accounts</p></div>
-        </a>
+        <?php endforeach; ?>
       </div>
     </div>
+    <?php endif; ?>
 
     <!-- Recent orders -->
     <div class="recent-section">
