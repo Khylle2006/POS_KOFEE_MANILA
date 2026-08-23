@@ -13,7 +13,96 @@ $toast_type = 'success';
 // Admin/HR = reviewers only. Everyone else = requesters only.
 $is_reviewer = in_array($role, ['admin', 'hr']);
 
+<<<<<<< HEAD
 $request_types = ['Certificate of Employment','ID Replacement','Schedule Change','Payslip Copy','Document Correction','Other'];
+=======
+$request_types = [
+    'Certificate of Employment',
+    'ID Replacement',
+    'Schedule Change',
+    'Payslip Copy',
+    'Document Correction',
+    'Inventory Restock',
+    'Inventory Adjustment',
+    'Other'
+];
+
+
+
+
+function createInventoryRequest($pdo, $employeeId, $ingredientName, $qty, $reason) {
+    $details = "Ingredient: {$ingredientName} | Qty: {$qty} | Reason: {$reason}";
+    $stmt = $pdo->prepare("
+        INSERT INTO hr_requests (employee_id, request_type, details, status)
+        VALUES (:employee_id, 'Inventory Restock', :details, 'pending')
+    ");
+    $stmt->execute([
+        ':employee_id' => $employeeId,
+        ':details' => $details
+    ]);
+}
+
+
+
+
+
+
+function parseInventoryRequestDetails($details) {
+    preg_match('/Ingredient ID:\s*(\d+)/i', $details, $ingredientMatch);
+    preg_match('/Qty:\s*([0-9]+(?:\.[0-9]+)?)/i', $details, $qtyMatch);
+    preg_match('/Type:\s*([^;]+)/i', $details, $typeMatch);
+
+    return [
+        'ingredient_id' => isset($ingredientMatch[1]) ? (int)$ingredientMatch[1] : 0,
+        'qty' => isset($qtyMatch[1]) ? (float)$qtyMatch[1] : 0.0,
+        'type' => isset($typeMatch[1]) ? trim($typeMatch[1]) : '',
+    ];
+}
+
+function applyApprovedInventoryRequest($pdo, $request) {
+    $parsed = parseInventoryRequestDetails($request['details'] ?? '');
+    if (!$parsed['ingredient_id'] || $parsed['qty'] <= 0) {
+        return false;
+    }
+
+    $type = $parsed['type'];
+    if ($type === 'Inventory Adjustment') {
+        $stmt = $pdo->prepare('UPDATE ingredients SET quantity = :q WHERE id = :id');
+        $stmt->execute([
+            ':q' => $parsed['qty'],
+            ':id' => $parsed['ingredient_id'],
+        ]);
+
+        $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
+            ->execute([
+                ':i' => $parsed['ingredient_id'],
+                ':q' => $parsed['qty'],
+                ':u' => $request['reviewed_by'] ?? null,
+            ]);
+
+        return true;
+    }
+
+    if ($type === 'Inventory Restock') {
+        $stmt = $pdo->prepare('UPDATE ingredients SET quantity = quantity + :q WHERE id = :id');
+        $stmt->execute([
+            ':q' => $parsed['qty'],
+            ':id' => $parsed['ingredient_id'],
+        ]);
+
+        $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
+            ->execute([
+                ':i' => $parsed['ingredient_id'],
+                ':q' => $parsed['qty'],
+                ':u' => $request['reviewed_by'] ?? null,
+            ]);
+
+        return true;
+    }
+
+    return false;
+}
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
 // ── Resolve the logged-in user's own employee profile (for self-service filing) ──
 $my_employee = null;
@@ -51,8 +140,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id     = (int)($_POST['id'] ?? 0);
             $status = $_POST['status'] ?? '';
             if ($id && in_array($status, ['approved','rejected','completed'])) {
+<<<<<<< HEAD
                 $pdo->prepare('UPDATE hr_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
                     ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
+=======
+                $request = $pdo->prepare('SELECT * FROM hr_requests WHERE id=:id LIMIT 1');
+                $request->execute([':id' => $id]);
+                $row = $request->fetch();
+
+                if ($status === 'approved' && $row && in_array($row['request_type'], ['Inventory Restock', 'Inventory Adjustment'])) {
+                    applyApprovedInventoryRequest($pdo, $row);
+                }
+
+                $pdo->prepare('UPDATE hr_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
+                    ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
+
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
                 $labels = ['approved'=>'✅ Request approved.', 'rejected'=>'❌ Request rejected.', 'completed'=>'📦 Request marked completed.'];
                 $toast  = $labels[$status];
             }

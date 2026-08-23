@@ -43,6 +43,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             id:         item.id,
             name:       item.name,
             icon:       guessIcon(item.name, key),
+<<<<<<< HEAD
+=======
+            image:      item.image_path ? `../assets/${item.image_path}` : `../assets/menu/${item.id}.jpg`,
+            imageFallback: `../assets/${item.id}.jpg`,
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
             priceSmall: parseFloat(item.price_small),
             priceLarge: parseFloat(item.price_large),
             stock:      parseInt(item.stock, 10) || 0
@@ -118,7 +123,14 @@ function renderGrid() {
         const soldOut = item.stock <= 0;
         return `
         <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`}>
+<<<<<<< HEAD
             <div class="item-img"><span>${item.icon}</span></div>
+=======
+            <div class="item-img">
+                <img src="${item.image}" alt="${escapeHtml(item.name)}" onerror="if (!this.dataset.fallback) { this.dataset.fallback='true'; this.src='${item.imageFallback}'; } else { this.hidden=true; this.nextElementSibling.hidden=false; }">
+                <span hidden>${item.icon}</span>
+            </div>
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
             <div class="item-name">${escapeHtml(item.name)}</div>
             ${soldOut
                 ? `<div class="item-soldout">Sold out</div>`

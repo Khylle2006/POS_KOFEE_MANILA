@@ -1,0 +1,61 @@
+/* ============================================================
+   Kofee Manila — Attendance (php/attendance.php)
+   Page-specific styles. Buttons, inputs, cards, tables, and
+   toasts already come from style.css — this file only adds
+   what's unique to this page.
+   ============================================================ */
+
+/* ── Stat cards row ─────────────────────────── */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+@media (max-width: 900px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .stat-row { grid-template-columns: 1fr; } }
+
+/* ── Date bar ───────────────────────────────── */
+.date-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+  background: var(--card-bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 14px 18px;
+}
+.date-bar input[type=date] { max-width: 180px; }
+.unmarked-note {
+  font-size: 12px; font-weight: 600; color: var(--amber);
+  background: var(--amber-lt); padding: 7px 14px; border-radius: 999px;
+}
+
+/* ── Attendance status badges ───────────────── */
+.status-present  { background: var(--green-lt); color: var(--green); }
+.status-late      { background: var(--amber-lt); color: var(--amber); }
+.status-absent    { background: var(--red-lt);   color: var(--red); }
+.status-on_leave  { background: var(--blue-lt);  color: var(--blue); }
+.status-half_day  { background: var(--accent-lt); color: var(--caramel); }
+
+/* ── Mark Attendance modal ──────────────────── */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(24,17,32,.55);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .18s ease;
+  z-index: 300; padding: 20px;
+}
+.modal-bg.open { opacity: 1; pointer-events: all; }
+.modal-bg .modal {
+  background: #fff; border-radius: var(--radius-lg); width: 100%; max-width: 460px;
+  box-shadow: var(--shadow-pop);
+  transform: translateY(14px) scale(.98); transition: transform .2s ease;
+  max-height: 88vh; overflow-y: auto;
+}
+.modal-bg.open .modal { transform: translateY(0) scale(1); }
+
+.req { color: var(--red); font-weight: 700; }
+
+/* The form isn't wrapped in a ".modal-body" div, so without this
+   the fields sit flush against the modal's edges — this is what
+   was making the modal feel cramped/tight. */
+#mark-modal form { padding: 20px 22px 6px; display: flex; flex-direction: column; }
+#mark-modal .field-row { gap: 12px; }
+#mark-modal .modal-actions { margin: 10px -22px -6px; }

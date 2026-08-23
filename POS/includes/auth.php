@@ -146,18 +146,25 @@ function require_role(string ...$roles): void {
 // ═══════════════════════════════════════════════
 
 function current_user(): array {
+<<<<<<< HEAD
     $roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
         ? $_SESSION['roles']
         : (!empty($_SESSION['role']) ? [$_SESSION['role']] : []);
 
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
     return [
         'id'        => $_SESSION['user_id']   ?? null,
         'username'  => $_SESSION['username']  ?? '',
         'firstname' => $_SESSION['firstname'] ?? '',
         'lastname'  => $_SESSION['lastname']  ?? '',
         'email'     => $_SESSION['email']     ?? '',
+<<<<<<< HEAD
         'role'      => $_SESSION['role']      ?? 'staff', // primary role — legacy code
         'roles'     => $roles,                            // ALL roles this account holds
+=======
+        'role'      => $_SESSION['role']      ?? 'staff',
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
         'status'    => $_SESSION['status']    ?? 'active',
         'name'      => trim(($_SESSION['firstname'] ?? '') . ' ' . ($_SESSION['lastname'] ?? '')),
     ];
@@ -168,6 +175,7 @@ function is_logged_in(): bool {
 }
 
 function is_admin(): bool {
+<<<<<<< HEAD
     $roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
         ? $_SESSION['roles']
         : [$_SESSION['role'] ?? ''];
@@ -179,6 +187,13 @@ function is_admin_or_manager(): bool {
         ? $_SESSION['roles']
         : [$_SESSION['role'] ?? ''];
     return (bool)array_intersect(['admin', 'manager'], $roles);
+=======
+    return ($_SESSION['role'] ?? '') === 'admin';
+}
+
+function is_admin_or_manager(): bool {
+    return in_array($_SESSION['role'] ?? '', ['admin', 'manager']);
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 }
 
 function get_dashboard_url(): string {

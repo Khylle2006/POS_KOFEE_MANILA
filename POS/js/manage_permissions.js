@@ -50,10 +50,13 @@ function saveChanges() {
   document.getElementById('save-confirm-modal').classList.add('open');
 }
 
+<<<<<<< HEAD
 function closeSaveConfirm() {
   document.getElementById('save-confirm-modal').classList.remove('open');
 }
 
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── Save changes: actual commit ──
 function doSaveChanges() {
   const roleSelect = document.getElementById('role-picker');
@@ -106,9 +109,12 @@ function closeSaveConfirm() {
   document.getElementById('save-confirm-modal').classList.remove('open');
 }
 
+<<<<<<< HEAD
 // ── Save changes: actual commit (was the old saveChanges body) ──
 
 
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── Add role ──
 function openAddRole() {
   document.getElementById('new-role-key').value = '';
@@ -172,6 +178,7 @@ function removeRole() {
     }
   })
   .catch(() => showToast('⚠️ Network error.', 'error'));
+<<<<<<< HEAD
 }
 
 const dropdownTrigger = document.getElementById('dropdownTrigger');
@@ -244,3 +251,6 @@ const dropdownTrigger = document.getElementById('dropdownTrigger');
                 selectedItems.classList.remove('text-gray-600');
             }
         }
+=======
+}
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1

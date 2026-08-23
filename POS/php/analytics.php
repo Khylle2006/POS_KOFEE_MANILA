@@ -78,7 +78,11 @@ require_permission('analytics.view');
 </div>
 
 <script>
+<<<<<<< HEAD
 fetch('../api/get_analytics.php')
+=======
+fetch('get_analytics.php')
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
   .then(r => r.json())
   .then(data => {
 
