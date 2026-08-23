@@ -43,6 +43,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             id:         item.id,
             name:       item.name,
             icon:       guessIcon(item.name, key),
+            image:      item.image_path ? `../assets/${item.image_path}` : `../assets/menu/${item.id}.jpg`,
+            imageFallback: `../assets/${item.id}.jpg`,
             priceSmall: parseFloat(item.price_small),
             priceLarge: parseFloat(item.price_large),
             stock:      parseInt(item.stock, 10) || 0
@@ -118,7 +120,10 @@ function renderGrid() {
         const soldOut = item.stock <= 0;
         return `
         <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`}>
-            <div class="item-img"><span>${item.icon}</span></div>
+            <div class="item-img">
+                <img src="${item.image}" alt="${escapeHtml(item.name)}" onerror="if (!this.dataset.fallback) { this.dataset.fallback='true'; this.src='${item.imageFallback}'; } else { this.hidden=true; this.nextElementSibling.hidden=false; }">
+                <span hidden>${item.icon}</span>
+            </div>
             <div class="item-name">${escapeHtml(item.name)}</div>
             ${soldOut
                 ? `<div class="item-soldout">Sold out</div>`

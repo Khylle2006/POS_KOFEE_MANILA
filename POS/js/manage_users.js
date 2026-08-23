@@ -54,8 +54,6 @@ function openEdit(r) {
   if (hasAccount) {
     document.getElementById('f-username').value = r.username || '';
     document.getElementById('pw-hint').textContent = '— leave blank to keep current';
-    // Already has an account: don't let them uncheck it away here
-    document.getElementById('f-want-account').disabled = true;
 
     // Check every role box this account currently holds
     const currentRoles = (r.role_array || []);
@@ -77,7 +75,6 @@ function openEdit(r) {
     document.getElementById('f-hire').value        = r.hire_date || '';
     document.getElementById('f-salary').value      = r.base_salary || '';
     document.getElementById('code-field').style.display = 'none'; // code is immutable once set
-    document.getElementById('f-want-employee').disabled = true;
   }
   toggleSection('employee');
 

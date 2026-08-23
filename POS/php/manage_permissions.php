@@ -5,7 +5,24 @@ require_login();
 require_permission('menu.manage');
 
 $user = current_user();
-if ($user['role'] !== 'admin') {
+$user_roles = [];
+if (!empty($_SESSION['roles']) && is_array($_SESSION['roles'])) {
+    $user_roles = $_SESSION['roles'];
+} elseif (!empty($_SESSION['role'])) {
+    $user_roles = [$_SESSION['role']];
+}
+if (empty($user_roles)) {
+    try {
+        $pdo = get_db();
+        $stmt = $pdo->prepare("SELECT role FROM user_roles WHERE user_id = :id UNION SELECT role FROM users WHERE id = :id AND role IS NOT NULL AND role <> ''");
+        $stmt->execute([':id' => $user['id']]);
+        $user_roles = array_values(array_filter($stmt->fetchAll(PDO::FETCH_COLUMN))); 
+    } catch (Throwable $e) {
+        $user_roles = [];
+    }
+}
+$is_admin = in_array('admin', $user_roles, true) || ($user['role'] ?? '') === 'admin';
+if (!$is_admin) {
     header('Location: dashboard.php');
     exit;
 }
@@ -161,12 +178,6 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
-window.CONFIG = {
-    role: <?= json_encode($selected) ?>,
-    userId: <?= json_encode($user['id']) ?>,
-    permissions: <?= json_encode($grants[$selected] ?? []) ?>,
-    apiUrl: '../api/'
-};
 
 
 <script src="../js/manage_permissions.js"></script>

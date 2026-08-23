@@ -158,6 +158,11 @@ include("../includes/sidebar.php");
         <label class="field-label">Description</label>
         <textarea class="field-textarea" id="e-desc"></textarea>
       </div>
+      <div class="field-group">
+        <label class="field-label">Product Image</label>
+        <input class="field-input" type="file" id="e-image" accept="image/jpeg,image/png,image/webp"/>
+        <small style="color:var(--text-muted)">Optional. JPG, PNG, or WebP up to 5 MB.</small>
+      </div>
       <div class="field-row">
         <div class="field-group">
           <label class="field-label">Regular Price (₱)</label>
@@ -201,6 +206,11 @@ include("../includes/sidebar.php");
       <div class="field-group">
         <label class="field-label">Description</label>
         <textarea class="field-textarea" id="add-desc"></textarea>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Product Image</label>
+        <input class="field-input" type="file" id="add-image" accept="image/jpeg,image/png,image/webp"/>
+        <small style="color:var(--text-muted)">Optional. JPG, PNG, or WebP up to 5 MB.</small>
       </div>
       <div class="field-row">
         <div class="field-group">
@@ -276,6 +286,7 @@ function openAdd() {
   document.getElementById('add-desc').value        = '';
   document.getElementById('add-price-small').value = '';
   document.getElementById('add-price-large').value = '';
+  document.getElementById('add-image').value        = '';
   document.getElementById('add-modal').classList.add('open');
 }
 function closeAdd() { document.getElementById('add-modal').classList.remove('open'); }
@@ -320,6 +331,8 @@ function doAddMenuItem() {
   fd.append('description', document.getElementById('add-desc').value);
   fd.append('price_small', document.getElementById('add-price-small').value);
   fd.append('price_large', document.getElementById('add-price-large').value);
+  const addImage = document.getElementById('add-image').files[0];
+  if (addImage) fd.append('image', addImage);
 
   const btn = document.getElementById('add-confirm-btn');
   fetch("../api/add_item.php", { method: "POST", body: fd })
@@ -450,6 +463,7 @@ function openEdit(p) {
   document.getElementById('e-desc').value        = p.description || '';
   document.getElementById('e-price-small').value = p.price_small;
   document.getElementById('e-price-large').value = p.price_large;
+  document.getElementById('e-image').value        = '';
   document.getElementById('edit-modal').classList.add('open');
 }
 function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); }
@@ -464,6 +478,8 @@ function saveEdit() {
   fd.append('description', document.getElementById('e-desc').value);
   fd.append('price_small', document.getElementById('e-price-small').value);
   fd.append('price_large', document.getElementById('e-price-large').value);
+  const editImage = document.getElementById('e-image').files[0];
+  if (editImage) fd.append('image', editImage);
 
   fetch(SELF, { method: 'POST', body: fd })
     .then(r => r.json())
@@ -500,6 +516,36 @@ function updateRowInDOM(id, p) {
   // Keep the Edit button's stored data current for the next click
   const editBtn = row.querySelector('.act-group button:nth-child(2)');
   if (editBtn) editBtn.setAttribute('onclick', `openEdit(${JSON.stringify(p).replace(/"/g, '&quot;')})`);
+}
+
+// ── Delete item ──────────────────────────────
+let pendingDelete = null;
+function confirmDelete(id, name) {
+  pendingDelete = id;
+  document.getElementById('del-msg').textContent = `Are you sure you want to delete "${name}"?`;
+  document.getElementById('delete-modal').classList.add('open');
+}
+function closeDelete() {
+  pendingDelete = null;
+  document.getElementById('delete-modal').classList.remove('open');
+}
+function doDelete() {
+  if (!pendingDelete) return;
+  const id = pendingDelete;
+  const fd = new FormData();
+  fd.append('action', 'delete');
+  fd.append('id', id);
+
+  fetch('../api/add_item.php', { method: 'POST', body: fd })
+    .then(response => response.json())
+    .then(result => {
+      if (!result.ok) throw new Error(result.error || 'Unable to delete item.');
+      closeDelete();
+      document.getElementById('prow-' + id)?.remove();
+      showToast('✅ Item deleted.');
+      applyFilters();
+    })
+    .catch(error => showToast('⚠️ ' + error.message, 'error'));
 }
 
 

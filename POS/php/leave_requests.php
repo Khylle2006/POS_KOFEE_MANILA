@@ -2,7 +2,6 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
-require_permission('menu.manage');
 
 $pdo   = get_db();
 $user  = current_user();
@@ -11,6 +10,7 @@ $toast = '';
 $toast_type = 'success';
 
 // Admin/HR = reviewers only. Everyone else = requesters only.
+// Crew/finance/manager can request leave as long as they are linked to an employee record.
 $is_reviewer = in_array($role, ['admin', 'hr']);
 
 $leave_types = ['Vacation','Sick','Emergency','Unpaid','Other'];
@@ -167,7 +167,7 @@ include("../includes/sidebar.php");
       <p><?= $is_reviewer ? 'Review and approve employee leave' : 'File and track your leave requests' ?></p>
     </div>
     <?php if (!$is_reviewer && $my_employee): ?>
-      <button class="btn-add" onclick="openFile()">➕ File Leave</button>
+      <button class="btn-add" type="button" onclick="document.getElementById('leave-form-wrap')?.scrollIntoView({behavior:'smooth', block:'start'});">➕ File Leave</button>
     <?php endif; ?>
   </div>
 
@@ -193,6 +193,48 @@ include("../includes/sidebar.php");
     </div>
 
     <div class="leave-grid">
+      <?php if (!$is_reviewer && $my_employee): ?>
+        <div class="leave-card" id="leave-form-wrap">
+          <div class="lc-head">
+            <div>
+              <div class="lc-name">File Leave Request</div>
+              <div class="lc-sub"><?= htmlspecialchars($my_employee['firstname'].' '.$my_employee['lastname'].' (#'.$my_employee['employee_code'].')') ?></div>
+            </div>
+          </div>
+
+          <form method="POST">
+            <input type="hidden" name="action" value="file"/>
+
+            <div class="field-group mg-b">
+              <label class="field-label">Leave Type</label>
+              <select class="field-input" name="leave_type">
+                <?php foreach ($leave_types as $t): ?><option value="<?= $t ?>"><?= $t ?></option><?php endforeach; ?>
+              </select>
+            </div>
+
+            <div class="field-row mg-b">
+              <div class="field-group">
+                <label class="field-label">Start Date <span class="req">*</span></label>
+                <input class="field-input" type="date" name="start_date" required/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">End Date <span class="req">*</span></label>
+                <input class="field-input" type="date" name="end_date" required/>
+              </div>
+            </div>
+
+            <div class="field-group mg-b">
+              <label class="field-label">Reason</label>
+              <textarea class="field-input" name="reason" rows="3" placeholder="Optional"></textarea>
+            </div>
+
+            <div class="lc-actions" style="justify-content:flex-end;">
+              <button type="submit" class="btn-save">✔ Submit Request</button>
+            </div>
+          </form>
+        </div>
+      <?php endif; ?>
+
       <?php if (empty($leaves)): ?>
         <div class="empty-state">🫙 No leave requests found.</div>
       <?php else: foreach ($leaves as $l): ?>
@@ -246,64 +288,10 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
-<?php if (!$is_reviewer && $my_employee): ?>
-<!-- File leave modal (requesters only) -->
-<div class="modal-bg" id="file-modal" onclick="if(event.target===this) closeFile()">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>➕ File Leave Request</h3>
-      <button class="modal-close" onclick="closeFile()">✕</button>
-    </div>
-    <form method="POST">
-      <input type="hidden" name="action" value="file"/>
-
-      <div class="field-group mg-b">
-        <label class="field-label">Filing as</label>
-        <input class="field-input" type="text" value="<?= htmlspecialchars($my_employee['firstname'].' '.$my_employee['lastname'].' (#'.$my_employee['employee_code'].')') ?>" disabled/>
-      </div>
-
-      <div class="field-group mg-b">
-        <label class="field-label">Leave Type</label>
-        <select class="field-input" name="leave_type">
-          <?php foreach ($leave_types as $t): ?><option value="<?= $t ?>"><?= $t ?></option><?php endforeach; ?>
-        </select>
-      </div>
-
-      <div class="field-row mg-b">
-        <div class="field-group">
-          <label class="field-label">Start Date <span class="req">*</span></label>
-          <input class="field-input" type="date" name="start_date" required/>
-        </div>
-        <div class="field-group">
-          <label class="field-label">End Date <span class="req">*</span></label>
-          <input class="field-input" type="date" name="end_date" required/>
-        </div>
-      </div>
-
-      <div class="field-group mg-b">
-        <label class="field-label">Reason</label>
-        <textarea class="field-input" name="reason" rows="3" placeholder="Optional"></textarea>
-      </div>
-
-      <div class="modal-actions">
-        <button type="button" class="btn-cancel" onclick="closeFile()">Cancel</button>
-        <button type="submit" class="btn-save">✔ Submit Request</button>
-      </div>
-    </form>
-  </div>
-</div>
-<?php endif; ?>
-
 <?php if ($toast): ?>
 <div class="toast toast-<?= $toast_type ?>" id="toast-msg"><?= $toast ?></div>
 <script>setTimeout(()=>{const t=document.getElementById('toast-msg'); if(t) t.style.opacity='0';},3500);</script>
 <?php endif; ?>
-
-<script>
-function openFile()  { document.getElementById('file-modal')?.classList.add('open'); }
-function closeFile() { document.getElementById('file-modal')?.classList.remove('open'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFile(); });
-</script>
 
 </body>
 </html>

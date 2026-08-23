@@ -49,8 +49,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'save') {
         $emp_id            = (int)($_POST['emp_id'] ?? 0);
         $existing_user_id  = (int)($_POST['existing_user_id'] ?? 0);
-        $want_account      = isset($_POST['want_account']);
-        $want_employee     = isset($_POST['want_employee']);
+        $want_account      = !empty($_POST['want_account']) && $_POST['want_account'] !== '0';
+        $want_employee     = !empty($_POST['want_employee']) && $_POST['want_employee'] !== '0';
+
+        // Preserve existing linked records during edits. If the user already has
+        // an account or employee profile, we must not reject the edit just because
+        // one of the form toggles was unchecked or omitted from the POST payload.
+        if (!$want_account && $existing_user_id) {
+            $want_account = true;
+        }
+        if (!$want_employee && $emp_id) {
+            $want_employee = true;
+        }
 
         $firstname = trim($_POST['firstname'] ?? '');
         $lastname  = trim($_POST['lastname']  ?? '');
@@ -484,7 +494,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
           <small>Lets this person sign in to the POS</small>
         </span>
         <span class="toggle-switch-wrap">
-          <input type="checkbox" name="want_account" id="f-want-account" checked onchange="toggleSection('account')"/>
+          <input type="checkbox" name="want_account" value="1" id="f-want-account" checked onchange="toggleSection('account')"/>
           <span class="toggle-visual"></span>
         </span>
       </label>
@@ -531,7 +541,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
           <small>Position, pay, and HR details</small>
         </span>
         <span class="toggle-switch-wrap">
-          <input type="checkbox" name="want_employee" id="f-want-employee" checked onchange="toggleSection('employee')"/>
+          <input type="checkbox" name="want_employee" value="1" id="f-want-employee" checked onchange="toggleSection('employee')"/>
           <span class="toggle-visual"></span>
         </span>
       </label>
@@ -566,7 +576,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
         </div>
         <div class="field-row mg-b">
           <div class="field-group">
-            <label class>="field-label">Hire Date</label>
+            <label class="field-label">Hire Date</label>
             <input class="field-input" type="date" name="hire_date" id="f-hire"/>
           </div>
           <div class="field-group">

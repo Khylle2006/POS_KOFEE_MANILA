@@ -7,6 +7,31 @@ require_permission('menu.manage');
 
 
 $pdo = get_db();
+$pdo->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_path VARCHAR(255) NULL");
+$pdo->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted TINYINT(1) NOT NULL DEFAULT 0");
+
+function save_product_image(int $product_id, string $field, ?string $old_path = null): ?string {
+    if (empty($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) return $old_path;
+    if ($_FILES[$field]['error'] !== UPLOAD_ERR_OK) throw new RuntimeException('The image upload failed.');
+    if ($_FILES[$field]['size'] > 5 * 1024 * 1024) throw new RuntimeException('Image must be 5 MB or smaller.');
+
+    $info = @getimagesize($_FILES[$field]['tmp_name']);
+    $extensions = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];
+    if (!$info || !isset($extensions[$info[2]])) throw new RuntimeException('Only JPG, PNG, and WebP images are allowed.');
+
+    $relative = 'menu/' . $product_id . '.' . $extensions[$info[2]];
+    $directory = __DIR__ . '/../assets/menu';
+    if (!is_dir($directory) && !mkdir($directory, 0755, true)) throw new RuntimeException('The image folder could not be created.');
+    if (!move_uploaded_file($_FILES[$field]['tmp_name'], $directory . '/' . basename($relative))) {
+        throw new RuntimeException('The image could not be saved.');
+    }
+
+    if ($old_path && $old_path !== $relative) {
+        $old_file = __DIR__ . '/../assets/' . ltrim($old_path, '/');
+        if (is_file($old_file)) @unlink($old_file);
+    }
+    return $relative;
+}
 
 // ── POST: Add new item ────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -46,8 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':ps'   => $price_small,
                 ':pl'   => $price_large,
             ]);
+            $id = (int)$pdo->lastInsertId();
+            $image_path = save_product_image($id, 'image');
+            if ($image_path) $pdo->prepare('UPDATE products SET image_path=:image WHERE id=:id')->execute([':image'=>$image_path, ':id'=>$id]);
             echo json_encode(['ok' => true]);
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
             http_response_code(500);
             echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
         }
@@ -78,11 +106,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$id || !$name) { http_response_code(422); echo json_encode(['ok'=>false,'error'=>'Missing fields.']); exit; }
 
         try {
+            $current = $pdo->prepare('SELECT image_path FROM products WHERE id=:id');
+            $current->execute([':id'=>$id]);
+            $old_path = $current->fetchColumn() ?: null;
+            $image_path = save_product_image($id, 'image', $old_path);
             $pdo->prepare(
-                'UPDATE products SET name=:n, description=:d, price_small=:ps, price_large=:pl, category_id=:c WHERE id=:id'
-            )->execute([':n'=>$name,':d'=>$desc,':ps'=>$price_small,':pl'=>$price_large,':c'=>(string)$cat_id,':id'=>$id]);
+                'UPDATE products SET name=:n, description=:d, price_small=:ps, price_large=:pl, category_id=:c, image_path=:image WHERE id=:id'
+            )->execute([':n'=>$name,':d'=>$desc,':ps'=>$price_small,':pl'=>$price_large,':c'=>(string)$cat_id,':image'=>$image_path,':id'=>$id]);
             echo json_encode(['ok'=>true]);
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
             http_response_code(500);
             echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
         }
@@ -112,9 +144,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         try {
+            $image = $pdo->prepare('SELECT image_path FROM products WHERE id=:id');
+            $image->execute([':id'=>$id]);
+            $image_path = $image->fetchColumn();
             $pdo->prepare('DELETE FROM products WHERE id=:id')->execute([':id'=>$id]);
-            echo json_encode(['ok'=>true]);
+            if ($image_path) {
+                $image_file = __DIR__ . '/../assets/' . ltrim($image_path, '/');
+                if (is_file($image_file)) @unlink($image_file);
+            }
+            echo json_encode(['ok'=>true, 'message'=>'Item deleted.']);
         } catch (PDOException $e) {
+            if ((int)$e->errorInfo[1] === 1451) {
+                $pdo->prepare('UPDATE products SET is_deleted=1, stock=0 WHERE id=:id')->execute([':id'=>$id]);
+                echo json_encode(['ok'=>true, 'message'=>'Item archived because it is used in order history.']);
+                exit;
+            }
             http_response_code(500);
             echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
         }

@@ -50,10 +50,6 @@ function saveChanges() {
   document.getElementById('save-confirm-modal').classList.add('open');
 }
 
-function closeSaveConfirm() {
-  document.getElementById('save-confirm-modal').classList.remove('open');
-}
-
 // ── Save changes: actual commit ──
 function doSaveChanges() {
   const roleSelect = document.getElementById('role-picker');
@@ -105,9 +101,6 @@ function doSaveChanges() {
 function closeSaveConfirm() {
   document.getElementById('save-confirm-modal').classList.remove('open');
 }
-
-// ── Save changes: actual commit (was the old saveChanges body) ──
-
 
 // ── Add role ──
 function openAddRole() {
