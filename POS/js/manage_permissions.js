@@ -51,10 +51,13 @@ function saveChanges() {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 function closeSaveConfirm() {
   document.getElementById('save-confirm-modal').classList.remove('open');
 }
 
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 =======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── Save changes: actual commit ──
@@ -110,9 +113,12 @@ function closeSaveConfirm() {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 // ── Save changes: actual commit (was the old saveChanges body) ──
 
 
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 =======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── Add role ──
@@ -178,6 +184,7 @@ function removeRole() {
     }
   })
   .catch(() => showToast('⚠️ Network error.', 'error'));
+<<<<<<< HEAD
 <<<<<<< HEAD
 }
 
@@ -251,6 +258,9 @@ const dropdownTrigger = document.getElementById('dropdownTrigger');
                 selectedItems.classList.remove('text-gray-600');
             }
         }
+=======
+}
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 =======
 }
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1

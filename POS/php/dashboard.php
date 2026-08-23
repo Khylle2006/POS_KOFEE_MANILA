@@ -113,6 +113,7 @@ $initials = strtoupper(substr($fname, 0, 1));
 
     <!-- Quick access -->
 <<<<<<< HEAD
+<<<<<<< HEAD
     <?php if (!empty($shortcuts)): ?>
     <div>
       <div class="section-title">Quick Access</div>
@@ -127,6 +128,8 @@ $initials = strtoupper(substr($fname, 0, 1));
     </div>
     <?php endif; ?>
 =======
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
     <div>
       <div class="section-title">Quick Access</div>
       <div class="home-shortcuts">
@@ -148,6 +151,9 @@ $initials = strtoupper(substr($fname, 0, 1));
         </a>
       </div>
     </div>
+<<<<<<< HEAD
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+=======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
     <!-- Recent orders -->

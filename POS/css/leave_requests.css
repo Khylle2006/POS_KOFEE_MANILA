@@ -40,7 +40,10 @@
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 /* ── Leave request modal ────────────────────── */
 .modal-bg {
   position: fixed; inset: 0; background: rgba(24,17,32,.55);
@@ -62,6 +65,9 @@
 #file-modal .field-row { gap: 12px; }
 #file-modal .modal-actions { margin: 0; }
 
+<<<<<<< HEAD
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+=======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 .lc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .lc-name { font-size: 14px; font-weight: 700; color: var(--espresso); }

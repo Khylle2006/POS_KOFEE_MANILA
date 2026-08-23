@@ -8,7 +8,10 @@ $toast = '';
 $toast_type = 'success';
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 function createInventoryStockRequest($pdo, $employeeId, $ingredientId, $ingredientName, $qty, $requestType = 'Inventory Restock', $reason = 'Pending approval') {
     $details = "Ingredient ID: {$ingredientId}; Ingredient: {$ingredientName}; Qty: {$qty}; Type: {$requestType}; Reason: {$reason}";
     $stmt = $pdo->prepare(
@@ -22,6 +25,9 @@ function createInventoryStockRequest($pdo, $employeeId, $ingredientId, $ingredie
     ]);
 }
 
+<<<<<<< HEAD
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+=======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -55,7 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     // Restock (add to existing)
+=======
+    // Restock (add to existing) — requires HR approval before stock changes
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 =======
     // Restock (add to existing) — requires HR approval before stock changes
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
@@ -64,12 +74,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $qty = (float)($_POST['qty']         ?? 0);
         if ($id && $qty > 0) {
 <<<<<<< HEAD
+<<<<<<< HEAD
             $pdo->prepare('UPDATE ingredients SET quantity = quantity + :q WHERE id = :id')
                 ->execute([':q'=>$qty,':id'=>$id]);
             $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
                 ->execute([':i'=>$id,':q'=>$qty,':u'=>$_SESSION['user_id']]);
             $toast = '✅ Restocked successfully!';
 =======
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
             $user = current_user();
             $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
             $emp->execute([':uid' => $user['id'] ?? 0]);
@@ -95,6 +108,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $toast = '✅ Restock request submitted for HR approval.';
             }
+<<<<<<< HEAD
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+=======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
         } else {
             $toast = '⚠️ Enter a valid quantity.';
@@ -103,7 +119,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     // Set stock (set exact value)
+=======
+    // Set stock (set exact value) — also requires HR approval before stock changes
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 =======
     // Set stock (set exact value) — also requires HR approval before stock changes
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
@@ -112,12 +132,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $qty = (float)($_POST['qty']         ?? -1);
         if ($id && $qty >= 0) {
 <<<<<<< HEAD
+<<<<<<< HEAD
             $pdo->prepare('UPDATE ingredients SET quantity = :q WHERE id = :id')
                 ->execute([':q'=>$qty,':id'=>$id]);
             $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
                 ->execute([':i'=>$id,':q'=>$qty,':u'=>$_SESSION['user_id']]);
             $toast = '✅ Stock set to ' . $qty . '!';
 =======
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
             $user = current_user();
             $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
             $emp->execute([':uid' => $user['id'] ?? 0]);
@@ -143,6 +166,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $toast = '✅ Stock adjustment request submitted for HR approval.';
             }
+<<<<<<< HEAD
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+=======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
         } else {
             $toast = '⚠️ Enter a valid quantity (0 or more).';

@@ -14,8 +14,11 @@ $toast_type = 'success';
 $is_reviewer = in_array($role, ['admin', 'hr']);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 $request_types = ['Certificate of Employment','ID Replacement','Schedule Change','Payslip Copy','Document Correction','Other'];
 =======
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 $request_types = [
     'Certificate of Employment',
     'ID Replacement',
@@ -102,6 +105,9 @@ function applyApprovedInventoryRequest($pdo, $request) {
 
     return false;
 }
+<<<<<<< HEAD
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+=======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
 // ── Resolve the logged-in user's own employee profile (for self-service filing) ──
@@ -141,9 +147,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $status = $_POST['status'] ?? '';
             if ($id && in_array($status, ['approved','rejected','completed'])) {
 <<<<<<< HEAD
+<<<<<<< HEAD
                 $pdo->prepare('UPDATE hr_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
                     ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
 =======
+=======
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
                 $request = $pdo->prepare('SELECT * FROM hr_requests WHERE id=:id LIMIT 1');
                 $request->execute([':id' => $id]);
                 $row = $request->fetch();
@@ -155,6 +164,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('UPDATE hr_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
                     ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
 
+<<<<<<< HEAD
+>>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+=======
 >>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
                 $labels = ['approved'=>'✅ Request approved.', 'rejected'=>'❌ Request rejected.', 'completed'=>'📦 Request marked completed.'];
                 $toast  = $labels[$status];
