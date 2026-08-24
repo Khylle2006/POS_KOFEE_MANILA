@@ -158,20 +158,11 @@ include("../includes/sidebar.php");
         <label class="field-label">Description</label>
         <textarea class="field-textarea" id="e-desc"></textarea>
       </div>
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
       <div class="field-group">
         <label class="field-label">Product Image</label>
         <input class="field-input" type="file" id="e-image" accept="image/jpeg,image/png,image/webp"/>
         <small style="color:var(--text-muted)">Optional. JPG, PNG, or WebP up to 5 MB.</small>
       </div>
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
       <div class="field-row">
         <div class="field-group">
           <label class="field-label">Regular Price (₱)</label>
@@ -216,20 +207,11 @@ include("../includes/sidebar.php");
         <label class="field-label">Description</label>
         <textarea class="field-textarea" id="add-desc"></textarea>
       </div>
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
       <div class="field-group">
         <label class="field-label">Product Image</label>
         <input class="field-input" type="file" id="add-image" accept="image/jpeg,image/png,image/webp"/>
         <small style="color:var(--text-muted)">Optional. JPG, PNG, or WebP up to 5 MB.</small>
       </div>
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
       <div class="field-row">
         <div class="field-group">
           <label class="field-label">Regular Price (₱)</label>
@@ -304,14 +286,7 @@ function openAdd() {
   document.getElementById('add-desc').value        = '';
   document.getElementById('add-price-small').value = '';
   document.getElementById('add-price-large').value = '';
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
   document.getElementById('add-image').value        = '';
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-  document.getElementById('add-image').value        = '';
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
   document.getElementById('add-modal').classList.add('open');
 }
 function closeAdd() { document.getElementById('add-modal').classList.remove('open'); }
@@ -356,16 +331,8 @@ function doAddMenuItem() {
   fd.append('description', document.getElementById('add-desc').value);
   fd.append('price_small', document.getElementById('add-price-small').value);
   fd.append('price_large', document.getElementById('add-price-large').value);
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
   const addImage = document.getElementById('add-image').files[0];
   if (addImage) fd.append('image', addImage);
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-  const addImage = document.getElementById('add-image').files[0];
-  if (addImage) fd.append('image', addImage);
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
   const btn = document.getElementById('add-confirm-btn');
   fetch("../api/add_item.php", { method: "POST", body: fd })
@@ -496,14 +463,7 @@ function openEdit(p) {
   document.getElementById('e-desc').value        = p.description || '';
   document.getElementById('e-price-small').value = p.price_small;
   document.getElementById('e-price-large').value = p.price_large;
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
   document.getElementById('e-image').value        = '';
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-  document.getElementById('e-image').value        = '';
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
   document.getElementById('edit-modal').classList.add('open');
 }
 function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); }
@@ -518,16 +478,8 @@ function saveEdit() {
   fd.append('description', document.getElementById('e-desc').value);
   fd.append('price_small', document.getElementById('e-price-small').value);
   fd.append('price_large', document.getElementById('e-price-large').value);
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
   const editImage = document.getElementById('e-image').files[0];
   if (editImage) fd.append('image', editImage);
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-  const editImage = document.getElementById('e-image').files[0];
-  if (editImage) fd.append('image', editImage);
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
   fetch(SELF, { method: 'POST', body: fd })
     .then(r => r.json())
@@ -566,11 +518,6 @@ function updateRowInDOM(id, p) {
   if (editBtn) editBtn.setAttribute('onclick', `openEdit(${JSON.stringify(p).replace(/"/g, '&quot;')})`);
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── Delete item ──────────────────────────────
 let pendingDelete = null;
 function confirmDelete(id, name) {
@@ -601,10 +548,6 @@ function doDelete() {
     .catch(error => showToast('⚠️ ' + error.message, 'error'));
 }
 
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
 // ── Close modals on backdrop / Escape ──────────
 document.querySelectorAll('.modal-overlay').forEach(el => {

@@ -112,24 +112,6 @@ $initials = strtoupper(substr($fname, 0, 1));
     </div>
 
     <!-- Quick access -->
-<<<<<<< HEAD
-<<<<<<< HEAD
-    <?php if (!empty($shortcuts)): ?>
-    <div>
-      <div class="section-title">Quick Access</div>
-      <div class="home-shortcuts">
-        <?php foreach ($shortcuts as $s): ?>
-        <a href="<?= htmlspecialchars($s['href']) ?>" class="shortcut-card">
-          <div class="shortcut-icon"><?= icon($s['icon']) ?></div>
-          <div><h3><?= htmlspecialchars($s['title']) ?></h3><p><?= htmlspecialchars($s['desc']) ?></p></div>
-        </a>
-        <?php endforeach; ?>
-      </div>
-    </div>
-    <?php endif; ?>
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
     <div>
       <div class="section-title">Quick Access</div>
       <div class="home-shortcuts">
@@ -151,10 +133,6 @@ $initials = strtoupper(substr($fname, 0, 1));
         </a>
       </div>
     </div>
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
     <!-- Recent orders -->
     <div class="recent-section">

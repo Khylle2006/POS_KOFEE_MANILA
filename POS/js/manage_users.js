@@ -23,14 +23,6 @@ function resetModal() {
   document.getElementById('f-want-employee').checked = true;
   document.getElementById('f-want-account').disabled  = false;
   document.getElementById('f-want-employee').disabled = false;
-<<<<<<< HEAD
-<<<<<<< HEAD
-  document.getElementById('f-want-account').dataset.locked  = '';
-  document.getElementById('f-want-employee').dataset.locked = '';
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
   document.querySelectorAll('#f-roles input[type=checkbox]').forEach(cb => cb.checked = false);
   toggleSection('account');
   toggleSection('employee');
@@ -58,20 +50,7 @@ function openEdit(r) {
 
   // Account section
   const hasAccount = !!r.user_id;
-<<<<<<< HEAD
-<<<<<<< HEAD
-  const acctCb = document.getElementById('f-want-account');
-  acctCb.checked = hasAccount;
-  // IMPORTANT: do NOT disable this checkbox — disabled fields are excluded
-  // from form submission entirely, which silently breaks saving (roles
-  // never sync). Use a "locked" flag instead so it stays submittable.
-  acctCb.dataset.locked = hasAccount ? '1' : '';
-=======
   document.getElementById('f-want-account').checked = hasAccount;
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-  document.getElementById('f-want-account').checked = hasAccount;
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
   if (hasAccount) {
     document.getElementById('f-username').value = r.username || '';
     document.getElementById('pw-hint').textContent = '— leave blank to keep current';
@@ -86,17 +65,7 @@ function openEdit(r) {
 
   // Employee section
   const hasProfile = !!r.emp_id;
-<<<<<<< HEAD
-<<<<<<< HEAD
-  const empCb = document.getElementById('f-want-employee');
-  empCb.checked = hasProfile;
-  empCb.dataset.locked = hasProfile ? '1' : '';
-=======
   document.getElementById('f-want-employee').checked = hasProfile;
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-  document.getElementById('f-want-employee').checked = hasProfile;
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
   if (hasProfile) {
     document.getElementById('f-code').value       = r.employee_code || '';
     document.getElementById('f-pos').value        = r.position || '';
@@ -115,27 +84,6 @@ function openEdit(r) {
 function closeModal() { document.getElementById('staff-modal').classList.remove('open'); }
 function closeModalBg(e) { if (e.target === e.currentTarget) closeModal(); }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-// A "locked" account/employee toggle stays enabled (so it still submits
-// with the form) but can't be switched off — reverts and explains why.
-['f-want-account', 'f-want-employee'].forEach(id => {
-  document.getElementById(id).addEventListener('change', function () {
-    if (this.dataset.locked === '1' && !this.checked) {
-      this.checked = true;
-      const errBox = document.getElementById('staff-form-error');
-      errBox.textContent = id === 'f-want-account'
-        ? "This account already has a login and can't be removed here — use Block instead."
-        : "This person already has an employee profile and it can't be removed here — use Deactivate instead.";
-      errBox.style.display = 'block';
-    }
-  });
-});
-
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── Save (Add/Edit) — AJAX so errors show inline without wiping the form ──
 document.getElementById('staff-form').addEventListener('submit', function (e) {
   e.preventDefault();

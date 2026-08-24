@@ -50,16 +50,6 @@ function saveChanges() {
   document.getElementById('save-confirm-modal').classList.add('open');
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-function closeSaveConfirm() {
-  document.getElementById('save-confirm-modal').classList.remove('open');
-}
-
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── Save changes: actual commit ──
 function doSaveChanges() {
   const roleSelect = document.getElementById('role-picker');
@@ -112,15 +102,6 @@ function closeSaveConfirm() {
   document.getElementById('save-confirm-modal').classList.remove('open');
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-// ── Save changes: actual commit (was the old saveChanges body) ──
-
-
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 // ── Add role ──
 function openAddRole() {
   document.getElementById('new-role-key').value = '';
@@ -184,83 +165,4 @@ function removeRole() {
     }
   })
   .catch(() => showToast('⚠️ Network error.', 'error'));
-<<<<<<< HEAD
-<<<<<<< HEAD
 }
-
-const dropdownTrigger = document.getElementById('dropdownTrigger');
-        const dropdownOptions = document.getElementById('dropdownOptions');
-        const arrowIcon = document.getElementById('arrowIcon');
-        const selectedItems = document.getElementById('selectedItems');
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        
-        // Toggle dropdown
-        dropdownTrigger.addEventListener('click', function(e) {
-            e.stopPropagation();
-            toggleDropdown();
-        });
-        
-        function toggleDropdown() {
-            if (dropdownOptions.classList.contains('max-h-0')) {
-                // Open dropdown
-                dropdownOptions.classList.remove('max-h-0');
-                dropdownOptions.classList.add('max-h-72', 'shadow-2xl');
-                arrowIcon.classList.add('rotate-180');
-            } else {
-                // Close dropdown
-                closeDropdown();
-            }
-        }
-        
-        function closeDropdown() {
-            dropdownOptions.classList.add('max-h-0');
-            dropdownOptions.classList.remove('max-h-72', 'shadow-2xl');
-            arrowIcon.classList.remove('rotate-180');
-        }
-        
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(e) {
-            if (!dropdownTrigger.contains(e.target) && !dropdownOptions.contains(e.target)) {
-                closeDropdown();
-            }
-        });
-        
-        // Prevent dropdown from closing when clicking inside options
-        dropdownOptions.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-        
-        // Update selected items display
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', updateSelectedItems);
-        });
-        
-        function updateSelectedItems() {
-            const selectedOptions = [];
-            
-            checkboxes.forEach(checkbox => {
-                if (checkbox.checked) {
-                    selectedOptions.push(checkbox.parentElement.querySelector('span').textContent);
-                }
-            });
-            
-            if (selectedOptions.length === 0) {
-                selectedItems.textContent = 'Select options...';
-                selectedItems.classList.add('text-gray-600');
-                selectedItems.classList.remove('text-gray-900');
-            } else if (selectedOptions.length <= 2) {
-                selectedItems.textContent = selectedOptions.join(', ');
-                selectedItems.classList.add('text-gray-900');
-                selectedItems.classList.remove('text-gray-600');
-            } else {
-                selectedItems.textContent = `${selectedOptions.length} items selected`;
-                selectedItems.classList.add('text-gray-900');
-                selectedItems.classList.remove('text-gray-600');
-            }
-        }
-=======
-}
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-}
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1

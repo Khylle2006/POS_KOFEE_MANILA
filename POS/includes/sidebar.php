@@ -34,16 +34,7 @@ if (!function_exists('icon')) {
 }
 
 $user    = current_user();
-<<<<<<< HEAD
-<<<<<<< HEAD
-$role    = $user['role']  ?? 'crew';   // primary role — used only for the display badge
-$roles   = $user['roles'] ?? [$role];  // ALL roles this account holds — used for access checks
-=======
 $role    = $user['role'] ?? 'crew';
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-$role    = $user['role'] ?? 'crew';
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
@@ -55,25 +46,16 @@ $access = [
     'menu_manager' => has_permission('menu.manage'),
     'inventory'    => has_permission('inventory.view'),
     'users'        => has_permission('users.manage'),
-<<<<<<< HEAD
-<<<<<<< HEAD
-    'hr_employees' => (bool)array_intersect(['admin', 'hr'], $roles),
-    'hr_attendance'=> (bool)array_intersect(['admin', 'hr'], $roles),
-    'hr_leave'     => true,
-    'hr_requests'  => true,
-    'manage_permissions' => in_array('admin', $roles, true),
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+    'requisitions'   => has_permission('procurement.requisitions'),
+    'purchase_orders'   => has_permission('procurement.purchase_orders'),
+    'bidding'   => has_permission('procurement.bidding.review'),
+    'rfq'   => has_permission('procurement.rfq.manage'),
+    'suppliers'   => has_permission('procurement.suppliers.manage'),
     'hr_employees' => in_array($role, ['admin', 'hr'], true),
     'hr_attendance'=> in_array($role, ['admin', 'hr'], true),
-    'hr_leave'     => true,
-    'hr_requests'  => true,
+    'hr_leave'     => in_array($role, ['admin', 'hr'], true),
+    'hr_requests'  => in_array($role, ['admin', 'hr'], true),
     'manage_permissions' => ($role === 'admin'),
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 ];
 
 // ── Live badge counts (best-effort; never break the sidebar if a
@@ -246,9 +228,38 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     <?php endif; ?>
 
     <?php if ($access['analytics']): ?>
-    <div class="<?= $groupLabel ?>">Reports</div>
+    <div class="<?= $groupLabel ?>">Finance</div>
     <button class="<?= navBtnClasses($current === 'analytics.php') ?>" onclick="window.location.href='analytics.php'">
         <?= icon('analytics') ?><span class="flex-1 truncate">Analytics</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['requisitions'] || $access['bidding'] || $access['rfq'] || $access['purchase_orders']): ?>
+    <div class="<?= $groupLabel ?>">Procurement</div>
+    <?php endif; ?>
+
+
+    <?php if ($access['requisitions']): ?>
+    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='requisitions.php'">
+        <?= icon('inventory') ?><span class="flex-1 truncate">Requisitions</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['purchase_orders']): ?>
+    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='purchase_orders.php'">
+        <?= icon('inventory') ?><span class="flex-1 truncate">Purchase Orders</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['rfq']): ?>
+    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='rfq.php'">
+        <?= icon('inventory') ?><span class="flex-1 truncate">Request for Quotation</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['suppliers']): ?>
+    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='suppliers.php'">
+        <?= icon('employees') ?><span class="flex-1 truncate">Suppliers</span>
     </button>
     <?php endif; ?>
 
@@ -302,17 +313,7 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
             <div class="text-[12.5px] font-semibold text-[var(--cream,#fbf3e9)] truncate">
                 <?= htmlspecialchars($user['firstname'] ?: $user['username']) ?>
             </div>
-<<<<<<< HEAD
-<<<<<<< HEAD
-            <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] capitalize truncate" title="<?= htmlspecialchars(implode(', ', $roles)) ?>">
-                <?= htmlspecialchars(implode(' + ', $roles)) ?>
-            </div>
-=======
             <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] capitalize"><?= htmlspecialchars($role) ?></div>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-            <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] capitalize"><?= htmlspecialchars($role) ?></div>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
         </div>
     </div>
 

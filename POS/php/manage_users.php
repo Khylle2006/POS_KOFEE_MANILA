@@ -49,13 +49,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'save') {
         $emp_id            = (int)($_POST['emp_id'] ?? 0);
         $existing_user_id  = (int)($_POST['existing_user_id'] ?? 0);
-<<<<<<< HEAD
-<<<<<<< HEAD
-        $want_account      = isset($_POST['want_account']);
-        $want_employee     = isset($_POST['want_employee']);
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
         $want_account      = !empty($_POST['want_account']) && $_POST['want_account'] !== '0';
         $want_employee     = !empty($_POST['want_employee']) && $_POST['want_employee'] !== '0';
 
@@ -68,10 +61,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$want_employee && $emp_id) {
             $want_employee = true;
         }
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
         $firstname = trim($_POST['firstname'] ?? '');
         $lastname  = trim($_POST['lastname']  ?? '');
@@ -505,15 +494,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
           <small>Lets this person sign in to the POS</small>
         </span>
         <span class="toggle-switch-wrap">
-<<<<<<< HEAD
-<<<<<<< HEAD
-          <input type="checkbox" name="want_account" id="f-want-account" checked onchange="toggleSection('account')"/>
-=======
           <input type="checkbox" name="want_account" value="1" id="f-want-account" checked onchange="toggleSection('account')"/>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-          <input type="checkbox" name="want_account" value="1" id="f-want-account" checked onchange="toggleSection('account')"/>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
           <span class="toggle-visual"></span>
         </span>
       </label>
@@ -560,15 +541,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
           <small>Position, pay, and HR details</small>
         </span>
         <span class="toggle-switch-wrap">
-<<<<<<< HEAD
-<<<<<<< HEAD
-          <input type="checkbox" name="want_employee" id="f-want-employee" checked onchange="toggleSection('employee')"/>
-=======
           <input type="checkbox" name="want_employee" value="1" id="f-want-employee" checked onchange="toggleSection('employee')"/>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-          <input type="checkbox" name="want_employee" value="1" id="f-want-employee" checked onchange="toggleSection('employee')"/>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
           <span class="toggle-visual"></span>
         </span>
       </label>
@@ -603,15 +576,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
         </div>
         <div class="field-row mg-b">
           <div class="field-group">
-<<<<<<< HEAD
-<<<<<<< HEAD
-            <label class>="field-label">Hire Date</label>
-=======
             <label class="field-label">Hire Date</label>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-            <label class="field-label">Hire Date</label>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
             <input class="field-input" type="date" name="hire_date" id="f-hire"/>
           </div>
           <div class="field-group">

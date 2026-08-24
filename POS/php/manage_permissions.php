@@ -5,12 +5,12 @@ require_login();
 require_permission('menu.manage');
 
 $user = current_user();
-<<<<<<< HEAD
-<<<<<<< HEAD
+
+
 if ($user['role'] !== 'admin') {
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+    header('Location: dashboard.php');
+    exit;
+}
 $user_roles = [];
 if (!empty($_SESSION['roles']) && is_array($_SESSION['roles'])) {
     $user_roles = $_SESSION['roles'];
@@ -29,10 +29,6 @@ if (empty($user_roles)) {
 }
 $is_admin = in_array('admin', $user_roles, true) || ($user['role'] ?? '') === 'admin';
 if (!$is_admin) {
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
     header('Location: dashboard.php');
     exit;
 }
@@ -109,13 +105,7 @@ include("../includes/sidebar.php");
 
     <?php if ($selected): ?>
     <!-- ── Permissions for selected role ── -->
-<<<<<<< HEAD
-<<<<<<< HEAD
-      
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+
     <div class="perms-card">
       <div class="perms-card-head">Permissions for <?= htmlspecialchars(strtoupper($selectedLabel)) ?></div>
 
@@ -195,8 +185,6 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 <script>
     window.CONFIG = {
         role: <?= json_encode($selected) ?>,
@@ -205,12 +193,6 @@ include("../includes/sidebar.php");
         apiUrl: '../api/'
     };
 </script>
-=======
-
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
 <script src="../js/manage_permissions.js"></script>
 </body>
