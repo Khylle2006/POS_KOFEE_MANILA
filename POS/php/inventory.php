@@ -57,11 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $qty = (float)($_POST['qty']         ?? 0);
         if ($id && $qty > 0) {
             $user = current_user();
-            $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
-            $emp->execute([':uid' => $user['id'] ?? 0]);
-            $employee = $emp->fetch();
+          $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
+          $emp->execute([':uid' => $user['id'] ?? 0]);
+          $employee = $emp->fetch();
 
-            if (!$employee) {
+          if (!$employee) {
                 $toast = '⚠️ Your account is not linked to an employee profile. Ask HR to link it first.';
                 $toast_type = 'error';
             } else {
@@ -93,11 +93,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $qty = (float)($_POST['qty']         ?? -1);
         if ($id && $qty >= 0) {
             $user = current_user();
-            $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
-            $emp->execute([':uid' => $user['id'] ?? 0]);
-            $employee = $emp->fetch();
+          $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
+          $emp->execute([':uid' => $user['id'] ?? 0]);
+          $employee = $emp->fetch();
 
-            if (!$employee) {
+          if (!$employee) {
                 $toast = '⚠️ Your account is not linked to an employee profile. Ask HR to link it first.';
                 $toast_type = 'error';
             } else {
@@ -533,7 +533,7 @@ function selectItem(ing) {
     </div>
 
     <div class="restock-section">
-      <h3>➕ Add to Stock</h3>
+      <h3>Request Stock</h3>
       <form method="POST">
         <input type="hidden" name="action"        value="restock"/>
         <input type="hidden" name="ingredient_id" value="${ing.id}"/>
@@ -542,7 +542,7 @@ function selectItem(ing) {
           <input type="number" name="qty"
                  placeholder="Add quantity (${esc(ing.unit)})"
                  step="0.1" min="0.1" required/>
-          <button type="submit" class="btn-confirm">➕ Add</button>
+          <button type="submit" class="btn-confirm">Request</button>
         </div>
       </form>
     </div>

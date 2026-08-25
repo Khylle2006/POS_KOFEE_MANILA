@@ -178,8 +178,9 @@ include("../includes/sidebar.php");
     @media (max-width:560px) {
       .item-row { grid-template-columns:minmax(0,1fr) 80px 32px; }
       .item-row .name { grid-column:1 / -1; }
-      .item-row .unit { grid-column:1 / 2; }
-      .item-row .price { grid-column:2 / 3; }
+      .item-row .qty { grid-column:1 / 2; grid-row:2; }
+      .item-row .unit { grid-column:2 / 3; grid-row:2; }
+      .item-row .price { grid-column:1 / 3; grid-row:3; }
       .item-row .rm-item { grid-column:3 / 4; grid-row:2; }
     }
     .budget-bar-wrap { background:#f2e6d6; border-radius:999px; height:8px; overflow:hidden; margin-top:6px; }

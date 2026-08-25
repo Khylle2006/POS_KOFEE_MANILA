@@ -6,15 +6,6 @@ require_login();
 header('Content-Type: application/json');
 
 $user = current_user();
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-if ($user['role'] !== 'admin') {
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 $user_roles = [];
 if (!empty($_SESSION['roles']) && is_array($_SESSION['roles'])) {
     $user_roles = $_SESSION['roles'];
@@ -33,13 +24,6 @@ if (empty($user_roles)) {
 }
 $is_admin = in_array('admin', $user_roles, true) || ($user['role'] ?? '') === 'admin';
 if (!$is_admin) {
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
     http_response_code(403);
     echo json_encode(['ok' => false, 'error' => 'Only admins can manage permissions.']);
     exit;

@@ -2,16 +2,6 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-require_permission('menu.manage');
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 
 $pdo   = get_db();
 $user  = current_user();
@@ -20,18 +10,7 @@ $toast = '';
 $toast_type = 'success';
 
 // Admin/HR = reviewers only. Everyone else = requesters only.
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-// Crew/finance/manager can request leave as long as they are linked to an employee record.
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-// Crew/finance/manager can request leave as long as they are linked to an employee record.
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
-// Crew/finance/manager can request leave as long as they are linked to an employee record.
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+
 $is_reviewer = in_array($role, ['admin', 'hr']);
 
 $leave_types = ['Vacation','Sick','Emergency','Unpaid','Other'];
@@ -188,19 +167,15 @@ include("../includes/sidebar.php");
       <p><?= $is_reviewer ? 'Review and approve employee leave' : 'File and track your leave requests' ?></p>
     </div>
     <?php if (!$is_reviewer && $my_employee): ?>
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
+
       <button class="btn-add" onclick="openFile()">➕ File Leave</button>
-=======
+
       <button class="btn-add" type="button" onclick="document.getElementById('leave-form-wrap')?.scrollIntoView({behavior:'smooth', block:'start'});">➕ File Leave</button>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
+
       <button class="btn-add" type="button" onclick="document.getElementById('leave-form-wrap')?.scrollIntoView({behavior:'smooth', block:'start'});">➕ File Leave</button>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
+
       <button class="btn-add" type="button" onclick="document.getElementById('leave-form-wrap')?.scrollIntoView({behavior:'smooth', block:'start'});">➕ File Leave</button>
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+
     <?php endif; ?>
   </div>
 
@@ -226,14 +201,7 @@ include("../includes/sidebar.php");
     </div>
 
     <div class="leave-grid">
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
+
       <?php if (!$is_reviewer && $my_employee): ?>
         <div class="leave-card" id="leave-form-wrap">
           <div class="lc-head">
@@ -276,13 +244,6 @@ include("../includes/sidebar.php");
         </div>
       <?php endif; ?>
 
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
       <?php if (empty($leaves)): ?>
         <div class="empty-state">🫙 No leave requests found.</div>
       <?php else: foreach ($leaves as $l): ?>
@@ -387,31 +348,15 @@ include("../includes/sidebar.php");
 </div>
 <?php endif; ?>
 
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 <?php if ($toast): ?>
 <div class="toast toast-<?= $toast_type ?>" id="toast-msg"><?= $toast ?></div>
 <script>setTimeout(()=>{const t=document.getElementById('toast-msg'); if(t) t.style.opacity='0';},3500);</script>
 <?php endif; ?>
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 <script>
 function openFile()  { document.getElementById('file-modal')?.classList.add('open'); }
 function closeFile() { document.getElementById('file-modal')?.classList.remove('open'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFile(); });
 </script>
-
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
-=======
->>>>>>> a4bf73b17bf67d5f6c4e3af0dddabeeb38e2c1b1
 </body>
 </html>

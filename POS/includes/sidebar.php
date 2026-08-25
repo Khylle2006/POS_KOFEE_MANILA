@@ -209,21 +209,23 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </button>
     <?php endif; ?>
 
-    <?php if ($access['inventory']): ?>
-    <button class="<?= navBtnClasses($current === 'inventory.php') ?>" onclick="window.location.href='inventory.php'">
-        <?= icon('inventory') ?><span class="flex-1 truncate">Inventory</span>
-    </button>
-    <?php endif; ?>
+    
 
     <?php if ($access['menu_manager']): ?>
     <button class="<?= navBtnClasses($current === 'add_item.php') ?>" onclick="window.location.href='add_item.php'">
-        <?= icon('menu') ?><span class="flex-1 truncate">Menu</span>
+        <?= icon('menu') ?><span class="flex-1 truncate">Manage Menu</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['history']): ?>
     <button class="<?= navBtnClasses($current === 'history.php') ?>" onclick="window.location.href='history.php'">
-        <?= icon('history') ?><span class="flex-1 truncate">History</span>
+        <?= icon('history') ?><span class="flex-1 truncate">Order History</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['inventory']): ?>
+    <button class="<?= navBtnClasses($current === 'inventory.php') ?>" onclick="window.location.href='inventory.php'">
+        <?= icon('inventory') ?><span class="flex-1 truncate">Inventory</span>
     </button>
     <?php endif; ?>
 
@@ -240,25 +242,25 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 
 
     <?php if ($access['requisitions']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='requisitions.php'">
+    <button class="<?= navBtnClasses($current === 'requisitions.php') ?>" onclick="window.location.href='requisitions.php'">
         <?= icon('inventory') ?><span class="flex-1 truncate">Requisitions</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['purchase_orders']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='purchase_orders.php'">
+    <button class="<?= navBtnClasses($current === 'purchase_orders.php') ?>" onclick="window.location.href='purchase_orders.php'">
         <?= icon('inventory') ?><span class="flex-1 truncate">Purchase Orders</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['rfq']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='rfq.php'">
+    <button class="<?= navBtnClasses($current === 'rfq.php') ?>" onclick="window.location.href='rfq.php'">
         <?= icon('inventory') ?><span class="flex-1 truncate">Request for Quotation</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['suppliers']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='suppliers.php'">
+    <button class="<?= navBtnClasses($current === 'suppliers.php') ?>" onclick="window.location.href='suppliers.php'">
         <?= icon('employees') ?><span class="flex-1 truncate">Suppliers</span>
     </button>
     <?php endif; ?>
@@ -289,17 +291,19 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </button>
     <?php endif; ?>
 
+    <?php if ($access['manage_permissions']): ?>
+    <button class="<?= navBtnClasses($current === 'manage_permissions.php') ?>" onclick="window.location.href='manage_permissions.php'">
+        <?= icon('permissions') ?><span class="flex-1 truncate">Manage Permission</span>
+    </button>
+    <?php endif; ?>
+
     <?php if ($access['hr_leave']): ?>
     <button class="<?= navBtnClasses($current === 'leave_requests.php') ?>" onclick="window.location.href='leave_requests.php'">
         <?= icon('leave') ?><span class="flex-1 truncate">Leave</span>
     </button>
     <?php endif; ?>
 
-    <?php if ($access['manage_permissions']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_permissions.php') ?>" onclick="window.location.href='manage_permissions.php'">
-        <?= icon('permissions') ?><span class="flex-1 truncate">Manage Permission</span>
-    </button>
-    <?php endif; ?>
+    
 
     <div class="flex-1"></div>
 
