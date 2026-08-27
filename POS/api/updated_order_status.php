@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/notifications.php';
 require_login();
 require_permission('orders.pending');
 
@@ -21,6 +22,13 @@ try {
     $pdo  = get_db();
     $stmt = $pdo->prepare("UPDATE orders SET status = :status WHERE id = :id");
     $stmt->execute([':status' => $status, ':id' => $id]);
+
+    $owner = $pdo->prepare('SELECT user_id FROM orders WHERE id = :id');
+    $owner->execute([':id' => $id]);
+    $ownerId = (int)$owner->fetchColumn();
+    if ($ownerId) {
+        notify_user($pdo, 'order:status:' . $id . ':' . $status, 'order', 'Order status updated', 'Order #' . str_pad($id, 4, '0', STR_PAD_LEFT) . ' is now ' . $status . '.', 'history.php', $ownerId);
+    }
 
     echo json_encode(['success' => true]);
 } catch (Exception $e) {

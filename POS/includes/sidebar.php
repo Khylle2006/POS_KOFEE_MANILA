@@ -1,6 +1,7 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/permissions.php';
+require_once __DIR__ . '/notifications.php';
 ob_start();
 require_once __DIR__ . '/icons.php';
 ob_end_clean(); // discard any stray/leaked text icons.php might accidentally output
@@ -57,6 +58,7 @@ $access = [
 //    table isn't set up yet in this install) ──────────────────────
 $pending_count = 0;
 $requests_count = 0;
+$notification_count = 0;
 try {
     $pdo = get_db();
     if ($access['pending']) {
@@ -68,6 +70,10 @@ try {
         try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
         $requests_count = $c;
     }
+    sync_notifications($pdo, $user);
+    $notification_stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE read_at IS NULL AND (user_id = :user_id OR role_key = :role_key)");
+    $notification_stmt->execute([':user_id' => $user['id'], ':role_key' => $role]);
+    $notification_count = (int)$notification_stmt->fetchColumn();
 } catch (Throwable $e) {
     // DB not reachable — sidebar still renders, just without counts.
 }
@@ -129,6 +135,19 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </div>
 
     <div class="flex-1"></div>
+
+    <div class="relative">
+        <button id="notification-btn" type="button" onclick="toggleNotifications()"
+            class="relative w-9 h-9 flex items-center justify-center rounded-lg text-[rgba(251,243,233,0.78)] hover:bg-[rgba(251,243,233,0.10)] hover:text-[var(--cream,#fbf3e9)] transition-colors duration-150"
+            aria-label="Notifications" aria-expanded="false" aria-controls="notification-panel">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+            <span id="notification-badge" class="<?= $notification_count ? '' : 'hidden' ?> absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)] text-[9px] font-extrabold leading-4"><?= $notification_count > 99 ? '99+' : $notification_count ?></span>
+        </button>
+        <div id="notification-panel" class="hidden absolute right-0 top-11 w-[min(360px,calc(100vw-24px))] rounded-xl bg-white text-[var(--text-main,#2b2130)] shadow-2xl border border-[var(--latte,#efe0cc)] overflow-hidden z-[250]">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--latte,#efe0cc)]"><strong class="text-[13px]">Notifications</strong><button type="button" onclick="markNotificationsRead()" class="text-[11px] font-semibold text-[var(--caramel,#c47d3e)] hover:underline">Mark all read</button></div>
+            <div id="notification-list" class="max-h-[360px] overflow-y-auto"><div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">Loading notifications...</div></div>
+        </div>
+    </div>
 
     <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                 bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
@@ -318,4 +337,31 @@ function toggleSidebar(force) {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') toggleSidebar(false);
 });
+
+const notificationPanel = document.getElementById('notification-panel');
+const notificationBadge = document.getElementById('notification-badge');
+const notificationList = document.getElementById('notification-list');
+
+function toggleNotifications() {
+    const open = notificationPanel.classList.toggle('hidden');
+    document.getElementById('notification-btn').setAttribute('aria-expanded', open ? 'false' : 'true');
+    if (!open) loadNotifications();
+}
+
+function loadNotifications() {
+    fetch('../api/get_notifications.php').then(response => response.json()).then(data => {
+        if (!data.success) throw new Error(data.error || 'Unable to load notifications');
+        notificationBadge.textContent = data.unread > 99 ? '99+' : data.unread;
+        notificationBadge.classList.toggle('hidden', data.unread === 0);
+        notificationList.innerHTML = data.items.length ? data.items.map(item => `<a href="${escapeNotification(item.link || '#')}" class="block px-4 py-3 border-b border-[var(--latte,#efe0cc)] hover:bg-[var(--cream,#fbf3e9)] ${item.read_at ? '' : 'bg-[var(--accent-lt,#fcefe1)]'}"><div class="text-[12px] font-bold">${escapeNotification(item.title)}</div><div class="mt-1 text-[11px] text-[var(--text-muted,#8b7c88)]">${escapeNotification(item.message)}</div><div class="mt-1 text-[10px] text-[var(--text-muted,#8b7c88)]">${escapeNotification(item.created_at)}</div></a>`).join('') : '<div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">You are all caught up.</div>';
+    }).catch(() => { notificationList.innerHTML = '<div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">Notifications unavailable.</div>'; });
+}
+
+function markNotificationsRead() {
+    fetch('../api/mark_notifications_read.php', { method: 'POST' }).then(response => response.json()).then(data => { if (data.success) loadNotifications(); });
+}
+
+function escapeNotification(value) {
+    return String(value).replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));
+}
 </script>
