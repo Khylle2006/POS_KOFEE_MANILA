@@ -46,6 +46,7 @@ $access = [
     'menu_manager' => has_permission('menu.manage'),
     'inventory'    => has_permission('inventory.view'),
     'users'        => has_permission('users.manage'),
+    'employee_home' => has_permission('employee.dashboard'),
     'requisitions'   => has_permission('procurement.requisitions'),
     'purchase_orders'   => has_permission('procurement.purchase_orders'),
     'bidding'   => has_permission('procurement.bidding.review'),
@@ -186,6 +187,13 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     <div class="<?= $groupLabel ?> pt-1.5">Main</div>
     <button class="<?= navBtnClasses($current === 'dashboard.php') ?>" onclick="window.location.href='dashboard.php'">
         <?= icon('home') ?><span class="flex-1 truncate">Dashboard</span>
+    </button>
+    
+    <?php endif; ?>
+
+    <?php if ($access['employee_home']): ?>
+    <button class="<?= navBtnClasses($current === 'employee_dashboard.php') ?>" onclick="window.location.href='employee_dashboard.php'">
+        <?= icon('attendance') ?><span class="flex-1 truncate">My Dashboard</span>
     </button>
     <?php endif; ?>
 
