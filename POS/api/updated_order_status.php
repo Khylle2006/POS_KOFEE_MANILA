@@ -26,8 +26,11 @@ try {
     $owner = $pdo->prepare('SELECT user_id FROM orders WHERE id = :id');
     $owner->execute([':id' => $id]);
     $ownerId = (int)$owner->fetchColumn();
+    $roles = ['admin', 'manager', 'staff', 'crew'];
+    $notificationKey = 'order:status:' . $id . ':' . $status;
+    notify_roles($pdo, $notificationKey, 'order', 'Order status updated', 'Order #' . str_pad($id, 4, '0', STR_PAD_LEFT) . ' is now ' . $status . '.', 'history.php', $roles);
     if ($ownerId) {
-        notify_user($pdo, 'order:status:' . $id . ':' . $status, 'order', 'Order status updated', 'Order #' . str_pad($id, 4, '0', STR_PAD_LEFT) . ' is now ' . $status . '.', 'history.php', $ownerId);
+        notify_user($pdo, $notificationKey . ':owner', 'order', 'Order status updated', 'Order #' . str_pad($id, 4, '0', STR_PAD_LEFT) . ' is now ' . $status . '.', 'history.php', $ownerId);
     }
 
     echo json_encode(['success' => true]);

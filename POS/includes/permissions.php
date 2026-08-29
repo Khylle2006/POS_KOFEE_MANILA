@@ -383,10 +383,24 @@ function install_default_permissions(): void {
         $default_roles = array(
             array('manager', 'Manager', 0),
             array('staff', 'Staff', 0),
+            array('crew', 'Crew', 0),
         );
         
         foreach ($default_roles as $role) {
             $pdo->prepare("INSERT IGNORE INTO roles (role_key, label, is_system) VALUES (?, ?, ?)")->execute($role);
+        }
+
+        // Give default manager/staff/crew roles access to the menu manager and delete action.
+        $default_menu_perms = array(
+            'manager' => array('menu.manage', 'menu.edit', 'menu.delete'),
+            'staff'   => array('menu.manage', 'menu.edit', 'menu.delete'),
+            'crew'    => array('menu.manage', 'menu.edit', 'menu.delete'),
+        );
+        foreach ($default_menu_perms as $role_key => $perms) {
+            foreach ($perms as $perm) {
+                $pdo->prepare('INSERT IGNORE INTO role_permissions (role, perm_key) VALUES (:r, :p)')
+                    ->execute([':r' => $role_key, ':p' => $perm]);
+            }
         }
         
     } catch (Exception $e) {

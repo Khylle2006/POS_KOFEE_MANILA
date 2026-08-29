@@ -29,7 +29,7 @@ function notify_user(PDO $pdo, string $eventKey, string $type, string $title, st
 
 function sync_notifications(PDO $pdo, array $user): void {
     try {
-        $roles = ['admin', 'manager', 'staff'];
+        $roles = ['admin', 'manager', 'staff', 'crew'];
         $pending = $pdo->query("SELECT id, total_amount FROM orders WHERE status = 'pending'")->fetchAll();
         foreach ($pending as $order) {
             notify_roles($pdo, 'order:new:' . $order['id'], 'order', 'New order received', 'Order #' . str_pad($order['id'], 4, '0', STR_PAD_LEFT) . ' is waiting.', 'pending_orders.php', $roles);
