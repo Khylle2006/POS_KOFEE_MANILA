@@ -12,6 +12,8 @@ $landing_pages = [
     'menu.manage'     => '../php/add_item.php',
     'inventory.view'  => '../php/inventory.php',
     'users.manage'    => '../php/manage_users.php',
+    'procurement.view'             => '../php/procurement_dashboard.php',
+    'procurement.supplier.portal'  => '../php/supplier_portal.php',
 ];
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);

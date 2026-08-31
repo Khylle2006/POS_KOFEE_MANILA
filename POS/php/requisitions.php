@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/procurement_helpers.php';
 require_login();
 require_permission('procurement.requisitions');
 
@@ -57,7 +58,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':p' => (float)($it['price'] ?? 0),
                     ]);
                 }
-                $pdo->commit();
+                 $pdo->commit();
+
+                notify_role_by_permission(
+                    'procurement.requisition.review', 'requisition_filed',
+                    '📋 New requisition awaiting review',
+                    htmlspecialchars($title) . ' — ' . php_currency($total),
+                    'requisitions.php', $user['id']
+                );
+
                 $toast = '✅ Requisition submitted for review!';
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
@@ -79,6 +88,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $req = $req->fetch();
 
             if ($req && $req['status'] === 'pending') {
+                $budget_check  = null;
+                $override_note = trim($_POST['budget_override_note'] ?? '');
+
+                if ($status === 'approved') {
+                    $budget_check = check_budget_availability($req['department'], (float)$req['estimated_total'], $period_label);
+
+                    if (!$budget_check['ok'] && !$override_note) {
+                        $toast = '⚠️ This exceeds the department\'s remaining budget ('
+                               . php_currency($budget_check['remaining']) . ' left). '
+                               . 'Add an override note to approve anyway, or reject / ask for reallocation.';
+                        $toast_type = 'error';
+                        header('Location: requisitions.php?toast=' . urlencode($toast) . '&type=error');
+                        exit;
+                    }
+                }
+
                 $pdo->prepare('
                     UPDATE purchase_requisitions
                     SET status=:s, reviewed_by=:u, reviewed_at=NOW(), review_notes=:n
@@ -88,14 +113,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Approved requisitions consume budget immediately (reserved,
                 // not just at payment time) so the budget strip stays honest.
                 if ($status === 'approved') {
-                    $pdo->prepare('
-                        INSERT INTO procurement_budgets (department, period_label, allocated_amount, used_amount)
-                        VALUES (:d, :p, 0, :amt)
-                        ON DUPLICATE KEY UPDATE used_amount = used_amount + :amt2
-                    ')->execute([
-                        ':d'=>$req['department'], ':p'=>$period_label,
-                        ':amt'=>$req['estimated_total'], ':amt2'=>$req['estimated_total'],
-                    ]);
+                    reserve_budget($req['department'], (float)$req['estimated_total'], $period_label);
+                    if (!$budget_check['ok'] && $override_note) {
+                        audit_log('requisition', $id, 'approved_over_budget', $override_note);
+                    }
                 }
 
                 $toast = $status === 'approved' ? '✅ Requisition approved.' : '❌ Requisition rejected.';
@@ -195,9 +216,6 @@ include("../includes/sidebar.php");
       <h1>Purchase Requisitions</h1>
       <p>Request supplies and review budget-checked requests</p>
     </div>
-    <?php if (has_permission('procurement.requisition.create')): ?>
-    <button class="btn-add" onclick="openCreate()">➕ File Requisition</button>
-    <?php endif; ?>
   </div>
 
   <div class="page-body">
@@ -319,10 +337,15 @@ include("../includes/sidebar.php");
       <p style="font-weight:800;text-align:right;margin-bottom:10px" id="v-total"></p>
       <p id="v-notes" style="font-size:12.5px;color:var(--text-muted);font-style:italic;margin-bottom:10px"></p>
 
-      <div id="v-review-block" style="display:none">
+       <div id="v-review-block" style="display:none">
+        <p id="v-budget-info" style="font-size:12.5px;font-weight:700;margin-bottom:10px;display:none"></p>
         <div class="field-group">
           <label class="field-label">Review Notes</label>
           <textarea class="field-input" id="v-review-notes" rows="2" placeholder="Optional — reason for approval/rejection"></textarea>
+        </div>
+        <div class="field-group" id="v-override-group" style="display:none">
+          <label class="field-label">Budget Override Note <span style="color:var(--red)">*</span></label>
+          <input class="field-input" type="text" id="v-budget-override" placeholder="Required to approve — reason this can exceed the remaining budget"/>
         </div>
       </div>
       <div id="v-reviewed-block" style="display:none;font-size:12.5px;color:var(--text-muted)"></div>
@@ -339,6 +362,10 @@ include("../includes/sidebar.php");
 <script>
 const CAN_REVIEW = <?= json_encode($can_review) ?>;
 const DEPT_LABELS = <?= json_encode($departments) ?>;
+// Keyed by department so openView() can look up the right budget row for
+// whichever requisition is being reviewed.
+const BUDGETS_BY_DEPT = <?= json_encode(array_column($budgets, null, 'department')) ?>;
+let currentReqNeedsOverride = false;
 
 // ── Create modal: dynamic item rows ────────────
 function addItemRow(vals = {}) {
@@ -369,31 +396,6 @@ function updateTotal() {
   document.getElementById('running-total').textContent = '₱' + total.toFixed(2);
 }
 
-function openCreate() {
-  document.getElementById('f-title').value = '';
-  document.getElementById('item-rows').innerHTML = '';
-  addItemRow();
-  document.getElementById('create-modal').classList.add('open');
-}
-function closeCreate() { document.getElementById('create-modal').classList.remove('open'); }
-
-document.getElementById('create-form').addEventListener('submit', function(e) {
-  const items = [];
-  document.querySelectorAll('#item-rows .item-row').forEach(row => {
-    const name  = row.querySelector('.name').value.trim();
-    const qty   = row.querySelector('.qty').value;
-    const unit  = row.querySelector('.unit').value.trim();
-    const price = row.querySelector('.price').value;
-    if (name) items.push({ name, qty, unit, price });
-  });
-  if (!items.length) {
-    e.preventDefault();
-    alert('Add at least one item.');
-    return;
-  }
-  document.getElementById('items-json').value = JSON.stringify(items);
-});
-
 // ── View / Review modal ────────────────────────
 function esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -413,15 +415,35 @@ function openView(r) {
   document.getElementById('v-total').textContent = 'Estimated Total: ₱' + parseFloat(r.estimated_total).toFixed(2);
   document.getElementById('v-notes').textContent = r.notes ? '"' + r.notes + '"' : '';
 
-  const reviewBlock   = document.getElementById('v-review-block');
-  const reviewedBlock = document.getElementById('v-reviewed-block');
-  const actions       = document.getElementById('v-actions');
+  const reviewBlock    = document.getElementById('v-review-block');
+  const reviewedBlock  = document.getElementById('v-reviewed-block');
+  const actions        = document.getElementById('v-actions');
+  const budgetInfo     = document.getElementById('v-budget-info');
+  const overrideGroup  = document.getElementById('v-override-group');
   reviewBlock.style.display = 'none';
   reviewedBlock.style.display = 'none';
+  budgetInfo.style.display = 'none';
+  overrideGroup.style.display = 'none';
+  document.getElementById('v-budget-override').value = '';
+  currentReqNeedsOverride = false;
   actions.innerHTML = '';
 
   if (r.status === 'pending' && CAN_REVIEW) {
     reviewBlock.style.display = '';
+
+    const budget = BUDGETS_BY_DEPT[r.department];
+    const allocated = budget ? parseFloat(budget.allocated_amount) : 0;
+    const used      = budget ? parseFloat(budget.used_amount) : 0;
+    const remaining = allocated - used;
+    currentReqNeedsOverride = parseFloat(r.estimated_total) > remaining;
+
+    budgetInfo.style.display = '';
+    budgetInfo.style.color = currentReqNeedsOverride ? 'var(--red)' : 'var(--espresso)';
+    budgetInfo.textContent = (DEPT_LABELS[r.department] || r.department) + ' has ₱' + remaining.toFixed(2)
+      + ' remaining this period' + (currentReqNeedsOverride ? ' — this exceeds it. An override note is required to approve.' : '.');
+
+    overrideGroup.style.display = currentReqNeedsOverride ? '' : 'none';
+
     actions.innerHTML = `
       <button type="button" class="btn-cancel" onclick="closeView()">Close</button>
       <button type="button" class="btn-save" style="background:var(--red)" onclick="submitReview(${r.id}, 'rejected')">❌ Reject</button>
@@ -440,11 +462,17 @@ function openView(r) {
 function closeView() { document.getElementById('view-modal').classList.remove('open'); }
 
 function submitReview(id, status) {
+  const overrideNote = document.getElementById('v-budget-override').value.trim();
+  if (status === 'approved' && currentReqNeedsOverride && !overrideNote) {
+    alert('This requisition exceeds the remaining budget — add an override note to approve anyway, or reject / ask for reallocation.');
+    return;
+  }
   const fd = new FormData();
   fd.append('action', 'review');
   fd.append('id', id);
   fd.append('status', status);
   fd.append('review_notes', document.getElementById('v-review-notes').value);
+  fd.append('budget_override_note', overrideNote);
   const form = document.createElement('form');
   form.method = 'POST';
   for (const [k,v] of fd.entries()) {

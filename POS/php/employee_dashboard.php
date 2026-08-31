@@ -88,6 +88,19 @@ include("../includes/sidebar.php");
   <link rel="stylesheet" href="../css/home.css"/>
   <link rel="stylesheet" href="../css/employee_dashboard.css"/>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .item-row { display:grid; grid-template-columns:minmax(0,2fr) 90px 70px 120px 32px; gap:8px; margin-bottom:8px; align-items:center; }
+    .item-row input, .item-row select { min-width:0; width:100%; }
+    .item-row .rm-item { background:var(--red-lt); color:var(--red); border:none; border-radius:8px; width:32px; height:32px; flex-shrink:0; cursor:pointer; }
+    @media (max-width:560px) {
+      .item-row { grid-template-columns:minmax(0,1fr) 80px 32px; }
+      .item-row .item-select { grid-column:1 / -1; }
+      .item-row .qty { grid-column:1 / 2; grid-row:2; }
+      .item-row .unit { grid-column:2 / 3; grid-row:2; }
+      .item-row .price { grid-column:1 / 3; grid-row:3; }
+      .item-row .rm-item { grid-column:3 / 4; grid-row:2; }
+    }
+  </style>
 </head>
 <body>
 
@@ -167,10 +180,12 @@ include("../includes/sidebar.php");
           <div class="shortcut-icon"><?= icon('leave') ?></div>
           <div><h3>File Leave Request</h3><p>Submit a new leave application</p></div>
         </button>
-        <a href="menu.php" class="shortcut-card">
-          <div class="shortcut-icon"><?= icon('order') ?></div>
-          <div><h3>New Order</h3><p>Go to the POS order screen</p></div>
-        </a>
+
+        <button type="button" class="shortcut-card" onclick="openCreate()">
+          <div class="shortcut-icon"><?= icon('requisition') ?></div>
+          <div><h3>File Requisition</h3><p>Submit a new purchase requisition</p></div>
+        </button>
+
       </div>
     </div>
 
@@ -275,6 +290,52 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
+<!-- ── Requisition Modal ── -->
+<div class="modal-overlay" id="create-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>➕ File Purchase Requisition</h3>
+      <button class="modal-close" onclick="closeCreate()">✕</button>
+    </div>
+    <form method="POST" action="../php/requisitions.php" id="create-form">
+      <input type="hidden" name="action" value="create"/>
+      <input type="hidden" name="items" id="items-json"/>
+      <div class="modal-body">
+        <div class="field-group">
+          <label class="field-label">Title <span style="color:var(--red)">*</span></label>
+          <input class="field-input" type="text" name="title" id="f-title" placeholder="e.g. Q3 espresso machine parts" required/>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Department</label>
+          <select class="field-input" name="department">
+            <option value="crew">Crew</option>
+            <option value="manager">Operations</option>
+            <option value="finance">Finance</option>
+            <option value="hr">HR</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Notes</label>
+          <textarea class="field-input" name="notes" rows="2" placeholder="Optional context for the reviewer"></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Items <span style="color:var(--red)">*</span></label>
+          <div id="item-rows"></div>
+          <button type="button" class="act-btn" onclick="addItemRow()" style="margin-top:4px">➕ Add Item</button>
+        </div>
+        <div style="text-align:right;font-weight:800;font-size:15px;color:var(--espresso);margin-top:10px">
+          Estimated Total: <span id="running-total">₱0.00</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" onclick="closeCreate()">Cancel</button>
+        <button type="submit" class="btn-save">✔ Submit for Review</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- ── Leave Request Modal ── -->
 <div class="modal-overlay" id="leave-modal">
   <div class="modal">
@@ -317,6 +378,166 @@ include("../includes/sidebar.php");
 <script>
 window.EMPLOYEE_NAME = <?= json_encode(trim($fname . ' ' . ($user['lastname'] ?? ''))) ?>;
 window.HAS_EMPLOYEE   = <?= json_encode((bool)$my_employee) ?>;
+window.INVENTORY_ITEMS = [];
+
+// Fetch inventory items on page load
+fetch('../api/get_ingredients.php')
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  })
+  .then(items => {
+    console.log('✅ Loaded inventory items:', items);
+    window.INVENTORY_ITEMS = items || [];
+    console.log('Total items:', window.INVENTORY_ITEMS.length);
+  })
+  .catch(e => {
+    console.error('❌ Failed to load inventory:', e);
+    window.INVENTORY_ITEMS = [];
+  });
+
+// ── Requisition Modal Functions ────────────────
+function addItemRow(vals = {}) {
+  const wrap = document.getElementById('item-rows');
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  
+  // Build inventory dropdown HTML
+  const itemOptions = window.INVENTORY_ITEMS
+    .map(i => `<option value="${i.id}" data-unit="${esc(i.unit)}">${esc(i.name)}${i.brand ? ' (' + esc(i.brand) + ')' : ''}</option>`)
+    .join('');
+  
+  const selectedId = vals.inventory_id ?? '';
+  
+  row.innerHTML = `
+    <select class="field-input item-select" onchange="updateItemFromInventory(this)">
+      <option value=""> Select Item </option>
+      ${itemOptions}
+    </select>
+    <input type="number" class="field-input qty" placeholder="Qty" min="0.1" step="0.1" value="${esc(vals.qty ?? '')}" oninput="updateTotal()">
+    <input type="text" class="field-input unit" placeholder="Unit" value="${esc(vals.unit ?? '')}" readonly style="background:#f5f5f5;cursor:not-allowed">
+    <input type="number" class="field-input price" placeholder="Est. ₱/unit" min="0" step="0.01" value="${esc(vals.price ?? '')}" oninput="updateTotal()">
+    <button type="button" class="rm-item" onclick="this.closest('.item-row').remove(); updateTotal();">✕</button>
+  `;
+  wrap.appendChild(row);
+  
+  if (selectedId) {
+    const select = row.querySelector('.item-select');
+    select.value = selectedId;
+  }
+  
+  updateTotal();
+}
+
+function updateItemFromInventory(selectEl) {
+  const selectedId = selectEl.value;
+  const row = selectEl.closest('.item-row');
+  
+  if (selectedId) {
+    const item = window.INVENTORY_ITEMS.find(i => i.id == selectedId);
+    if (item) {
+      row.querySelector('.unit').value = item.unit || 'pcs';
+    }
+  } else {
+    row.querySelector('.unit').value = '';
+  }
+  updateTotal();
+}
+
+function updateTotal() {
+  let total = 0;
+  document.querySelectorAll('#item-rows .item-row').forEach(row => {
+    const qty   = parseFloat(row.querySelector('.qty').value) || 0;
+    const price = parseFloat(row.querySelector('.price').value) || 0;
+    total += qty * price;
+  });
+  document.getElementById('running-total').textContent = '₱' + total.toFixed(2);
+}
+
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function openCreate() {
+  console.log('Opening requisition modal. Inventory items:', window.INVENTORY_ITEMS.length);
+  document.getElementById('f-title').value = '';
+  document.getElementById('item-rows').innerHTML = '';
+  addItemRow();
+  document.getElementById('create-modal').classList.add('open');
+}
+
+function closeCreate() { 
+  document.getElementById('create-modal').classList.remove('open'); 
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast toast-${type}`;
+  toast.style.display = 'block';
+  toast.style.opacity = '1';
+  setTimeout(() => {
+    toast.style.opacity = '0';
+  }, 3500);
+}
+
+document.getElementById('create-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  const items = [];
+  document.querySelectorAll('#item-rows .item-row').forEach(row => {
+    const selectEl = row.querySelector('.item-select');
+    const inventoryId = selectEl.value;
+    const inventoryItem = window.INVENTORY_ITEMS.find(i => i.id == inventoryId);
+    const name = inventoryItem ? inventoryItem.name : '';
+    const qty   = row.querySelector('.qty').value;
+    const unit  = row.querySelector('.unit').value.trim();
+    const price = row.querySelector('.price').value;
+    if (name) items.push({ name, inventory_id: inventoryId, qty, unit, price });
+  });
+  
+  if (!items.length) {
+    alert('Add at least one item.');
+    return;
+  }
+  
+  // Prepare form data
+  const formData = new FormData();
+  formData.append('action', 'create');
+  formData.append('title', document.getElementById('f-title').value);
+  formData.append('department', document.querySelector('select[name="department"]').value);
+  formData.append('notes', document.querySelector('textarea[name="notes"]').value);
+  formData.append('items', JSON.stringify(items));
+  
+  // Submit via AJAX
+  fetch('../php/requisitions.php', {
+    method: 'POST',
+    body: formData
+  })
+  .then(r => r.text())
+  .then(html => {
+    // Check if response contains success indicator
+    if (html.includes('toast-success') || html.includes('Requisition submitted')) {
+      showToast('✅ Requisition submitted for review!', 'success');
+      closeCreate();
+      // Reset form
+      document.getElementById('create-form').reset();
+      document.getElementById('f-title').value = '';
+      document.getElementById('item-rows').innerHTML = '';
+    } else {
+      showToast('⚠️ Failed to submit requisition', 'error');
+    }
+  })
+  .catch(e => {
+    console.error('Error:', e);
+    showToast('⚠️ Error submitting requisition', 'error');
+  });
+});
+
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) { closeCreate(); } });
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCreate(); } });
 </script>
 <script src="../js/employee_dashboard.js?v=<?= filemtime(__DIR__.'/../js/employee_dashboard.js') ?>"></script>
 

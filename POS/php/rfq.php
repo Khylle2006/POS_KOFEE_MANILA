@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/procurement_helpers.php';
 require_login();
 require_permission('procurement.view');
 
@@ -17,12 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create_rfq') {
         require_permission('procurement.rfq.manage');
 
-        $req_id    = (int)($_POST['requisition_id'] ?? 0);
+       $req_id    = (int)($_POST['requisition_id'] ?? 0);
         $due_date  = $_POST['due_date'] ?: null;
         $suppliers = array_map('intval', $_POST['suppliers'] ?? []);
 
+        $req_stmt = $pdo->prepare('SELECT status FROM purchase_requisitions WHERE id = :id');
+        $req_stmt->execute([':id' => $req_id]);
+        $req_status = $req_stmt->fetchColumn();
+
         if (!$req_id || empty($suppliers)) {
             $toast = '⚠️ Invite at least one supplier.'; $toast_type = 'error';
+        } elseif ($req_status !== 'approved') {
+            $toast = '⚠️ Only approved requisitions can go out for RFQ.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -30,11 +37,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([':r'=>$req_id, ':u'=>$user['id'], ':d'=>$due_date]);
                 $rfq_id = (int)$pdo->lastInsertId();
 
-                $ins = $pdo->prepare('INSERT IGNORE INTO rfq_invites (rfq_id, supplier_id) VALUES (:r,:s)');
+              $ins = $pdo->prepare('INSERT IGNORE INTO rfq_invites (rfq_id, supplier_id) VALUES (:r,:s)');
                 foreach ($suppliers as $sid) $ins->execute([':r'=>$rfq_id, ':s'=>$sid]);
 
-                $pdo->prepare("UPDATE purchase_requisitions SET status='sourcing' WHERE id=:id")->execute([':id'=>$req_id]);
-                $pdo->commit();
+                $sup_user_stmt = $pdo->prepare('SELECT user_id, name FROM suppliers WHERE id = :id');
+                foreach ($suppliers as $sid) {
+                    $sup_user_stmt->execute([':id' => $sid]);
+                    $sup = $sup_user_stmt->fetch();
+                    if ($sup && $sup['user_id']) {
+                        notify_user(
+                            (int)$sup['user_id'], 'rfq_invite', '📨 New RFQ invitation',
+                            'You have been invited to quote on a new RFQ.',
+                            'supplier_portal.php'
+                        );
+                    }
+                }
+
+                $pdo->prepare("UPDATE purchase_requisitions SET status='sourcing' WHERE id=:id")->execute([':id'=>$req_id]);                $pdo->commit();
                 header('Location: rfq.php?id=' . $rfq_id . '&toast=' . urlencode('✅ RFQ created and sent to ' . count($suppliers) . ' supplier(s).'));
                 exit;
             } catch (Exception $e) {
@@ -283,6 +302,58 @@ include("../includes/sidebar.php");
             <input class="field-input" type="text" name="notes" placeholder="Optional"/></div>
           <button type="submit" class="btn-save">➕ Record Offers</button>
         </form>
+        <?php endif; ?>
+
+        <?php if (count($bids) >= 2): $best_total = min(array_column($bids, 'quoted_total')); $best_lead = min(array_column($bids, 'lead_time_days')); ?>
+        <h3 style="font-size:13.5px;margin-bottom:10px">⚖️ Compare Offers Side-by-Side</h3>
+        <div class="table-scroll-wrapper" style="margin-bottom:22px">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:140px">Criteria</th>
+                <?php foreach ($bids as $b): ?>
+                  <th><?= htmlspecialchars($b['supplier_name']) ?></th>
+                <?php endforeach; ?>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="muted-cell" style="font-weight:600">Quoted Total</td>
+                <?php foreach ($bids as $b): ?>
+                  <td style="font-weight:800<?= $b['quoted_total']==$best_total ? ';color:var(--green)' : '' ?>">
+                    ₱<?= number_format($b['quoted_total'],2) ?><?= $b['quoted_total']==$best_total ? ' 🏅' : '' ?>
+                  </td>
+                <?php endforeach; ?>
+              </tr>
+              <tr>
+                <td class="muted-cell" style="font-weight:600">Lead Time</td>
+                <?php foreach ($bids as $b): ?>
+                  <td style="font-weight:700<?= $b['lead_time_days']==$best_lead ? ';color:var(--green)' : '' ?>">
+                    <?= $b['lead_time_days'] ?> day(s)<?= $b['lead_time_days']==$best_lead ? ' 🏅' : '' ?>
+                  </td>
+                <?php endforeach; ?>
+              </tr>
+              <tr>
+                <td class="muted-cell" style="font-weight:600">Notes</td>
+                <?php foreach ($bids as $b): ?>
+                  <td class="muted-cell"><?= $b['notes'] ? htmlspecialchars($b['notes']) : '—' ?></td>
+                <?php endforeach; ?>
+              </tr>
+              <tr>
+                <td class="muted-cell" style="font-weight:600">Status</td>
+                <?php foreach ($bids as $b): ?>
+                  <td>
+                    <?php if ($b['status']==='selected'): ?><span class="status-badge status-approved">Accepted</span>
+                    <?php elseif ($b['status']==='shortlisted'): ?><span class="status-badge status-pending">⭐ Shortlisted</span>
+                    <?php elseif ($b['status']==='rejected'): ?><span class="status-badge status-rejected">Rejected</span>
+                    <?php else: ?><span class="status-badge status-pending">Submitted</span>
+                    <?php endif; ?>
+                  </td>
+                <?php endforeach; ?>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <?php endif; ?>
 
         <h3 style="font-size:13.5px;margin-bottom:10px">Offers <?= count($bids) ? '(' . count($bids) . ')' : '' ?></h3>

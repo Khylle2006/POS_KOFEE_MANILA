@@ -9,15 +9,30 @@ $user  = current_user();
 $toast = '';
 $toast_type = 'success';
 
-// Shared role list — the account "Roles" checkboxes below draw from this,
-// and it also stocks the employee "Department" dropdown.
-$roles = [
-    'hr'      => 'HR',
-    'finance' => 'Finance',
-    'crew'    => 'Crew',
-    'manager' => 'Manager',
-    'admin'   => 'Admin',
-];
+// ── Roles now come from the database ──────────
+// The `roles` table (role_key, label, is_system) already exists in the
+// database and is the source of truth for what roles exist — this used to
+// be a hardcoded PHP array, which is why newer roles like "ops" or
+// "procurement" never showed up in the checkboxes/dropdown/filter.
+// Backfill: pick up any role that's in use on real records (user_roles /
+// legacy users.role) but somehow isn't in the roles table yet, so nothing
+// already in use silently disappears from the dropdowns/filters.
+$pdo->exec("
+    INSERT IGNORE INTO roles (role_key, label, is_system)
+    SELECT DISTINCT role, role, 0 FROM user_roles
+    WHERE role IS NOT NULL AND role <> ''
+");
+$pdo->exec("
+    INSERT IGNORE INTO roles (role_key, label, is_system)
+    SELECT DISTINCT role, role, 0 FROM users
+    WHERE role IS NOT NULL AND role <> ''
+");
+
+$roles = [];
+foreach ($pdo->query("SELECT role_key, label FROM roles ORDER BY is_system DESC, label")->fetchAll() as $row) {
+    $roles[$row['role_key']] = $row['label'];
+}
+
 $emp_types = ['Full-time', 'Part-time', 'Contract'];
 
 // ── Multi-role support ────────────────────────
@@ -259,13 +274,13 @@ unset($r);
 $search = trim($_GET['search'] ?? '');
 $filter = $_GET['filter'] ?? 'all';
 
-$filtered = array_filter($roster, function ($r) use ($search, $filter) {
+$filtered = array_filter($roster, function ($r) use ($search, $filter, $roles) {
     if ($search) {
         $hay = strtolower($r['fn'].' '.$r['ln'].' '.$r['username'].' '.$r['employee_code'].' '.$r['position']);
         if (!str_contains($hay, strtolower($search))) return false;
     }
     if ($filter !== 'all') {
-        if (in_array($filter, ['hr','finance','crew','manager','admin'])
+        if (array_key_exists($filter, $roles)
             && !in_array($filter, $r['role_array'])
             && $r['department'] !== $filter) return false;
         if ($filter === 'no_account'  && $r['user_id']) return false;
@@ -365,7 +380,8 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
               <tr class="empty-row"><td colspan="8">🫙 No staff found.</td></tr>
             <?php else:
               // Avatar tint matches the role badge colors — a glance at the
-              // left edge of the table now tells you who's what.
+              // left edge of the table now tells you who's what. Roles beyond
+              // the original five fall back to a neutral tint below.
               $role_colors = ['hr'=>'#6a3fa0','finance'=>'#00695c','crew'=>'#1565c0','manager'=>'#e65100','admin'=>'#c47d3e'];
               foreach ($filtered as $r):
                 $full     = $r['fn'].' '.$r['ln'];
