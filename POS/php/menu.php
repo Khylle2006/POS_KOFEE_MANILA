@@ -2,7 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
-require_permission('menu.manage');
+require_permission('orders.new');
 
 include("../includes/sidebar.php");
 ?>

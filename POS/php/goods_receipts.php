@@ -59,6 +59,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      WHERE g.po_id = :po AND gri.requisition_item_id = :ri AND gri.item_condition = 'good'"
                 );
 
+                // Match a received line item to an existing Inventory ingredient
+                // by name (case/whitespace-insensitive). Requisition items are
+                // free-typed text with no formal link to ingredients.id, so this
+                // is a best-effort match, not a guaranteed one.
+                $ing_lookup = $pdo->prepare(
+                    'SELECT id, quantity FROM ingredients
+                     WHERE LOWER(TRIM(name)) = LOWER(TRIM(:n)) AND archived_at IS NULL
+                     LIMIT 1'
+                );
+                $ing_restock = $pdo->prepare(
+                    'UPDATE ingredients SET quantity = quantity + :q WHERE id = :id'
+                );
+                $ing_log = $pdo->prepare(
+                    'INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i, :q, :u)'
+                );
+                $unmatched_items = []; // item names received but not found in Inventory
+
                 foreach ($items as $req_item_id => $data) {
                     $req_item_id = (int)$req_item_id;
                     $received    = (float)($data['received_qty'] ?? 0);
@@ -75,6 +92,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':g' => $grn_id, ':ri' => $req_item_id, ':n' => $ri['item_name'], ':u' => $ri['unit'],
                         ':oq' => $ri['quantity'], ':rq' => $received, ':c' => $condition, ':dn' => $notes ?: null,
                     ]);
+
+                    // Only "good" condition stock actually gets added to Inventory —
+                    // damaged/rejected items were received but aren't usable.
+                    if ($condition === 'good' && $received > 0) {
+                        $ing_lookup->execute([':n' => $ri['item_name']]);
+                        $ing = $ing_lookup->fetch();
+                        if ($ing) {
+                            $ing_restock->execute([':q' => $received, ':id' => $ing['id']]);
+                            $ing_log->execute([':i' => $ing['id'], ':q' => $received, ':u' => $user['id']]);
+                        } else {
+                            $unmatched_items[] = $ri['item_name'];
+                        }
+                    }
 
                     $prior_stmt->execute([':po' => $po_id, ':ri' => $req_item_id]);
                     $already_good = (float)$prior_stmt->fetchColumn();
@@ -113,7 +143,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif ($grn_status === 'partial') {
                     $toast = '📦 Partial receipt recorded. Remaining quantity still expected.';
                 } else {
-                    $toast = '✅ Delivery fully received — Purchase Order marked delivered.';
+                    $toast = '✅ Delivery fully received — Purchase Order marked delivered. Inventory updated.';
+                }
+
+                if (!empty($unmatched_items)) {
+                    $toast .= ' ⚠️ No matching Inventory item for: ' . implode(', ', array_unique($unmatched_items)) . ' — add it in Inventory, then restock it manually.';
+                    $toast_type = 'error';
                 }
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();

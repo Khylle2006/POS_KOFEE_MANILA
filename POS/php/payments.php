@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $toast = '💸 Payment completed — invoice marked paid.';
-            } catch (Exception $e) {{
+            } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
             }

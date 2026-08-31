@@ -1,7 +1,9 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+
 require_login();
+require_permission('empployee_dashboard.view');
 // Self-service page — every logged-in role with an employee profile can use
 // this, so it's gated on login only, not a specific admin/HR permission.
 

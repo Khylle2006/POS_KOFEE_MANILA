@@ -51,11 +51,32 @@ function login_user(string $username, string $password): array {
         $_SESSION['firstname'] = $user['firstname'] ?? '';
         $_SESSION['lastname'] = $user['lastname'] ?? '';
         $_SESSION['email'] = $user['email'] ?? '';
-        $_SESSION['role'] = $user['role'] ?? 'staff'; // ← THIS IS CRUCIAL!
+        $_SESSION['role'] = $user['role'] ?? 'staff'; // ← legacy single-role column, kept for backward compat
         $_SESSION['status'] = $user['status'] ?? 'active';
-        
+
+        // Pull ALL roles from user_roles (multi-role RBAC) — this is what
+        // has_permission()/require_permission() actually check. Without this,
+        // $_SESSION['roles'] stays empty and has_permission() silently falls
+        // back to the single legacy $_SESSION['role'] above, which can miss
+        // permissions granted only through a second role. That mismatch is
+        // what causes a valid login to bounce straight to
+        // "login.php?reason=forbidden" on the landing page.
+        $roles_stmt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :id');
+        $roles_stmt->execute([':id' => $user['id']]);
+        $all_roles = $roles_stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        if (empty($all_roles) && !empty($_SESSION['role'])) {
+            // No user_roles rows yet — fall back to the legacy single role.
+            $all_roles = [$_SESSION['role']];
+        }
+
+        $_SESSION['roles'] = array_values(array_unique(array_map(
+            fn($r) => strtolower(trim($r)),
+            $all_roles
+        )));
+
         // Debug: Log successful login
-        error_log("User logged in: {$user['username']} (Role: {$_SESSION['role']})");
+        error_log("User logged in: {$user['username']} (roles: " . implode(',', $_SESSION['roles']) . ")");
         
         return [
             'ok' => true,
@@ -229,6 +250,23 @@ function refresh_session(): void {
             $_SESSION['lastname'] = $user['lastname'] ?? '';
             $_SESSION['email'] = $user['email'] ?? '';
             $_SESSION['status'] = $user['status'] ?? 'active';
+
+            // Keep $_SESSION['roles'] (plural, multi-role) in sync too —
+            // has_permission() checks this first. Without refreshing it here,
+            // any refresh_session() call would fall back to only the single
+            // legacy role above and re-trigger the forbidden-redirect bug.
+            $roles_stmt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :id');
+            $roles_stmt->execute([':id' => $_SESSION['user_id']]);
+            $all_roles = $roles_stmt->fetchAll(PDO::FETCH_COLUMN);
+
+            if (empty($all_roles) && !empty($_SESSION['role'])) {
+                $all_roles = [$_SESSION['role']];
+            }
+
+            $_SESSION['roles'] = array_values(array_unique(array_map(
+                fn($r) => strtolower(trim($r)),
+                $all_roles
+            )));
         }
     } catch (Exception $e) {
         // Silent fail

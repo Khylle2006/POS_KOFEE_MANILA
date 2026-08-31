@@ -47,6 +47,7 @@ $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
     'dashboard'    => has_permission('dashboard.view'),
+    'employee_dashboard' => has_permission('employee_dashboard.view'),
     'new_order'    => has_permission('orders.new'),
     'pending'      => has_permission('orders.pending'),
     'history'      => has_permission('orders.history'),
@@ -54,7 +55,6 @@ $access = [
     'menu_manager' => has_permission('menu.manage'),
     'inventory'    => has_permission('inventory.view'),
     'users'        => has_permission('users.manage'),
-    'employee_home' => has_permission('empployee_dashboard.view'),
 
     // ── Procurement module — gated on the specific permission each
     //    page's workflow actually needs, so the link only shows to
@@ -225,14 +225,14 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     <?php if ($access['dashboard']): ?>
     <div class="<?= $groupLabel ?> pt-1.5">Main</div>
     <button class="<?= navBtnClasses($current === 'dashboard.php') ?>" onclick="window.location.href='dashboard.php'">
-        <?= icon('home') ?><span class="flex-1 truncate">Dashboard</span>
+        <?= icon('home') ?><span class="flex-1 truncate">Admin Dashboard</span>
     </button>
     
     <?php endif; ?>
 
-    <?php if ($access['employee_home']): ?>
+    <?php if ($access['employee_dashboard']): ?>
     <button class="<?= navBtnClasses($current === 'employee_dashboard.php') ?>" onclick="window.location.href='employee_dashboard.php'">
-        <?= icon('attendance') ?><span class="flex-1 truncate">My Dashboard</span>
+        <?= icon('attendance') ?><span class="flex-1 truncate">Employee Dashboard</span>
     </button>
     <?php endif; ?>
 

@@ -4,7 +4,8 @@ require_once '../includes/auth.php';
 require_login();
 
 $landing_pages = [
-    'dashboard.view'  => '../php/dashboard.php',
+    'employee_dashboard.view'  => '../php/employee_dashboard.php',
+    'admin_dashboard.view'  => '../php/dashboard.php',
     'orders.new'      => '../php/menu.php',
     'orders.pending'  => '../php/pending_orders.php',
     'orders.history'  => '../php/history.php',
@@ -46,7 +47,7 @@ error_log("auth/index.php: user_id={$user_id} roles=[" . implode(',', $roles) . 
 
 // Admin in ANY held role -> dashboard, always.
 if (in_array('admin', $roles, true)) {
-    header('Location: ../php/dashboard.php');
+    header('Location: ../php/employee_dashboard.php');
     exit;
 }
 
