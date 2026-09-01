@@ -89,7 +89,7 @@ include("../includes/sidebar.php");
   <link rel="stylesheet" href="../css/sidebar.css"/>
   <link rel="stylesheet" href="../css/home.css"/>
   <link rel="stylesheet" href="../css/employee_dashboard.css"/>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../css/index.css">
   <style>
     .item-row { display:grid; grid-template-columns:minmax(0,2fr) 90px 70px 120px 32px; gap:8px; margin-bottom:8px; align-items:center; }
     .item-row input, .item-row select { min-width:0; width:100%; }

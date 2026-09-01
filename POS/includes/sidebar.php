@@ -143,7 +143,7 @@ function navBtnClasses(bool $active): string {
 
 $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
 ?>
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="../css/index.css">
 
 <!-- ── Top bar: always visible, holds the Menu toggle ── -->
 <header class="fixed top-0 inset-x-0 h-14 z-[200] flex items-center gap-3 px-4
