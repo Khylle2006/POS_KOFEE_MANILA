@@ -1,6 +1,5 @@
 <?php
 require_once '../includes/db.php';
-require_once '../includes/notifications.php';
 
 header('Content-Type: application/json');
 
@@ -73,9 +72,6 @@ try {
     }
 
     $pdo->commit();
-
-    $roles = ['admin', 'manager', 'staff', 'crew'];
-    notify_roles($pdo, 'order:new:' . $order_id, 'order', 'New order received', 'Order #' . str_pad($order_id, 4, '0', STR_PAD_LEFT) . ' is waiting.', 'pending_orders.php', $roles);
 
     echo json_encode(["success" => true, "order_id" => $order_id]);
 

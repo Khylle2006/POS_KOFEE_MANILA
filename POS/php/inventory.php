@@ -65,10 +65,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $toast = '⚠️ Your account is not linked to an employee profile. Ask HR to link it first.';
                 $toast_type = 'error';
             } else {
-                $ing = $pdo->prepare('SELECT name FROM ingredients WHERE id = :id LIMIT 1');
+                $ing = $pdo->prepare('SELECT name, quantity FROM ingredients WHERE id = :id LIMIT 1');
                 $ing->execute([':id' => $id]);
                 $ingredient = $ing->fetch();
 
+                // Update the inventory quantity directly
+                $newQuantity = ((float)$ingredient['quantity']) + $qty;
+                $pdo->prepare(
+                    'UPDATE ingredients SET quantity = :q WHERE id = :id'
+                )->execute([':q' => $newQuantity, ':id' => $id]);
+
+                // Also log the restock request
                 createInventoryStockRequest(
                     $pdo,
                     (int)$employee['id'],
@@ -76,10 +83,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $ingredient['name'] ?? 'Unknown item',
                     $qty,
                     'Inventory Restock',
-                    'Restock request pending approval'
+                    'Restock request approved'
                 );
 
-                $toast = '✅ Restock request submitted for HR approval.';
+                $toast = '✅ Inventory updated! Added ' . $qty . ' units.';
             }
         } else {
             $toast = '⚠️ Enter a valid quantity.';
@@ -105,6 +112,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ing->execute([':id' => $id]);
                 $ingredient = $ing->fetch();
 
+                // Update the inventory quantity directly
+                $pdo->prepare(
+                    'UPDATE ingredients SET quantity = :q WHERE id = :id'
+                )->execute([':q' => $qty, ':id' => $id]);
+
+                // Also log the stock adjustment request
                 createInventoryStockRequest(
                     $pdo,
                     (int)$employee['id'],
@@ -112,10 +125,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $ingredient['name'] ?? 'Unknown item',
                     $qty,
                     'Inventory Adjustment',
-                    'Stock set request pending approval'
+                    'Stock set to ' . $qty . ' - approved'
                 );
 
-                $toast = '✅ Stock adjustment request submitted for HR approval.';
+                $toast = '✅ Stock updated to ' . $qty . ' units.';
             }
         } else {
             $toast = '⚠️ Enter a valid quantity (0 or more).';
@@ -533,22 +546,7 @@ function selectItem(ing) {
     </div>
 
     <div class="restock-section">
-      <h3>➕ Add to Stock</h3>
-      <form method="POST">
-        <input type="hidden" name="action"        value="restock"/>
-        <input type="hidden" name="ingredient_id" value="${ing.id}"/>
-        ${returnFields()}
-        <div class="restock-row">
-          <input type="number" name="qty"
-                 placeholder="Add quantity (${esc(ing.unit)})"
-                 step="0.1" min="0.1" required/>
-          <button type="submit" class="btn-confirm">➕ Add</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="restock-section">
-      <h3>✏️ Set Exact Stock</h3>
+      <h3>✏️ Update Exact Stock</h3>
       <form method="POST">
         <input type="hidden" name="action"        value="set_stock"/>
         <input type="hidden" name="ingredient_id" value="${ing.id}"/>
@@ -558,7 +556,7 @@ function selectItem(ing) {
                  placeholder="Set stock to… (${esc(ing.unit)})"
                  value="${qty.toFixed(1)}"
                  step="0.1" min="0" required/>
-          <button type="submit" class="btn-confirm" style="background:#1565c0">✔ Set</button>
+          <button type="submit" class="btn-confirm" style="background:#1565c0">✔ Update</button>
         </div>
       </form>
     </div>

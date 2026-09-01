@@ -116,3 +116,4 @@
   .sidebar { transform: translateX(-100%); box-shadow: var(--shadow-pop); }
   .sidebar.open { transform: translateX(0); }
 }
+

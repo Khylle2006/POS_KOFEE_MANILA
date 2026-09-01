@@ -14,7 +14,7 @@ include("../includes/sidebar.php");
   <title>Menu Manager — Kofee POS</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <?php ?>
 </head>
 <body>
 
@@ -109,7 +109,7 @@ include("../includes/sidebar.php");
               </td>
               <td>
                 <div class="act-group">
-                  <?php if (has_permission('menu.manage') || has_permission('menu.edit')): ?>
+                  <?php if (has_permission('menu.edit')): ?>
                   <button class="act-btn <?= $available ? 'act-hold' : 'act-activate' ?>"
                           id="toggle-<?= $p['id'] ?>"
                           data-state="<?= $available ? 'on' : 'off' ?>"
@@ -118,8 +118,8 @@ include("../includes/sidebar.php");
                   </button>
                   <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'>✏️ Edit</button>
                   <?php endif; ?>
-                  <?php if (has_permission('menu.manage') || has_permission('menu.delete')): ?>
-                  <button class="act-btn act-block" data-id="<?= (int)$p['id'] ?>" data-name="<?= htmlspecialchars($p['name'], ENT_QUOTES, 'UTF-8') ?>" onclick="confirmDeleteFromButton(this)">🗑️</button>
+                  <?php if (has_permission('menu.delete')): ?>
+                  <button class="act-btn act-block" onclick="confirmDelete(<?= $p['id'] ?>, <?= json_encode($p['name']) ?>)">🗑️</button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -520,34 +520,14 @@ function updateRowInDOM(id, p) {
 
 // ── Delete item ──────────────────────────────
 let pendingDelete = null;
-function confirmDeleteFromButton(button) {
-  if (!button) return;
-  const id = Number(button.dataset.id);
-  const name = button.dataset.name || '';
-  confirmDelete(id, name);
-}
 function confirmDelete(id, name) {
   pendingDelete = id;
-  Swal.fire({
-    title: `Delete "${name}"?`,
-    text: 'This item will be archived and hidden from the menu.',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Delete',
-    cancelButtonText: 'Cancel',
-    reverseButtons: true,
-    confirmButtonColor: '#d9534f'
-  }).then((result) => {
-    if (result.isConfirmed) {
-      doDelete();
-    } else {
-      pendingDelete = null;
-    }
-  });
+  document.getElementById('del-msg').textContent = `Are you sure you want to delete "${name}"?`;
+  document.getElementById('delete-modal').classList.add('open');
 }
 function closeDelete() {
   pendingDelete = null;
-  document.getElementById('delete-modal')?.classList.remove('open');
+  document.getElementById('delete-modal').classList.remove('open');
 }
 function doDelete() {
   if (!pendingDelete) return;
@@ -556,43 +536,16 @@ function doDelete() {
   fd.append('action', 'delete');
   fd.append('id', id);
 
-  fetch('../api/add_item.php', {
-      method: 'POST',
-      body: fd,
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(async response => {
-      const text = await response.text();
-      let result = null;
-      try { result = text ? JSON.parse(text) : null; } catch (e) { throw new Error('Server returned an invalid response.'); }
-      if (!response.ok || !result || result.ok !== true) {
-        throw new Error((result && result.error) || 'Unable to delete item.');
-      }
-      return result;
-    })
+  fetch('../api/add_item.php', { method: 'POST', body: fd })
+    .then(response => response.json())
     .then(result => {
+      if (!result.ok) throw new Error(result.error || 'Unable to delete item.');
       closeDelete();
       document.getElementById('prow-' + id)?.remove();
-      showToast(result.message ? '✅ ' + result.message : '✅ Item archived.');
+      showToast('✅ Item deleted.');
       applyFilters();
-      pendingDelete = null;
-      Swal.fire({
-        title: 'Archived!',
-        text: result.message || 'Item archived successfully.',
-        icon: 'success',
-        timer: 1600,
-        showConfirmButton: false
-      });
     })
-    .catch(error => {
-      pendingDelete = null;
-      showToast('⚠️ ' + error.message, 'error');
-      Swal.fire({
-        title: 'Delete failed',
-        text: error.message,
-        icon: 'error'
-      });
-    });
+    .catch(error => showToast('⚠️ ' + error.message, 'error'));
 }
 
 

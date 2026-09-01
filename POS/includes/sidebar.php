@@ -1,7 +1,6 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/permissions.php';
-require_once __DIR__ . '/notifications.php';
 ob_start();
 require_once __DIR__ . '/icons.php';
 ob_end_clean(); // discard any stray/leaked text icons.php might accidentally output
@@ -28,6 +27,14 @@ if (!function_exists('icon')) {
             'sun'         => '<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/>',
             'coin'        => '<circle cx="12" cy="12" r="9"/><path d="M9.2 15.4c.5.9 1.5 1.5 2.8 1.5 1.8 0 3-1 3-2.3 0-3.2-5.6-1.7-5.6-4.9 0-1.3 1.2-2.3 3-2.3 1.2 0 2.2.5 2.7 1.4M12 6.4v1.2M12 16.4v1.2"/>',
             'chevron'     => '<path d="M9 6l6 6-6 6"/>',
+            'dashboard'   => '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+            'rfq'         => '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
+            'truck'       => '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/>',
+            'invoice'     => '<path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
+            'scale'       => '<path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-3 6a3 3 0 006 0z"/><path d="M19 7l-3 6a3 3 0 006 0z"/>',
+            'card'        => '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+            'star'        => '<path d="M12 2l3 6.5 7 .9-5 5 1.3 7-6.3-3.6L5.7 21.4 7 14.4l-5-5 7-.9z"/>',
+            'portal'      => '<path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/>',
         ];
         $body = $paths[$name] ?? $paths['home'];
         return '<svg width="'.$size.'" height="'.$size.'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'.$body.'</svg>';
@@ -40,6 +47,7 @@ $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
     'dashboard'    => has_permission('dashboard.view'),
+    'employee_dashboard' => has_permission('employee_dashboard.view'),
     'new_order'    => has_permission('orders.new'),
     'pending'      => has_permission('orders.pending'),
     'history'      => has_permission('orders.history'),
@@ -47,10 +55,26 @@ $access = [
     'menu_manager' => has_permission('menu.manage'),
     'inventory'    => has_permission('inventory.view'),
     'users'        => has_permission('users.manage'),
+
+    // ── Procurement module — gated on the specific permission each
+    //    page's workflow actually needs, so the link only shows to
+    //    roles who can do something once they get there. ──────────
+    'procurement_home'    => has_permission('procurement.view'),
+    'requisitions'         => has_permission('procurement.requisitions') || has_permission('procurement.requisition.create') || has_permission('procurement.requisition.review'),
+    'rfq'                  => has_permission('procurement.rfq.manage') || has_permission('procurement.bidding.review') || has_permission('procurement.negotiation'),
+    'purchase_orders'      => has_permission('procurement.po.manage') || has_permission('procurement.receiving') || has_permission('procurement.negotiation'),
+    'goods_receipts'       => has_permission('procurement.receiving') || has_permission('procurement.grn.discrepancy.manage'),
+    'invoices'             => has_permission('procurement.invoice.create') || has_permission('procurement.invoice.match'),
+    'three_way_match'      => has_permission('procurement.invoice.match'),
+    'payments'             => has_permission('procurement.payment.process'),
+    'supplier_performance' => has_permission('procurement.performance.rate') || has_permission('procurement.close'),
+    'suppliers'            => has_permission('procurement.suppliers.manage'),
+    'procurement_reports'  => has_permission('procurement.reports.view'),
+    'supplier_portal'      => has_permission('procurement.supplier.portal'),
     'hr_employees' => in_array($role, ['admin', 'hr'], true),
     'hr_attendance'=> in_array($role, ['admin', 'hr'], true),
-    'hr_leave'     => true,
-    'hr_requests'  => true,
+    'hr_leave'     => in_array($role, ['admin', 'hr'], true),
+    'hr_requests'  => in_array($role, ['admin', 'hr'], true),
     'manage_permissions' => ($role === 'admin'),
 ];
 
@@ -58,7 +82,7 @@ $access = [
 //    table isn't set up yet in this install) ──────────────────────
 $pending_count = 0;
 $requests_count = 0;
-$notification_count = 0;
+$procurement_badge = 0;
 try {
     $pdo = get_db();
     if ($access['pending']) {
@@ -70,10 +94,25 @@ try {
         try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
         $requests_count = $c;
     }
-    sync_notifications($pdo, $user);
-    $notification_stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE read_at IS NULL AND (user_id = :user_id OR role_key = :role_key)");
-    $notification_stmt->execute([':user_id' => $user['id'], ':role_key' => $role]);
-    $notification_count = (int)$notification_stmt->fetchColumn();
+    // Procurement "needs your attention" badge — only tallies the queues
+    // this particular user can actually act on, so it never nags a
+    // requester about bids they have no permission to evaluate.
+    if ($access['procurement_home']) {
+        $pc = 0;
+        if (has_permission('procurement.requisition.review')) {
+            try { $pc += (int)$pdo->query("SELECT COUNT(*) FROM purchase_requisitions WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
+        }
+        if (has_permission('procurement.bidding.review')) {
+            try { $pc += (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'submitted'")->fetchColumn(); } catch (Throwable $e) {}
+        }
+        if (has_permission('procurement.grn.discrepancy.manage')) {
+            try { $pc += (int)$pdo->query("SELECT COUNT(*) FROM goods_receipts WHERE status = 'discrepancy'")->fetchColumn(); } catch (Throwable $e) {}
+        }
+        if (has_permission('procurement.invoice.match')) {
+            try { $pc += (int)$pdo->query("SELECT COUNT(*) FROM invoices WHERE status = 'disputed'")->fetchColumn(); } catch (Throwable $e) {}
+        }
+        $procurement_badge = $pc;
+    }
 } catch (Throwable $e) {
     // DB not reachable — sidebar still renders, just without counts.
 }
@@ -136,19 +175,6 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 
     <div class="flex-1"></div>
 
-    <div class="relative">
-        <button id="notification-btn" type="button" onclick="toggleNotifications()"
-            class="relative w-9 h-9 flex items-center justify-center rounded-lg text-[rgba(251,243,233,0.78)] hover:bg-[rgba(251,243,233,0.10)] hover:text-[var(--cream,#fbf3e9)] transition-colors duration-150"
-            aria-label="Notifications" aria-expanded="false" aria-controls="notification-panel">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
-            <span id="notification-badge" class="<?= $notification_count ? '' : 'hidden' ?> absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)] text-[9px] font-extrabold leading-4"><?= $notification_count > 99 ? '99+' : $notification_count ?></span>
-        </button>
-        <div id="notification-panel" class="hidden absolute right-0 top-11 w-[min(360px,calc(100vw-24px))] rounded-xl bg-white text-[var(--text-main,#2b2130)] shadow-2xl border border-[var(--latte,#efe0cc)] overflow-hidden z-[250]">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--latte,#efe0cc)]"><strong class="text-[13px]">Notifications</strong><button type="button" onclick="markNotificationsRead()" class="text-[11px] font-semibold text-[var(--caramel,#c47d3e)] hover:underline">Mark all read</button></div>
-            <div id="notification-list" class="max-h-[360px] overflow-y-auto"><div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">Loading notifications...</div></div>
-        </div>
-    </div>
-
     <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                 bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                 text-[var(--espresso-deep,#1c1108)]">
@@ -199,7 +225,14 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     <?php if ($access['dashboard']): ?>
     <div class="<?= $groupLabel ?> pt-1.5">Main</div>
     <button class="<?= navBtnClasses($current === 'dashboard.php') ?>" onclick="window.location.href='dashboard.php'">
-        <?= icon('home') ?><span class="flex-1 truncate">Dashboard</span>
+        <?= icon('home') ?><span class="flex-1 truncate">Admin Dashboard</span>
+    </button>
+    
+    <?php endif; ?>
+
+    <?php if ($access['employee_dashboard']): ?>
+    <button class="<?= navBtnClasses($current === 'employee_dashboard.php') ?>" onclick="window.location.href='employee_dashboard.php'">
+        <?= icon('attendance') ?><span class="flex-1 truncate">Employee Dashboard</span>
     </button>
     <?php endif; ?>
 
@@ -223,28 +256,110 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </button>
     <?php endif; ?>
 
+    
+
+    <?php if ($access['menu_manager']): ?>
+    <button class="<?= navBtnClasses($current === 'add_item.php') ?>" onclick="window.location.href='add_item.php'">
+        <?= icon('menu') ?><span class="flex-1 truncate">Manage Menu</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['history']): ?>
+    <button class="<?= navBtnClasses($current === 'history.php') ?>" onclick="window.location.href='history.php'">
+        <?= icon('history') ?><span class="flex-1 truncate">Order History</span>
+    </button>
+    <?php endif; ?>
+
     <?php if ($access['inventory']): ?>
     <button class="<?= navBtnClasses($current === 'inventory.php') ?>" onclick="window.location.href='inventory.php'">
         <?= icon('inventory') ?><span class="flex-1 truncate">Inventory</span>
     </button>
     <?php endif; ?>
 
-    <?php if ($access['menu_manager']): ?>
-    <button class="<?= navBtnClasses($current === 'add_item.php') ?>" onclick="window.location.href='add_item.php'">
-        <?= icon('menu') ?><span class="flex-1 truncate">Menu</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['history']): ?>
-    <button class="<?= navBtnClasses($current === 'history.php') ?>" onclick="window.location.href='history.php'">
-        <?= icon('history') ?><span class="flex-1 truncate">History</span>
-    </button>
-    <?php endif; ?>
-
     <?php if ($access['analytics']): ?>
-    <div class="<?= $groupLabel ?>">Reports</div>
+    <div class="<?= $groupLabel ?>">Finance</div>
     <button class="<?= navBtnClasses($current === 'analytics.php') ?>" onclick="window.location.href='analytics.php'">
         <?= icon('analytics') ?><span class="flex-1 truncate">Analytics</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_home'] || $access['requisitions'] || $access['rfq'] || $access['purchase_orders'] || $access['goods_receipts'] || $access['invoices'] || $access['three_way_match'] || $access['payments'] || $access['supplier_performance'] || $access['suppliers'] || $access['procurement_reports'] || $access['supplier_portal']): ?>
+    <div class="<?= $groupLabel ?>">Procurement</div>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_home']): ?>
+    <button class="<?= navBtnClasses($current === 'procurement_dashboard.php') ?>" onclick="window.location.href='procurement_dashboard.php'">
+        <?= icon('dashboard') ?><span class="flex-1 truncate">Procurement Home</span>
+        <?php if ($procurement_badge > 0): ?>
+        <span class="flex-shrink-0 text-[10px] font-extrabold px-[7px] py-[1px] rounded-full
+                     bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)]"><?= $procurement_badge ?></span>
+        <?php endif; ?>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['requisitions']): ?>
+    <button class="<?= navBtnClasses($current === 'requisitions.php') ?>" onclick="window.location.href='requisitions.php'">
+        <?= icon('requests') ?><span class="flex-1 truncate">Requisitions</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['rfq']): ?>
+    <button class="<?= navBtnClasses($current === 'rfq.php') ?>" onclick="window.location.href='rfq.php'">
+        <?= icon('rfq') ?><span class="flex-1 truncate">RFQ &amp; Bidding</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['purchase_orders']): ?>
+    <button class="<?= navBtnClasses($current === 'purchase_orders.php') ?>" onclick="window.location.href='purchase_orders.php'">
+        <?= icon('inventory') ?><span class="flex-1 truncate">Purchase Orders</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['goods_receipts']): ?>
+    <button class="<?= navBtnClasses($current === 'goods_receipts.php') ?>" onclick="window.location.href='goods_receipts.php'">
+        <?= icon('truck') ?><span class="flex-1 truncate">Goods Receiving</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['invoices']): ?>
+    <button class="<?= navBtnClasses($current === 'invoices.php') ?>" onclick="window.location.href='invoices.php'">
+        <?= icon('invoice') ?><span class="flex-1 truncate">Invoices</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['three_way_match']): ?>
+    <button class="<?= navBtnClasses($current === 'three_way_match.php') ?>" onclick="window.location.href='three_way_match.php'">
+        <?= icon('scale') ?><span class="flex-1 truncate">3-Way Match</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['payments']): ?>
+    <button class="<?= navBtnClasses($current === 'payments.php') ?>" onclick="window.location.href='payments.php'">
+        <?= icon('card') ?><span class="flex-1 truncate">Payments</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['supplier_performance']): ?>
+    <button class="<?= navBtnClasses($current === 'supplier_performace.php') ?>" onclick="window.location.href='supplier_performace.php'">
+        <?= icon('star') ?><span class="flex-1 truncate">Supplier Performance</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['suppliers']): ?>
+    <button class="<?= navBtnClasses($current === 'suppliers.php') ?>" onclick="window.location.href='suppliers.php'">
+        <?= icon('employees') ?><span class="flex-1 truncate">Suppliers</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_reports']): ?>
+    <button class="<?= navBtnClasses($current === 'procurement_reports.php') ?>" onclick="window.location.href='procurement_reports.php'">
+        <?= icon('analytics') ?><span class="flex-1 truncate">Procurement Reports</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['supplier_portal']): ?>
+    <button class="<?= navBtnClasses($current === 'supplier_portal.php') ?>" onclick="window.location.href='supplier_portal.php'">
+        <?= icon('portal') ?><span class="flex-1 truncate">Supplier Portal</span>
     </button>
     <?php endif; ?>
 
@@ -274,17 +389,19 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </button>
     <?php endif; ?>
 
+    <?php if ($access['manage_permissions']): ?>
+    <button class="<?= navBtnClasses($current === 'manage_permissions.php') ?>" onclick="window.location.href='manage_permissions.php'">
+        <?= icon('permissions') ?><span class="flex-1 truncate">Manage Permission</span>
+    </button>
+    <?php endif; ?>
+
     <?php if ($access['hr_leave']): ?>
     <button class="<?= navBtnClasses($current === 'leave_requests.php') ?>" onclick="window.location.href='leave_requests.php'">
         <?= icon('leave') ?><span class="flex-1 truncate">Leave</span>
     </button>
     <?php endif; ?>
 
-    <?php if ($access['manage_permissions']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_permissions.php') ?>" onclick="window.location.href='manage_permissions.php'">
-        <?= icon('permissions') ?><span class="flex-1 truncate">Manage Permission</span>
-    </button>
-    <?php endif; ?>
+    
 
     <div class="flex-1"></div>
 
@@ -337,31 +454,4 @@ function toggleSidebar(force) {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') toggleSidebar(false);
 });
-
-const notificationPanel = document.getElementById('notification-panel');
-const notificationBadge = document.getElementById('notification-badge');
-const notificationList = document.getElementById('notification-list');
-
-function toggleNotifications() {
-    const open = notificationPanel.classList.toggle('hidden');
-    document.getElementById('notification-btn').setAttribute('aria-expanded', open ? 'false' : 'true');
-    if (!open) loadNotifications();
-}
-
-function loadNotifications() {
-    fetch('../api/get_notifications.php').then(response => response.json()).then(data => {
-        if (!data.success) throw new Error(data.error || 'Unable to load notifications');
-        notificationBadge.textContent = data.unread > 99 ? '99+' : data.unread;
-        notificationBadge.classList.toggle('hidden', data.unread === 0);
-        notificationList.innerHTML = data.items.length ? data.items.map(item => `<a href="${escapeNotification(item.link || '#')}" class="block px-4 py-3 border-b border-[var(--latte,#efe0cc)] hover:bg-[var(--cream,#fbf3e9)] ${item.read_at ? '' : 'bg-[var(--accent-lt,#fcefe1)]'}"><div class="text-[12px] font-bold">${escapeNotification(item.title)}</div><div class="mt-1 text-[11px] text-[var(--text-muted,#8b7c88)]">${escapeNotification(item.message)}</div><div class="mt-1 text-[10px] text-[var(--text-muted,#8b7c88)]">${escapeNotification(item.created_at)}</div></a>`).join('') : '<div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">You are all caught up.</div>';
-    }).catch(() => { notificationList.innerHTML = '<div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">Notifications unavailable.</div>'; });
-}
-
-function markNotificationsRead() {
-    fetch('../api/mark_notifications_read.php', { method: 'POST' }).then(response => response.json()).then(data => { if (data.success) loadNotifications(); });
-}
-
-function escapeNotification(value) {
-    return String(value).replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));
-}
 </script>

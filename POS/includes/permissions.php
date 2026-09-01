@@ -128,49 +128,52 @@ function set_role_permission(string $role, string $perm_key, bool $granted): arr
         return ['ok' => false, 'error' => 'Admin always has full access and cannot be edited.'];
     }
     if (!role_exists($role)) {
-        return ['ok' => false, 'error' => 'Unknown role.'];
+        return ['ok' => false, 'error' => "Unknown role: '$role'"];
     }
 
     $pdo = get_db();
     $chk = $pdo->prepare('SELECT 1 FROM permissions WHERE perm_key = :p');
     $chk->execute([':p' => $perm_key]);
     if (!$chk->fetchColumn()) {
-        return ['ok' => false, 'error' => 'Unknown permission.'];
+        return ['ok' => false, 'error' => "Unknown permission: '$perm_key'"];
     }
 
-    if ($granted) {
-        $pdo->prepare('INSERT IGNORE INTO role_permissions (role, perm_key) VALUES (:r, :p)')
-            ->execute([':r' => $role, ':p' => $perm_key]);
-    } else {
-        $pdo->prepare('DELETE FROM role_permissions WHERE role = :r AND perm_key = :p')
-            ->execute([':r' => $role, ':p' => $perm_key]);
+    try {
+        if ($granted) {
+            $stmt = $pdo->prepare(
+                'INSERT INTO role_permissions (role, perm_key) VALUES (:r, :p)
+                 ON DUPLICATE KEY UPDATE role = role'
+            );
+            $stmt->execute([':r' => $role, ':p' => $perm_key]);
+        } else {
+            $stmt = $pdo->prepare('DELETE FROM role_permissions WHERE role = :r AND perm_key = :p');
+            $stmt->execute([':r' => $role, ':p' => $perm_key]);
+        }
+    } catch (PDOException $e) {
+        error_log("set_role_permission failed for role={$role} perm={$perm_key}: " . $e->getMessage());
+        return ['ok' => false, 'error' => 'Database error: ' . $e->getMessage()];
     }
 
     return ['ok' => true];
 }
 
 // ═══════════════════════════════════════════════
-//  PERMISSION CHECK - THE FIXED VERSION
-//  COMPATIBLE WITH PHP 7.0+
+//  PERMISSION CHECK
+
 // ═══════════════════════════════════════════════
 
 /**
  * Does the CURRENT logged-in user have this permission?
  * Admin always returns true — it's a hardcoded bypass so admin
  * can never lock itself out while editing permissions.
- * 
- * IMPROVED: Now checks database if session role is missing
  */
 function has_permission(string $perm_key): bool {
     static $cache = array();
 
-    // 1. Must be logged in
     if (!isset($_SESSION['user_id'])) {
         return false;
     }
 
-    // 2. Prefer the full multi-role list set at login; fall back to the
-    //    single legacy role for older sessions that predate user_roles.
     $roles = [];
     if (!empty($_SESSION['roles']) && is_array($_SESSION['roles'])) {
         $roles = $_SESSION['roles'];
@@ -178,7 +181,6 @@ function has_permission(string $perm_key): bool {
         $roles = [$_SESSION['role']];
     }
 
-    // 3. Session has neither — recover from the database.
     if (empty($roles)) {
         $user_id = $_SESSION['user_id'];
         try {
@@ -210,12 +212,18 @@ function has_permission(string $perm_key): bool {
         }
     }
 
-    // 4. Admin in ANY held role grants full access.
+    if (!empty($_SESSION['role'])) {
+        $roles[] = $_SESSION['role'];
+    }
+    $roles = array_values(array_unique(array_filter(array_map(
+        static function ($role) { return strtolower(trim((string)$role)); },
+        $roles
+    ))));
+
     if (in_array('admin', $roles, true)) {
         return true;
     }
 
-    // 5. Check every held role — first one that grants it wins.
     foreach ($roles as $role) {
         if (!isset($cache[$role])) {
             try {
@@ -237,7 +245,6 @@ function has_permission(string $perm_key): bool {
 
 /**
  * Redirect away if the current user lacks a permission.
- * IMPROVED: Better error handling and logging
  */
 function require_permission(string $perm_key): void {
     if (!isset($_SESSION['user_id'])) {
@@ -250,17 +257,7 @@ function require_permission(string $perm_key): void {
         $username = isset($_SESSION['username']) ? $_SESSION['username'] : 'unknown';
         error_log("require_permission: User {$_SESSION['user_id']} ('{$username}') denied for '{$perm_key}'");
 
-        $_SESSION = array();
-        if (ini_get("session.use_cookies")) {
-            $params = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000,
-                $params["path"], $params["domain"],
-                $params["secure"], $params["httponly"]
-            );
-        }
-        session_destroy();
-
-        header('Location: ../auth/login.php?reason=forbidden');
+        header('Location: no_access.php?reason=forbidden');
         exit;
     }
 }
@@ -269,25 +266,21 @@ function require_permission(string $perm_key): void {
 //  HELPER: Get user's role
 // ═══════════════════════════════════════════════
 
-/**
- * Get the current user's role from session or database
- */
 function get_current_user_role(): string {
     if (!isset($_SESSION['user_id'])) {
         return '';
     }
-    
+
     if (isset($_SESSION['role']) && !empty($_SESSION['role'])) {
         return $_SESSION['role'];
     }
-    
-    // Try to get from database
+
     try {
         $pdo = get_db();
         $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
         $stmt->execute(array($_SESSION['user_id']));
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if ($user && !empty($user['role'])) {
             $_SESSION['role'] = $user['role'];
             return $user['role'];
@@ -295,7 +288,7 @@ function get_current_user_role(): string {
     } catch (Exception $e) {
         error_log("Error getting user role: " . $e->getMessage());
     }
-    
+
     return '';
 }
 
@@ -303,17 +296,13 @@ function get_current_user_role(): string {
 //  HELPER: Get all permissions for current user
 // ═══════════════════════════════════════════════
 
-/**
- * Get all permission keys for the current user
- */
 function get_current_user_permissions(): array {
     $role = get_current_user_role();
     if (empty($role)) {
         return array();
     }
-    
+
     if ($role === 'admin') {
-        // Admin has all permissions - return all from database
         try {
             $pdo = get_db();
             $perms = $pdo->query("SELECT perm_key FROM permissions")->fetchAll(PDO::FETCH_COLUMN);
@@ -322,7 +311,7 @@ function get_current_user_permissions(): array {
             return array();
         }
     }
-    
+
     return get_role_permissions($role);
 }
 
@@ -330,12 +319,7 @@ function get_current_user_permissions(): array {
 //  HELPER: Clear permission cache
 // ═══════════════════════════════════════════════
 
-/**
- * Clear the permission cache (useful after updating permissions)
- */
 function clear_permission_cache(): void {
-    // Clear static cache (can't clear static directly, will be rebuilt)
-    // Just unset session cache
     if (isset($_SESSION['permissions'])) {
         unset($_SESSION['permissions']);
     }
@@ -345,14 +329,10 @@ function clear_permission_cache(): void {
 //  INSTALLATION HELPER (Optional)
 // ═══════════════════════════════════════════════
 
-/**
- * Install default permissions and roles (run once)
- */
 function install_default_permissions(): void {
     try {
         $pdo = get_db();
-        
-        // Insert default permissions if they don't exist
+
         $default_permissions = array(
             array('menu.manage', 'Manage Menu', 'menu'),
             array('menu.edit', 'Edit Menu Items', 'menu'),
@@ -364,45 +344,28 @@ function install_default_permissions(): void {
             array('settings.view', 'View Settings', 'settings'),
             array('settings.edit', 'Edit Settings', 'settings'),
         );
-        
+
         foreach ($default_permissions as $perm) {
             $stmt = $pdo->prepare("INSERT IGNORE INTO permissions (perm_key, label, category) VALUES (?, ?, ?)");
             $stmt->execute($perm);
         }
-        
-        // Ensure admin role exists
+
         $pdo->prepare("INSERT IGNORE INTO roles (role_key, label, is_system) VALUES ('admin', 'Administrator', 1)")->execute();
-        
-        // Give admin all permissions
+
         $perms = $pdo->query("SELECT perm_key FROM permissions")->fetchAll(PDO::FETCH_COLUMN);
         foreach ($perms as $perm) {
             $pdo->prepare("INSERT IGNORE INTO role_permissions (role, perm_key) VALUES ('admin', ?)")->execute(array($perm));
         }
-        
-        // Create default roles
+
         $default_roles = array(
             array('manager', 'Manager', 0),
             array('staff', 'Staff', 0),
-            array('crew', 'Crew', 0),
         );
-        
+
         foreach ($default_roles as $role) {
             $pdo->prepare("INSERT IGNORE INTO roles (role_key, label, is_system) VALUES (?, ?, ?)")->execute($role);
         }
 
-        // Give default manager/staff/crew roles access to the menu manager and delete action.
-        $default_menu_perms = array(
-            'manager' => array('menu.manage', 'menu.edit', 'menu.delete'),
-            'staff'   => array('menu.manage', 'menu.edit', 'menu.delete'),
-            'crew'    => array('menu.manage', 'menu.edit', 'menu.delete'),
-        );
-        foreach ($default_menu_perms as $role_key => $perms) {
-            foreach ($perms as $perm) {
-                $pdo->prepare('INSERT IGNORE INTO role_permissions (role, perm_key) VALUES (:r, :p)')
-                    ->execute([':r' => $role_key, ':p' => $perm]);
-            }
-        }
-        
     } catch (Exception $e) {
         error_log("Error installing default permissions: " . $e->getMessage());
     }
