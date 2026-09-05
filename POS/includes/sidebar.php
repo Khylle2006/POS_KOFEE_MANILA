@@ -288,12 +288,6 @@ $groupLabel = 'kfs-group-label';
     </button>
     <?php endif; ?>
 
-    <?php if ($access['three_way_match']): ?>
-    <button class="<?= navBtnClasses($current === 'three_way_match.php') ?>" onclick="window.location.href='three_way_match.php'">
-        <?= icon('scale') ?><span class="kfs-nav-label">3-Way Match</span>
-    </button>
-    <?php endif; ?>
-
     <?php if ($access['payments']): ?>
     <button class="<?= navBtnClasses($current === 'payments.php') ?>" onclick="window.location.href='payments.php'">
         <?= icon('card') ?><span class="kfs-nav-label">Payments</span>
