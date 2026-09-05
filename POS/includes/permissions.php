@@ -214,7 +214,7 @@ function has_permission(string $perm_key): bool {
 
     if (!empty($_SESSION['role'])) {
         $roles[] = $_SESSION['role'];
-    }
+    }   
     $roles = array_values(array_unique(array_filter(array_map(
         static function ($role) { return strtolower(trim((string)$role)); },
         $roles

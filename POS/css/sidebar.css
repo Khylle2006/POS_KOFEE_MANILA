@@ -1,119 +1,138 @@
 /* ============================================================
-   Kofee Manila — Sidebar
+   Offline replacement for the Tailwind-CDN classes used in
+   includes/sidebar.php. Same visual result, no CDN required.
    ============================================================ */
 
-.sidebar {
-  position: fixed; top: 0; left: 0; bottom: 0;
-  width: var(--sidebar-w, 248px);
-  background: linear-gradient(165deg, var(--espresso) 0%, var(--espresso-deep) 115%);
-  color: var(--cream);
-  display: flex; flex-direction: column;
-  padding: 22px 14px 16px;
-  z-index: 150;
-  overflow-y: auto;
-  transition: transform .25s ease;
-}
+.kfs-hidden { display: none !important; }
+body.kfs-noscroll { overflow: hidden; }
 
-/* Brand mark */
-.sidebar-logo {
-  display: flex; align-items: center; gap: 11px;
-  padding: 4px 8px 20px;
-  margin-bottom: 8px;
+/* ── Top bar ── */
+.kfs-topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 200;
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: var(--espresso, #2c1a0e); color: var(--cream, #fbf3e9);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,.15), 0 2px 4px -2px rgba(0,0,0,.1);
+}
+.kfs-menu-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 8px; border: none; color: inherit;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  background: rgba(251,243,233,.08); transition: background .15s ease;
+}
+.kfs-menu-btn:hover { background: rgba(251,243,233,.16); }
+
+.kfs-topbar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.kfs-topbar-mark {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(150deg, var(--caramel,#c47d3e) 0%, var(--espresso-deep,#1c1108) 140%);
+}
+.kfs-topbar-name {
+  font-family: 'Playfair Display', serif; font-weight: 700; font-size: 15px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kfs-flex1 { flex: 1; }
+.kfs-topbar-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800;
+  background: linear-gradient(150deg, var(--caramel-light,#d9a06b), var(--caramel,#c47d3e));
+  color: var(--espresso-deep, #1c1108);
+}
+.kfs-topbar-spacer { height: 56px; }
+
+/* ── Backdrop ── */
+.kfs-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 220;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+}
+.kfs-backdrop.open { opacity: 1; pointer-events: auto; }
+
+/* ── Sidebar panel ── */
+.kfs-sidebar {
+  position: fixed; top: 0; left: 0; height: 100%; width: 248px; z-index: 230;
+  display: flex; flex-direction: column; padding: 16px 14px; overflow-y: auto;
+  background: linear-gradient(165deg, var(--espresso,#2c1a0e) 0%, var(--espresso-deep,#1c1108) 115%);
+  color: var(--cream, #fbf3e9);
+  transform: translateX(-100%);
+  transition: transform .3s ease-out;
+}
+.kfs-sidebar.open { transform: translateX(0); }
+
+.kfs-sidebar-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 16px; margin-bottom: 8px;
   border-bottom: 1px solid rgba(251,243,233,.10);
 }
-.sidebar-logo-mark {
-  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
-  background: linear-gradient(150deg, var(--caramel) 0%, var(--espresso-deep) 140%);
+.kfs-sidebar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.kfs-sidebar-mark {
+  width: 36px; height: 36px; border-radius: 11px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(150deg, var(--caramel,#c47d3e) 0%, var(--espresso-deep,#1c1108) 140%);
   box-shadow: 0 6px 14px -4px rgba(201,123,61,.6);
 }
-.sidebar-logo-mark svg { width: 20px; height: 20px; }
-.sidebar-logo-text { line-height: 1.25; overflow: hidden; }
-.sidebar-logo-text .name { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 15.5px; white-space: nowrap; }
-.sidebar-logo-text .tag  { font-size: 10.5px; color: var(--caramel-light); letter-spacing: .04em; white-space: nowrap; }
+.kfs-sidebar-brand-text { line-height: 1.2; overflow: hidden; }
+.kfs-sidebar-brand-text .name {
+  font-family: 'Playfair Display', serif; font-weight: 700; font-size: 15.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kfs-sidebar-brand-text .tag {
+  font-size: 10.5px; color: var(--caramel-light, #d9a06b);
+  letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kfs-sidebar-close {
+  width: 32px; height: 32px; flex-shrink: 0; border: none; background: none;
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  color: rgba(251,243,233,.6); cursor: pointer;
+}
+.kfs-sidebar-close:hover { background: rgba(251,243,233,.08); color: var(--cream, #fbf3e9); }
 
-/* Group labels */
-.nav-group-label {
+.kfs-group-label {
   font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-  color: rgba(251,243,233,.35);
-  padding: 14px 12px 6px;
+  color: rgba(251,243,233,.35); padding: 14px 12px 6px;
 }
-.nav-group-label:first-of-type { padding-top: 6px; }
+.kfs-group-label.kfs-first { padding-top: 6px; }
 
-/* Nav buttons */
-.nav-btn {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  background: none; border: none; text-align: left;
+.kfs-nav-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 500;
+  position: relative; background: none; border: none; cursor: pointer;
   color: rgba(251,243,233,.72);
-  padding: 10px 12px; border-radius: 10px;
-  font-size: 13px; font-weight: 500;
-  transition: background .15s ease, color .15s ease;
-  position: relative;
+  transition: background-color .15s ease, color .15s ease;
 }
-.nav-btn svg { flex-shrink: 0; opacity: .85; }
-.nav-btn:hover { background: rgba(251,243,233,.06); color: var(--cream); }
-.nav-btn.active {
-  background: linear-gradient(135deg, var(--caramel) 0%, rgba(201,123,61,.75) 100%);
+.kfs-nav-btn:hover { background: rgba(251,243,233,.06); color: var(--cream, #fbf3e9); }
+.kfs-nav-btn.active {
   color: #fff; font-weight: 600;
   box-shadow: 0 6px 16px -6px rgba(201,123,61,.65);
+  background: linear-gradient(135deg, var(--caramel,#c47d3e) 0%, var(--espresso-deep,#1c1108) 100%);
 }
-.nav-btn.active svg { opacity: 1; }
-.nav-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.nav-badge {
-  background: var(--caramel-light); color: var(--espresso-deep);
-  font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px;
-  flex-shrink: 0;
-}
-.nav-btn.active .nav-badge { background: rgba(255,255,255,.9); }
-
-.sidebar-divider {
-  height: 1px; background: rgba(251,243,233,.10);
-  margin: 12px 12px 4px;
+.kfs-nav-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kfs-badge {
+  flex-shrink: 0; font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px;
+  background: var(--caramel-light, #d9a06b); color: var(--espresso-deep, #1c1108);
 }
 
-.sidebar-spacer { flex: 1; }
+.kfs-flexgrow { flex: 1; }
 
-/* Footer / user card */
-.sidebar-user {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px; border-radius: 12px;
-  background: rgba(251,243,233,.06);
-  margin-bottom: 8px;
+.kfs-user-card {
+  display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px;
+  background: rgba(251,243,233,.06); margin-bottom: 8px;
 }
-.sidebar-user-avatar {
+.kfs-user-avatar {
   width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
-  background: linear-gradient(150deg, var(--caramel-light), var(--caramel));
-  color: var(--espresso-deep); font-weight: 800; font-size: 12px;
   display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800;
+  background: linear-gradient(150deg, var(--caramel-light,#d9a06b), var(--caramel,#c47d3e));
+  color: var(--espresso-deep, #1c1108);
 }
-.sidebar-user-info { line-height: 1.25; overflow: hidden; }
-.sidebar-user-name { font-size: 12.5px; font-weight: 600; color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sidebar-user-role { font-size: 10.5px; color: var(--caramel-light); text-transform: capitalize; }
+.kfs-user-info { line-height: 1.2; overflow: hidden; }
+.kfs-user-name { font-size: 12.5px; font-weight: 600; color: var(--cream, #fbf3e9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kfs-user-role { font-size: 10.5px; color: var(--caramel-light, #d9a06b); text-transform: capitalize; }
 
-.logout-btn {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  background: rgba(198,40,40,.14); border: none; color: #f2a9a9;
-  padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 600;
+.kfs-logout-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px;
+  border-radius: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer;
+  background: rgba(198,40,40,.14); color: #f2a9a9;
+  transition: background-color .15s ease;
 }
-.logout-btn:hover { background: rgba(198,40,40,.24); }
-
-/* Mobile */
-.sidebar-toggle {
-  display: none; position: fixed; top: 16px; left: 16px; z-index: 160;
-  width: 42px; height: 42px; border-radius: 12px; border: none;
-  background: var(--espresso); color: var(--cream); font-size: 19px;
-  box-shadow: var(--shadow-pop);
-}
-.sidebar-overlay {
-  display: none; position: fixed; inset: 0; background: rgba(24,17,32,.5);
-  z-index: 140; opacity: 0; pointer-events: none; transition: opacity .2s ease;
-}
-.sidebar-overlay.open { opacity: 1; pointer-events: all; display: block; }
-
-@media (max-width: 900px) {
-  .sidebar-toggle { display: flex; align-items: center; justify-content: center; }
-  .sidebar { transform: translateX(-100%); box-shadow: var(--shadow-pop); }
-  .sidebar.open { transform: translateX(0); }
-}
-
+.kfs-logout-btn:hover { background: rgba(198,40,40,.24); }

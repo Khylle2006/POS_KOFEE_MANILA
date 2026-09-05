@@ -288,20 +288,85 @@ include("../includes/sidebar.php");
     <?php else: ?>
       <!-- ── List view ── -->
       <?php if (has_permission('procurement.payment.process')): ?>
-      <div class="table-card" style="padding:16px 18px;margin-bottom:18px">
-        <h3 style="font-size:13.5px;margin-bottom:10px">💸 Approved Invoices Awaiting Payment</h3>
-        <?php if (empty($awaiting)): ?>
-          <p class="muted-cell">Nothing awaiting payment right now.</p>
-        <?php else: ?>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <?php foreach ($awaiting as $a): ?>
-              <button class="act-btn" onclick="window.location.href='payments.php?new_for_invoice=<?= $a['id'] ?>'">
-                <?= htmlspecialchars($a['invoice_number']) ?> — <?= htmlspecialchars($a['supplier_name']) ?> (<?= php_currency($a['total_amount']) ?>)
-              </button>
-            <?php endforeach; ?>
+      <div class="table-card" style="padding:0;margin-bottom:18px;overflow:hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1.5px solid var(--border)">
+    <h3 style="font-size:13.5px;font-weight:700;color:var(--espresso);display:flex;align-items:center;gap:6px;margin:0">
+      💸 Approved Invoices Awaiting Payment
+    </h3>
+    <?php if (!empty($awaiting)): ?>
+      <span class="count-badge" style="background:var(--amber-lt);color:var(--amber)"><?= count($awaiting) ?></span>
+    <?php endif; ?>
+  </div>
+
+  <?php if (empty($awaiting)): ?>
+    <div style="padding:30px 18px;text-align:center;color:var(--text-muted);font-size:13px">
+      ✅ Nothing awaiting payment right now.
+    </div>
+  <?php else: ?>
+    <div>
+      <?php foreach ($awaiting as $a): ?>
+        <div class="kf-invoice-row" onclick="window.location.href='payments.php?new_for_invoice=<?= $a['id'] ?>'">
+          <div class="kf-invoice-icon">🧾</div>
+          <div class="kf-invoice-info">
+            <div class="kf-invoice-num">
+              <?= htmlspecialchars($a['invoice_number']) ?>
+            </div>
+            <div class="kf-invoice-supplier">
+              <?= htmlspecialchars($a['supplier_name']) ?>
+              <?php if (!empty($a['due_date'])): ?>
+                · Due <?= date('M d, Y', strtotime($a['due_date'])) ?>
+              <?php endif; ?>
+            </div>
           </div>
-        <?php endif; ?>
-      </div>
+          <div class="kf-invoice-amount">
+            <?= php_currency($a['total_amount']) ?>
+          </div>
+          <button class="act-btn act-activate" onclick="event.stopPropagation();window.location.href='payments.php?new_for_invoice=<?= $a['id'] ?>'">
+            Pay Now
+          </button>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+</div>
+
+<style>
+.kf-invoice-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 18px;
+  border-bottom: 1px solid #F2E6D6;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.kf-invoice-row:last-child { border-bottom: none; }
+.kf-invoice-row:hover { background: #FEFAF4; }
+
+.kf-invoice-icon {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  background: var(--amber-lt);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.kf-invoice-info { flex: 1; min-width: 0; }
+.kf-invoice-num {
+  font-size: 13px; font-weight: 700; color: var(--espresso);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kf-invoice-supplier {
+  font-size: 11.5px; color: var(--text-muted); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kf-invoice-amount {
+  font-size: 14px; font-weight: 800; color: var(--espresso);
+  flex-shrink: 0; white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .kf-invoice-row { flex-wrap: wrap; }
+  .kf-invoice-amount { order: 3; margin-left: 48px; }
+  .kf-invoice-info { order: 2; }
+}
+</style>
       <?php endif; ?>
 
       <div class="filter-bar" style="padding:0">

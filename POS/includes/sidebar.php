@@ -119,50 +119,28 @@ try {
 
 $initials = strtoupper(substr($user['firstname'] ?: $user['username'] ?: '?', 0, 1));
 
-// ── Tailwind class helpers ────────────────────────────────────
-// Colors reference your existing CSS custom properties (--espresso etc.)
-// with a hex fallback, so this still matches your theme wherever those
-// variables are already defined, and won't render invisible if they're not.
-$C = [
-    'espresso'      => 'var(--espresso,#2c1a0e)',
-    'espresso-deep' => 'var(--espresso-deep,#1c1108)',
-    'cream'         => 'var(--cream,#fbf3e9)',
-    'caramel'       => 'var(--caramel,#c47d3e)',
-    'caramel-light' => 'var(--caramel-light,#d9a06b)',
-];
-
 function navBtnClasses(bool $active): string {
-    $base = 'group flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-[10px] '
-          . 'text-[13px] font-medium transition-colors duration-150 relative';
-    if ($active) {
-        return $base . ' text-white font-semibold shadow-[0_6px_16px_-6px_rgba(201,123,61,0.65)]'
-                      . ' bg-[linear-gradient(135deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_100%)]';
-    }
-    return $base . ' text-[rgba(251,243,233,0.72)] hover:bg-[rgba(251,243,233,0.06)] hover:text-[var(--cream,#fbf3e9)]';
+    return 'kfs-nav-btn' . ($active ? ' active' : '');
 }
 
-$groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
+$groupLabel = 'kfs-group-label';
 ?>
-<script src="https://cdn.tailwindcss.com"></script>
 
 <!-- ── Top bar: always visible, holds the Menu toggle ── -->
-<header class="fixed top-0 inset-x-0 h-14 z-[200] flex items-center gap-3 px-4
-               bg-[var(--espresso,#2c1a0e)] text-[var(--cream,#fbf3e9)] shadow-md">
+<header class="kfs-topbar">
 
     <button id="sidebar-menu-btn" onclick="toggleSidebar()"
-        class="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-semibold
-               bg-[rgba(251,243,233,0.08)] hover:bg-[rgba(251,243,233,0.16)] transition-colors duration-150"
+        class="kfs-menu-btn"
         aria-expanded="false" aria-controls="main-sidebar">
         <svg id="menu-icon-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
         <svg id="menu-icon-close" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" class="hidden"><path d="M6 6l12 12M18 6L6 18"/></svg>
+             stroke-width="2" stroke-linecap="round" class="kfs-hidden"><path d="M6 6l12 12M18 6L6 18"/></svg>
         <span>Menu</span>
     </button>
 
-    <div class="flex items-center gap-2.5 min-w-0">
-        <div class="w-8 h-8 rounded-[9px] flex items-center justify-center flex-shrink-0
-                    bg-[linear-gradient(150deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_140%)]">
+    <div class="kfs-topbar-brand">
+        <div class="kfs-topbar-mark">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cream,#fbf3e9)"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z"/>
@@ -170,38 +148,28 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
                 <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2"/>
             </svg>
         </div>
-        <span class="font-['Playfair_Display',serif] font-bold text-[15px] truncate">Kofee Manila</span>
+        <span class="kfs-topbar-name">Kofee Manila</span>
     </div>
 
-    <div class="flex-1"></div>
+    <div class="kfs-flex1"></div>
 
-    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
-                bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
-                text-[var(--espresso-deep,#1c1108)]">
+    <div class="kfs-topbar-avatar">
         <?= htmlspecialchars($initials) ?>
     </div>
 </header>
 
 <!-- Spacer so page content (rendered after this include) isn't hidden under the fixed top bar -->
-<div class="h-14"></div>
+<div class="kfs-topbar-spacer"></div>
 
 <!-- ── Backdrop ── -->
-<div id="sidebar-backdrop" onclick="toggleSidebar(false)"
-     class="fixed inset-0 bg-black/50 z-[220] opacity-0 pointer-events-none transition-opacity duration-200"></div>
+<div id="sidebar-backdrop" onclick="toggleSidebar(false)" class="kfs-backdrop"></div>
 
 <!-- ── Sidebar popover panel ── -->
-<nav id="main-sidebar"
-     class="fixed top-0 left-0 h-full w-[248px] z-[230] flex flex-col
-            px-3.5 pt-4 pb-4 overflow-y-auto
-            bg-[linear-gradient(165deg,var(--espresso,#2c1a0e)_0%,var(--espresso-deep,#1c1108)_115%)]
-            text-[var(--cream,#fbf3e9)]
-            -translate-x-full transition-transform duration-300 ease-out">
+<nav id="main-sidebar" class="kfs-sidebar">
 
-    <div class="flex items-center justify-between pb-4 mb-2 border-b border-[rgba(251,243,233,0.10)]">
-        <div class="flex items-center gap-2.5 min-w-0">
-            <div class="w-9 h-9 rounded-[11px] flex items-center justify-center flex-shrink-0
-                        bg-[linear-gradient(150deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_140%)]
-                        shadow-[0_6px_14px_-4px_rgba(201,123,61,0.6)]">
+    <div class="kfs-sidebar-head">
+        <div class="kfs-sidebar-brand">
+            <div class="kfs-sidebar-mark">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cream,#fbf3e9)"
                      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z"/>
@@ -209,30 +177,27 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
                     <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2"/>
                 </svg>
             </div>
-            <div class="leading-tight overflow-hidden">
-                <div class="font-['Playfair_Display',serif] font-bold text-[15.5px] truncate">Kofee Manila</div>
-                <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] tracking-wide truncate">Coffee &amp; Bites</div>
+            <div class="kfs-sidebar-brand-text">
+                <div class="name">Kofee Manila</div>
+                <div class="tag">Coffee &amp; Bites</div>
             </div>
         </div>
-        <button onclick="toggleSidebar(false)" aria-label="Close menu"
-            class="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0
-                   text-[rgba(251,243,233,0.6)] hover:bg-[rgba(251,243,233,0.08)] hover:text-[var(--cream,#fbf3e9)]">
+        <button onclick="toggleSidebar(false)" aria-label="Close menu" class="kfs-sidebar-close">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
     </div>
 
     <?php if ($access['dashboard']): ?>
-    <div class="<?= $groupLabel ?> pt-1.5">Main</div>
+    <div class="<?= $groupLabel ?>">Main</div>
     <button class="<?= navBtnClasses($current === 'dashboard.php') ?>" onclick="window.location.href='dashboard.php'">
-        <?= icon('home') ?><span class="flex-1 truncate">Admin Dashboard</span>
+        <?= icon('home') ?><span class="kfs-nav-label">Admin Dashboard</span>
     </button>
-    
     <?php endif; ?>
 
     <?php if ($access['employee_dashboard']): ?>
     <button class="<?= navBtnClasses($current === 'employee_dashboard.php') ?>" onclick="window.location.href='employee_dashboard.php'">
-        <?= icon('attendance') ?><span class="flex-1 truncate">Employee Dashboard</span>
+        <?= icon('attendance') ?><span class="kfs-nav-label">Employee Dashboard</span>
     </button>
     <?php endif; ?>
 
@@ -242,44 +207,41 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 
     <?php if ($access['new_order']): ?>
     <button class="<?= navBtnClasses($current === 'menu.php') ?>" onclick="window.location.href='menu.php'">
-        <?= icon('order') ?><span class="flex-1 truncate">POS</span>
+        <?= icon('order') ?><span class="kfs-nav-label">POS</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['pending']): ?>
     <button class="<?= navBtnClasses($current === 'pending_orders.php') ?>" onclick="window.location.href='pending_orders.php'">
-        <?= icon('pending') ?><span class="flex-1 truncate">Pending</span>
+        <?= icon('pending') ?><span class="kfs-nav-label">Pending</span>
         <?php if ($pending_count > 0): ?>
-        <span class="flex-shrink-0 text-[10px] font-extrabold px-[7px] py-[1px] rounded-full
-                     bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)]"><?= $pending_count ?></span>
+        <span class="kfs-badge"><?= $pending_count ?></span>
         <?php endif; ?>
     </button>
     <?php endif; ?>
 
-    
-
     <?php if ($access['menu_manager']): ?>
     <button class="<?= navBtnClasses($current === 'add_item.php') ?>" onclick="window.location.href='add_item.php'">
-        <?= icon('menu') ?><span class="flex-1 truncate">Manage Menu</span>
+        <?= icon('menu') ?><span class="kfs-nav-label">Manage Menu</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['history']): ?>
     <button class="<?= navBtnClasses($current === 'history.php') ?>" onclick="window.location.href='history.php'">
-        <?= icon('history') ?><span class="flex-1 truncate">Order History</span>
+        <?= icon('history') ?><span class="kfs-nav-label">Order History</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['inventory']): ?>
     <button class="<?= navBtnClasses($current === 'inventory.php') ?>" onclick="window.location.href='inventory.php'">
-        <?= icon('inventory') ?><span class="flex-1 truncate">Inventory</span>
+        <?= icon('inventory') ?><span class="kfs-nav-label">Inventory</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['analytics']): ?>
     <div class="<?= $groupLabel ?>">Finance</div>
     <button class="<?= navBtnClasses($current === 'analytics.php') ?>" onclick="window.location.href='analytics.php'">
-        <?= icon('analytics') ?><span class="flex-1 truncate">Analytics</span>
+        <?= icon('analytics') ?><span class="kfs-nav-label">Analytics</span>
     </button>
     <?php endif; ?>
 
@@ -289,77 +251,76 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 
     <?php if ($access['procurement_home']): ?>
     <button class="<?= navBtnClasses($current === 'procurement_dashboard.php') ?>" onclick="window.location.href='procurement_dashboard.php'">
-        <?= icon('dashboard') ?><span class="flex-1 truncate">Procurement Home</span>
+        <?= icon('dashboard') ?><span class="kfs-nav-label">Procurement Home</span>
         <?php if ($procurement_badge > 0): ?>
-        <span class="flex-shrink-0 text-[10px] font-extrabold px-[7px] py-[1px] rounded-full
-                     bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)]"><?= $procurement_badge ?></span>
+        <span class="kfs-badge"><?= $procurement_badge ?></span>
         <?php endif; ?>
     </button>
     <?php endif; ?>
 
     <?php if ($access['requisitions']): ?>
     <button class="<?= navBtnClasses($current === 'requisitions.php') ?>" onclick="window.location.href='requisitions.php'">
-        <?= icon('requests') ?><span class="flex-1 truncate">Requisitions</span>
+        <?= icon('requests') ?><span class="kfs-nav-label">Requisitions</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['rfq']): ?>
     <button class="<?= navBtnClasses($current === 'rfq.php') ?>" onclick="window.location.href='rfq.php'">
-        <?= icon('rfq') ?><span class="flex-1 truncate">RFQ &amp; Bidding</span>
+        <?= icon('rfq') ?><span class="kfs-nav-label">RFQ &amp; Bidding</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['purchase_orders']): ?>
     <button class="<?= navBtnClasses($current === 'purchase_orders.php') ?>" onclick="window.location.href='purchase_orders.php'">
-        <?= icon('inventory') ?><span class="flex-1 truncate">Purchase Orders</span>
+        <?= icon('inventory') ?><span class="kfs-nav-label">Purchase Orders</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['goods_receipts']): ?>
     <button class="<?= navBtnClasses($current === 'goods_receipts.php') ?>" onclick="window.location.href='goods_receipts.php'">
-        <?= icon('truck') ?><span class="flex-1 truncate">Goods Receiving</span>
+        <?= icon('truck') ?><span class="kfs-nav-label">Goods Receiving</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['invoices']): ?>
     <button class="<?= navBtnClasses($current === 'invoices.php') ?>" onclick="window.location.href='invoices.php'">
-        <?= icon('invoice') ?><span class="flex-1 truncate">Invoices</span>
+        <?= icon('invoice') ?><span class="kfs-nav-label">Invoices</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['three_way_match']): ?>
     <button class="<?= navBtnClasses($current === 'three_way_match.php') ?>" onclick="window.location.href='three_way_match.php'">
-        <?= icon('scale') ?><span class="flex-1 truncate">3-Way Match</span>
+        <?= icon('scale') ?><span class="kfs-nav-label">3-Way Match</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['payments']): ?>
     <button class="<?= navBtnClasses($current === 'payments.php') ?>" onclick="window.location.href='payments.php'">
-        <?= icon('card') ?><span class="flex-1 truncate">Payments</span>
+        <?= icon('card') ?><span class="kfs-nav-label">Payments</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['supplier_performance']): ?>
     <button class="<?= navBtnClasses($current === 'supplier_performace.php') ?>" onclick="window.location.href='supplier_performace.php'">
-        <?= icon('star') ?><span class="flex-1 truncate">Supplier Performance</span>
+        <?= icon('star') ?><span class="kfs-nav-label">Supplier Performance</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['suppliers']): ?>
     <button class="<?= navBtnClasses($current === 'suppliers.php') ?>" onclick="window.location.href='suppliers.php'">
-        <?= icon('employees') ?><span class="flex-1 truncate">Suppliers</span>
+        <?= icon('employees') ?><span class="kfs-nav-label">Suppliers</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['procurement_reports']): ?>
     <button class="<?= navBtnClasses($current === 'procurement_reports.php') ?>" onclick="window.location.href='procurement_reports.php'">
-        <?= icon('analytics') ?><span class="flex-1 truncate">Procurement Reports</span>
+        <?= icon('analytics') ?><span class="kfs-nav-label">Procurement Reports</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['supplier_portal']): ?>
     <button class="<?= navBtnClasses($current === 'supplier_portal.php') ?>" onclick="window.location.href='supplier_portal.php'">
-        <?= icon('portal') ?><span class="flex-1 truncate">Supplier Portal</span>
+        <?= icon('portal') ?><span class="kfs-nav-label">Supplier Portal</span>
     </button>
     <?php endif; ?>
 
@@ -369,59 +330,52 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 
     <?php if ($access['hr_requests']): ?>
     <button class="<?= navBtnClasses($current === 'hr_requests.php') ?>" onclick="window.location.href='hr_requests.php'">
-        <?= icon('requests') ?><span class="flex-1 truncate">Requests</span>
+        <?= icon('requests') ?><span class="kfs-nav-label">Requests</span>
         <?php if ($requests_count > 0): ?>
-        <span class="flex-shrink-0 text-[10px] font-extrabold px-[7px] py-[1px] rounded-full
-                     bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)]"><?= $requests_count ?></span>
+        <span class="kfs-badge"><?= $requests_count ?></span>
         <?php endif; ?>
     </button>
     <?php endif; ?>
 
     <?php if ($access['users']): ?>
     <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='manage_users.php'">
-        <?= icon('employees') ?><span class="flex-1 truncate">Manage Employees</span>
+        <?= icon('employees') ?><span class="kfs-nav-label">Manage Employees</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['hr_attendance']): ?>
     <button class="<?= navBtnClasses($current === 'attendance.php') ?>" onclick="window.location.href='attendance.php'">
-        <?= icon('attendance') ?><span class="flex-1 truncate">Attendance</span>
+        <?= icon('attendance') ?><span class="kfs-nav-label">Attendance</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['manage_permissions']): ?>
     <button class="<?= navBtnClasses($current === 'manage_permissions.php') ?>" onclick="window.location.href='manage_permissions.php'">
-        <?= icon('permissions') ?><span class="flex-1 truncate">Manage Permission</span>
+        <?= icon('permissions') ?><span class="kfs-nav-label">Manage Permission</span>
     </button>
     <?php endif; ?>
 
     <?php if ($access['hr_leave']): ?>
     <button class="<?= navBtnClasses($current === 'leave_requests.php') ?>" onclick="window.location.href='leave_requests.php'">
-        <?= icon('leave') ?><span class="flex-1 truncate">Leave</span>
+        <?= icon('leave') ?><span class="kfs-nav-label">Leave</span>
     </button>
     <?php endif; ?>
 
-    
+    <div class="kfs-flexgrow"></div>
 
-    <div class="flex-1"></div>
-
-    <div class="flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2">
-        <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
-                    bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
-                    text-[var(--espresso-deep,#1c1108)]">
+    <div class="kfs-user-card">
+        <div class="kfs-user-avatar">
             <?= htmlspecialchars($initials) ?>
         </div>
-        <div class="leading-tight overflow-hidden">
-            <div class="text-[12.5px] font-semibold text-[var(--cream,#fbf3e9)] truncate">
+        <div class="kfs-user-info">
+            <div class="kfs-user-name">
                 <?= htmlspecialchars($user['firstname'] ?: $user['username']) ?>
             </div>
-            <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] capitalize"><?= htmlspecialchars($role) ?></div>
+            <div class="kfs-user-role"><?= htmlspecialchars($role) ?></div>
         </div>
     </div>
 
-    <button class="flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
-                   bg-[rgba(198,40,40,0.14)] text-[#f2a9a9] hover:bg-[rgba(198,40,40,0.24)] transition-colors duration-150"
-        onclick="window.location.href='../auth/logout.php'">
+    <button class="kfs-logout-btn" onclick="window.location.href='../auth/logout.php'">
         <?= icon('logout') ?><span>Logout</span>
     </button>
 </nav>
@@ -434,21 +388,16 @@ function toggleSidebar(force) {
     const iconOpen  = document.getElementById('menu-icon-open');
     const iconClose = document.getElementById('menu-icon-close');
 
-    const willOpen = typeof force === 'boolean' ? force : panel.classList.contains('-translate-x-full');
+    const willOpen = typeof force === 'boolean' ? force : !panel.classList.contains('open');
 
-    panel.classList.toggle('-translate-x-full', !willOpen);
-    panel.classList.toggle('translate-x-0', willOpen);
-
-    backdrop.classList.toggle('opacity-0', !willOpen);
-    backdrop.classList.toggle('pointer-events-none', !willOpen);
-    backdrop.classList.toggle('opacity-100', willOpen);
-    backdrop.classList.toggle('pointer-events-auto', willOpen);
+    panel.classList.toggle('open', willOpen);
+    backdrop.classList.toggle('open', willOpen);
 
     btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-    iconOpen.classList.toggle('hidden', willOpen);
-    iconClose.classList.toggle('hidden', !willOpen);
+    iconOpen.classList.toggle('kfs-hidden', willOpen);
+    iconClose.classList.toggle('kfs-hidden', !willOpen);
 
-    document.body.classList.toggle('overflow-hidden', willOpen);
+    document.body.classList.toggle('kfs-noscroll', willOpen);
 }
 
 document.addEventListener('keydown', e => {
