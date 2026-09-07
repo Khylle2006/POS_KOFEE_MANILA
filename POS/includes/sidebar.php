@@ -74,8 +74,7 @@ $access = [
     'hr_employees' => in_array($role, ['admin', 'hr'], true),
     'hr_attendance'=> in_array($role, ['admin', 'hr'], true),
     'hr_leave'     => in_array($role, ['admin', 'hr'], true),
-    'hr_requests'  => in_array($role, ['admin', 'hr'], true),
-    'manage_permissions' => ($role === 'admin'),
+    'manage_permissions' => in_array($role, ['admin', 'hr'], true),
 ];
 
 // ── Live badge counts (best-effort; never break the sidebar if a
@@ -191,7 +190,7 @@ $groupLabel = 'kfs-group-label';
     <?php if ($access['dashboard']): ?>
     <div class="<?= $groupLabel ?>">Main</div>
     <button class="<?= navBtnClasses($current === 'dashboard.php') ?>" onclick="window.location.href='dashboard.php'">
-        <?= icon('home') ?><span class="kfs-nav-label">Admin Dashboard</span>
+        <?= icon('home') ?><span class="kfs-nav-label">Admin    Dashboard</span>
     </button>
     <?php endif; ?>
 
@@ -318,17 +317,8 @@ $groupLabel = 'kfs-group-label';
     </button>
     <?php endif; ?>
 
-    <?php if ($access['hr_requests'] || $access['hr_leave'] || $access['users'] || $access['hr_employees'] || $access['hr_attendance'] || $access['manage_permissions']): ?>
-    <div class="<?= $groupLabel ?>">Admin</div>
-    <?php endif; ?>
-
-    <?php if ($access['hr_requests']): ?>
-    <button class="<?= navBtnClasses($current === 'hr_requests.php') ?>" onclick="window.location.href='hr_requests.php'">
-        <?= icon('requests') ?><span class="kfs-nav-label">Requests</span>
-        <?php if ($requests_count > 0): ?>
-        <span class="kfs-badge"><?= $requests_count ?></span>
-        <?php endif; ?>
-    </button>
+    <?php if ($access['hr_leave'] || $access['users'] || $access['hr_employees'] || $access['hr_attendance'] || $access['manage_permissions']): ?>
+    <div class="<?= $groupLabel ?>">Human Resources</div>
     <?php endif; ?>
 
     <?php if ($access['users']): ?>

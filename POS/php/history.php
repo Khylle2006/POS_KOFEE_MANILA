@@ -7,7 +7,7 @@ require_permission('orders.history');
 
 include("../includes/sidebar.php");
 ?>
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>

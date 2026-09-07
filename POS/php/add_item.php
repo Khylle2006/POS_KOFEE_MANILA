@@ -118,9 +118,6 @@ include("../includes/sidebar.php");
                   </button>
                   <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'>✏️ Edit</button>
                   <?php endif; ?>
-                  <?php if (has_permission('menu.delete')): ?>
-                  <button class="act-btn act-block" onclick="confirmDelete(<?= $p['id'] ?>, <?= json_encode($p['name']) ?>)">🗑️</button>
-                  <?php endif; ?>
                 </div>
               </td>
             </tr>
