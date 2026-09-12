@@ -4,7 +4,7 @@ require_once '../includes/permissions.php';
 require_login();
 require_permission('orders.history');
 ?>
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>

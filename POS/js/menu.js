@@ -1,7 +1,5 @@
 console.log("menu.js loaded");
 let menuData = {};
-let isOperating = false;
-let orderCompleted = false;
 
 // Best-guess icon per product: match on name keywords first, then
 // fall back to a sensible default for the category. Keeps the grid
@@ -27,61 +25,32 @@ function guessIcon(name, categoryKey) {
     return hit ? hit[1] : (CATEGORY_ICON[categoryKey] || "🧋");
 }
 
-async function loadMenuData() {
-    try {
-        const res  = await fetch("../api/get_menu.php");
-        const data = await res.json();
-
-        menuData = {
-            "ice-coffee": [],
-            "hot-coffee": [],
-            "milk-tea":   [],
-            "fruit-tea":  []
-        };
-
-        data.forEach(item => {
-            const key = item.category_name.toLowerCase().replace(" ", "-");
-            if (!menuData[key]) menuData[key] = [];
-            menuData[key].push({
-                id:             item.id,
-                name:           item.name,
-                icon:           guessIcon(item.name, key),
-                image:          item.image_path ? `../assets/${item.image_path}` : `../assets/menu/${item.id}.jpg`,
-                imageFallback:  `../assets/${item.id}.jpg`,
-                priceSmall:     parseFloat(item.price_small),
-                priceLarge:     parseFloat(item.price_large),
-                stock:          parseInt(item.stock, 10) || 0,
-                hasRecipe:      Boolean(item.has_recipe),
-                smallAvailable: Boolean(item.small_available),
-                smallMissing:   item.small_missing || [],
-                largeAvailable: Boolean(item.large_available),
-                largeMissing:   item.large_missing || []
-            });
-        });
-
-        renderGrid();
-    } catch (err) {
-        console.error("Failed to load menu data:", err);
-    }
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
-    await loadMenuData();
-    renderOrder();
-});
+    const res  = await fetch("../api/get_menu.php");
+    const data = await res.json();
 
-// Restore ingredients if cashier leaves page with un-submitted cart
-window.addEventListener('beforeunload', () => {
-    if (orderItems.length > 0 && !orderCompleted) {
-        const payload = JSON.stringify({
-            action: 'refund_batch',
-            items: orderItems
+    menuData = {
+        "ice-coffee": [],
+        "hot-coffee": [],
+        "milk-tea":   [],
+        "fruit-tea":  []
+    };
+
+    data.forEach(item => {
+        const key = item.category_name.toLowerCase().replace(" ", "-");
+        if (!menuData[key]) menuData[key] = [];
+        menuData[key].push({
+            id:         item.id,
+            name:       item.name,
+            icon:       guessIcon(item.name, key),
+            priceSmall: parseFloat(item.price_small),
+            priceLarge: parseFloat(item.price_large),
+            stock:      parseInt(item.stock, 10) || 0
         });
-        if (navigator.sendBeacon) {
-            const blob = new Blob([payload], { type: 'application/json' });
-            navigator.sendBeacon('../api/cart_stock.php', blob);
-        }
-    }
+    });
+
+    renderGrid();
+    renderOrder();
 });
 
 let currentCat  = "ice-coffee";
@@ -146,29 +115,14 @@ function renderGrid() {
 
     grid.innerHTML = items.map(item => {
         const price   = currentSize === 'small' ? item.priceSmall : item.priceLarge;
-        const isAvail = currentSize === 'small' ? item.smallAvailable : item.largeAvailable;
-        const missing = currentSize === 'small' ? item.smallMissing : item.largeMissing;
-        const soldOut = !isAvail;
-
-        let statusBadge = '';
-        if (soldOut) {
-            if (missing && missing.length > 0) {
-                statusBadge = `<div class="item-soldout warning-badge" title="Missing: ${escapeHtml(missing.join(', '))}">⚠️ Out of Stock<span class="missing-text">${escapeHtml(missing.join(', '))}</span></div>`;
-            } else {
-                statusBadge = `<div class="item-soldout">Unavailable</div>`;
-            }
-        } else {
-            statusBadge = `<div class="item-price">₱${parseFloat(price).toFixed(2)}</div>`;
-        }
-
+        const soldOut = item.stock <= 0;
         return `
         <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`}>
-            <div class="item-img">
-                <img src="${item.image}" alt="${escapeHtml(item.name)}" onerror="if (!this.dataset.fallback) { this.dataset.fallback='true'; this.src='${item.imageFallback}'; } else { this.hidden=true; this.nextElementSibling.hidden=false; }">
-                <span hidden>${item.icon}</span>
-            </div>
+            <div class="item-img"><span>${item.icon}</span></div>
             <div class="item-name">${escapeHtml(item.name)}</div>
-            ${statusBadge}
+            ${soldOut
+                ? `<div class="item-soldout">Sold out</div>`
+                : `<div class="item-price">₱${parseFloat(price).toFixed(2)}</div>`}
         </div>`;
     }).join('');
 }
@@ -180,58 +134,29 @@ function escapeHtml(str) {
 }
 
 // ── Order ─────────────────────────────────────
-async function addToOrder(itemId) {
-    if (isOperating) return;
+function addToOrder(itemId) {
     const item = Object.values(menuData).flat().find(i => i.id == itemId);
     if (!item) { console.error("Item not found:", itemId); return; }
+    if (item.stock <= 0) return;
 
-    const isAvail = currentSize === 'small' ? item.smallAvailable : item.largeAvailable;
-    if (!isAvail) return;
+    const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
+    const key      = itemId + '_' + currentSize;
+    const existing = orderItems.find(o => o.key === key);
 
-    isOperating = true;
-    try {
-        const res = await fetch('../api/cart_stock.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'deduct',
-                product_id: itemId,
-                size: currentSize,
-                qty: 1
-            })
+    if (existing) {
+        existing.qty++;
+    } else {
+        orderItems.push({
+            key,
+            id:    itemId,
+            name:  item.name,
+            icon:  item.icon,
+            size:  currentSize,
+            price: parseFloat(price),
+            qty:   1
         });
-        const result = await res.json();
-
-        if (!result.success) {
-            showSimpleError(result.error || 'Unable to deduct ingredient stock.');
-            await loadMenuData();
-            return;
-        }
-
-        const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
-        const key      = itemId + '_' + currentSize;
-        const existing = orderItems.find(o => o.key === key);
-
-        if (existing) {
-            existing.qty++;
-        } else {
-            orderItems.push({
-                key,
-                id:    itemId,
-                name:  item.name,
-                icon:  item.icon,
-                size:  currentSize,
-                price: parseFloat(price),
-                qty:   1
-            });
-        }
-        renderOrder();
-        await loadMenuData();
-    } catch (err) {
-        showSimpleError('Network error while deducting stock.');
-    } finally {
-        isOperating = false;
     }
+    renderOrder();
 }
 
 function renderOrder() {
@@ -253,7 +178,7 @@ function renderOrder() {
         <div class="order-item-row">
             <div class="oi-icon">${o.icon}</div>
             <div class="oi-info">
-                <div class="oi-name">${escapeHtml(o.name)}</div>
+                <div class="oi-name">${o.name}</div>
                 <div class="oi-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
             </div>
             <div class="oi-controls">
@@ -268,83 +193,15 @@ function renderOrder() {
     updateTotals();
 }
 
-async function changeQty(index, delta) {
-    if (isOperating) return;
-    const item = orderItems[index];
-    if (!item) return;
-
-    isOperating = true;
-    try {
-        if (delta > 0) {
-            // Deduct stock for +1
-            const res = await fetch('../api/cart_stock.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'deduct',
-                    product_id: item.id,
-                    size: item.size,
-                    qty: 1
-                })
-            });
-            const result = await res.json();
-            if (!result.success) {
-                showSimpleError(result.error || 'Cannot increase quantity. Out of stock.');
-                await loadMenuData();
-                return;
-            }
-            item.qty += 1;
-        } else if (delta < 0) {
-            // Refund stock for -1
-            await fetch('../api/cart_stock.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'refund',
-                    product_id: item.id,
-                    size: item.size,
-                    qty: 1
-                })
-            });
-            item.qty -= 1;
-            if (item.qty <= 0) {
-                orderItems.splice(index, 1);
-            }
-        }
-        renderOrder();
-        await loadMenuData();
-    } catch (err) {
-        showSimpleError('Error updating quantity.');
-    } finally {
-        isOperating = false;
-    }
+function changeQty(index, delta) {
+    orderItems[index].qty += delta;
+    if (orderItems[index].qty <= 0) orderItems.splice(index, 1);
+    renderOrder();
 }
 
-async function removeItem(index) {
-    if (isOperating) return;
-    const item = orderItems[index];
-    if (!item) return;
-
-    isOperating = true;
-    try {
-        await fetch('../api/cart_stock.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'refund',
-                product_id: item.id,
-                size: item.size,
-                qty: item.qty
-            })
-        });
-        orderItems.splice(index, 1);
-        renderOrder();
-        await loadMenuData();
-    } catch (err) {
-        showSimpleError('Error removing item.');
-    } finally {
-        isOperating = false;
-    }
+function removeItem(index) {
+    orderItems.splice(index, 1);
+    renderOrder();
 }
 
 function calcVAT(gross) {
@@ -366,30 +223,12 @@ function updateTotals() {
     if (el('total'))    el('total').textContent    = '₱' + total.toFixed(2);
 }
 
-async function clearOrder() {
-    if (orderItems.length === 0) return;
-    if (isOperating) return;
-
-    isOperating = true;
-    try {
-        await fetch('../api/cart_stock.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'refund_batch',
-                items: orderItems
-            })
-        });
-        orderItems = [];
-        renderOrder();
-        await loadMenuData();
-    } catch (err) {
-        showSimpleError('Error clearing order.');
-    } finally {
-        isOperating = false;
-    }
+function clearOrder() {
+    orderItems = [];
+    renderOrder();
 }
 
+// ── Checkout ──────────────────────────────────
 // ── Checkout ──────────────────────────────────
 let pendingCheckout = null;
 
@@ -408,7 +247,7 @@ function checkout() {
 
     const itemsListHtml = orderItems.map(o => `
         <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0">
-            <span>${escapeHtml(o.name)} (${o.size}) ×${o.qty}</span>
+            <span>${o.name} (${o.size}) ×${o.qty}</span>
             <span>₱${(o.price * o.qty).toFixed(2)}</span>
         </div>
     `).join('');
@@ -443,7 +282,6 @@ function submitConfirmedOrder() {
     const payload = {
         total,
         payment_method: typeMap[orderType] || "Dine In",
-        pre_deducted: true,
         items: snapshot.map(o => ({
             id:    o.id,
             qty:   o.qty,
@@ -466,9 +304,7 @@ function submitConfirmedOrder() {
             return;
         }
 
-        orderCompleted = true;
         showReceipt(res.order_id, subtotal, vat, total, snapshot);
-        loadMenuData();
     })
     .catch(err => {
         closeConfirmOrder();
@@ -477,23 +313,20 @@ function submitConfirmedOrder() {
 }
 
 function showSimpleError(message) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: "Stock Alert",
-            text: message,
-            icon: "warning",
-            customClass: {
-                popup: 'swal-cafe-popup',
-                title: 'swal-cafe-title',
-                htmlContainer: 'swal-cafe-text',
-                confirmButton: 'swal-cafe-confirm',
-                icon: 'swal-cafe-icon-error'
-            },
-            buttonsStyling: false
-        });
-    } else {
-        alert("Stock Alert: " + message);
-    }
+    document.getElementById('confirm-total').textContent; // no-op safeguard
+    Swal.fire({
+        title: "Error!",
+        text: message,
+        icon: "error",
+        customClass: {
+            popup: 'swal-cafe-popup',
+            title: 'swal-cafe-title',
+            htmlContainer: 'swal-cafe-text',
+            confirmButton: 'swal-cafe-confirm',
+            icon: 'swal-cafe-icon-error'
+        },
+        buttonsStyling: false
+    });
 }
 
 // ── Receipt Modal ─────────────────────────────
@@ -518,7 +351,7 @@ function showReceipt(orderId, subtotal, vat, total, items) {
         <div class="receipt-item">
             <div class="ri-icon">${o.icon}</div>
             <div class="ri-info">
-                <div class="ri-name">${escapeHtml(o.name)}</div>
+                <div class="ri-name">${o.name}</div>
                 <div class="ri-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
             </div>
             <span class="ri-qty">×${o.qty}</span>
@@ -539,9 +372,6 @@ function showReceipt(orderId, subtotal, vat, total, items) {
 
 function closeReceipt() {
     document.getElementById('receipt-overlay').classList.remove('open');
-    orderCompleted = false;
-    orderItems = [];
-    renderOrder();
 }
 
 function printReceipt() {
@@ -566,6 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeReceipt(); closeConfirmOrder(); closeNoItems(); }
 });
+
 
 // ── Exports ───────────────────────────────────
 window.closeConfirmOrder    = closeConfirmOrder;
