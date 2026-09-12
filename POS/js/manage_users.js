@@ -27,6 +27,8 @@ function resetModal() {
   document.getElementById('f-want-employee').checked = true;
   document.getElementById('f-want-account').disabled  = false;
   document.getElementById('f-want-employee').disabled = false;
+  document.getElementById('f-want-account').dataset.locked  = '';
+  document.getElementById('f-want-employee').dataset.locked = '';
   document.querySelectorAll('#f-roles input[type=checkbox]').forEach(cb => cb.checked = false);
   toggleSection('account');
   toggleSection('employee');
@@ -61,7 +63,12 @@ function openEdit(r) {
 
   // Account section
   const hasAccount = !!r.user_id;
-  document.getElementById('f-want-account').checked = hasAccount;
+  const acctCb = document.getElementById('f-want-account');
+  acctCb.checked = hasAccount;
+  // IMPORTANT: do NOT disable this checkbox — disabled fields are excluded
+  // from form submission entirely, which silently breaks saving (roles
+  // never sync). Use a "locked" flag instead so it stays submittable.
+  acctCb.dataset.locked = hasAccount ? '1' : '';
   if (hasAccount) {
     document.getElementById('f-username').value = r.username || '';
     document.getElementById('pw-hint').textContent = '— leave blank to keep current';
@@ -76,7 +83,9 @@ function openEdit(r) {
 
   // Employee section
   const hasProfile = !!r.emp_id;
-  document.getElementById('f-want-employee').checked = hasProfile;
+  const empCb = document.getElementById('f-want-employee');
+  empCb.checked = hasProfile;
+  empCb.dataset.locked = hasProfile ? '1' : '';
   if (hasProfile) {
     document.getElementById('f-code').value       = r.employee_code || '';
     document.getElementById('f-pos').value        = r.position || '';
@@ -88,7 +97,6 @@ function openEdit(r) {
     document.getElementById('code-field').style.display = 'none'; // code is immutable once set
   }
   toggleSection('employee');
-
   document.getElementById('staff-modal').classList.add('open');
 }
 

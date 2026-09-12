@@ -117,7 +117,9 @@ include("../includes/sidebar.php");
                     <?= $available ? 'Mark Unavailable' : 'Mark Available' ?>
                   </button>
                   <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'>✏️ Edit</button>
-                  <button class="act-btn" onclick="openRecipe(<?= $p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES) ?>)">🧪 Recipe</button>
+                  <?php endif; ?>
+                  <?php if (has_permission('menu.delete')): ?>
+                  <button class="act-btn act-block" onclick="confirmDelete(<?= $p['id'] ?>, <?= json_encode($p['name']) ?>)">🗑️</button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -156,11 +158,6 @@ include("../includes/sidebar.php");
         <label class="field-label">Description</label>
         <textarea class="field-textarea" id="e-desc"></textarea>
       </div>
-      <div class="field-group">
-        <label class="field-label">Product Image</label>
-        <input class="field-input" type="file" id="e-image" accept="image/jpeg,image/png,image/webp"/>
-        <small style="color:var(--text-muted)">Optional. JPG, PNG, or WebP up to 5 MB.</small>
-      </div>
       <div class="field-row">
         <div class="field-group">
           <label class="field-label">Regular Price (₱)</label>
@@ -183,7 +180,7 @@ include("../includes/sidebar.php");
 
 <!-- add modal -->
 <div class="modal-overlay" id="add-modal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal">
     <div class="modal-header">
       <h3>➕ Add Menu Item</h3>
       <button class="modal-close" onclick="closeAdd()">✕</button>
@@ -205,11 +202,6 @@ include("../includes/sidebar.php");
         <label class="field-label">Description</label>
         <textarea class="field-textarea" id="add-desc"></textarea>
       </div>
-      <div class="field-group">
-        <label class="field-label">Product Image</label>
-        <input class="field-input" type="file" id="add-image" accept="image/jpeg,image/png,image/webp"/>
-        <small style="color:var(--text-muted)">Optional. JPG, PNG, or WebP up to 5 MB.</small>
-      </div>
       <div class="field-row">
         <div class="field-group">
           <label class="field-label">Regular Price (₱)</label>
@@ -220,23 +212,6 @@ include("../includes/sidebar.php");
           <input class="field-input" type="number" id="add-price-large" step="0.01" min="0"/>
         </div>
       </div>
-
-      <hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
-      <div style="font-size:13px;font-weight:700;color:var(--espresso);margin-bottom:6px">
-        🧪 Recipe & Ingredients (Auto-deducted on order)
-      </div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
-        Pick the ingredients consumed per cup for Regular and Up Size.
-      </p>
-      <div class="filter-bar" style="margin-bottom:10px">
-        <button type="button" class="act-btn" id="add-recipe-tab-small" onclick="switchNewItemRecipeSize('small')">Regular</button>
-        <button type="button" class="act-btn" id="add-recipe-tab-large" onclick="switchNewItemRecipeSize('large')">Up Size</button>
-      </div>
-      <div id="add-recipe-rows"></div>
-      <button type="button" class="act-btn" style="margin-top:8px" onclick="addNewItemRecipeRow()">➕ Add Ingredient</button>
-      <p id="add-recipe-empty-msg" style="font-size:12px;color:var(--text-muted);margin-top:8px">
-        No ingredients added for this size yet.
-      </p>
     </div>
     <div class="modal-actions">
       <button class="btn-mcancel" onclick="closeAdd()">Cancel</button>
@@ -290,152 +265,20 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
-<!-- Recipe builder modal -->
-<div class="modal-overlay" id="recipe-modal">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-header">
-      <h3>🧪 Recipe — <span id="recipe-item-name"></span></h3>
-      <button class="modal-close" onclick="closeRecipe()">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">
-        Set which inventory ingredients this drink consumes, and how much per cup.
-        Regular and Up Size can use different amounts.
-      </p>
-      <div class="filter-bar" style="margin-bottom:12px">
-        <button type="button" class="act-btn" id="recipe-tab-small" onclick="switchRecipeSize('small')">Regular</button>
-        <button type="button" class="act-btn" id="recipe-tab-large" onclick="switchRecipeSize('large')">Up Size</button>
-      </div>
-      <div id="recipe-rows"></div>
-      <button type="button" class="act-btn" style="margin-top:8px" onclick="addRecipeRow()">➕ Add Ingredient</button>
-      <p id="recipe-empty-msg" style="font-size:12.5px;color:var(--text-muted);margin-top:8px;display:none">
-        No ingredients set for this size yet — this size won't deduct any stock at checkout.
-      </p>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-mcancel" onclick="closeRecipe()">Cancel</button>
-      <button class="btn-msave" onclick="saveRecipe()">💾 Save Recipe</button>
-    </div>
-  </div>
-</div>
-
 <!-- Toast -->
 <div class="toast" id="toast" style="display:none"></div>
 
 <script>
 
-let allIngredientsList = [];
-async function ensureIngredientsLoaded() {
-  if (allIngredientsList.length > 0) return allIngredientsList;
-  try {
-    const res = await fetch('../api/get_ingredients.php');
-    allIngredientsList = await res.json();
-    if (!recipeState.ingredientList || recipeState.ingredientList.length === 0) {
-      recipeState.ingredientList = allIngredientsList;
-    }
-  } catch(e) {
-    console.error('Failed to load ingredients:', e);
-  }
-  return allIngredientsList;
-}
-
-let newItemRecipe = {
-  activeSize: 'small',
-  small: [],
-  large: []
-};
-
-async function openAdd() {
+function openAdd() {
   document.getElementById('add-category').value    = '';
   document.getElementById('add-name').value        = '';
   document.getElementById('add-desc').value        = '';
   document.getElementById('add-price-small').value = '';
   document.getElementById('add-price-large').value = '';
-  document.getElementById('add-image').value        = '';
-  newItemRecipe = { activeSize: 'small', small: [], large: [] };
-  await ensureIngredientsLoaded();
-  renderNewItemRecipeRows();
   document.getElementById('add-modal').classList.add('open');
 }
 function closeAdd() { document.getElementById('add-modal').classList.remove('open'); }
-
-function switchNewItemRecipeSize(size) {
-  saveCurrentNewItemRows();
-  newItemRecipe.activeSize = size;
-  renderNewItemRecipeRows();
-}
-
-function saveCurrentNewItemRows() {
-  const rows = Array.from(document.querySelectorAll('#add-recipe-rows .field-row'));
-  const list = [];
-  for (const row of rows) {
-    const sel = row.querySelector('.recipe-ing-select');
-    const inp = row.querySelector('.recipe-qty-input');
-    if (sel && inp && sel.value && inp.value) {
-      list.push({ ingredient_id: parseInt(sel.value, 10), qty_used: parseFloat(inp.value) });
-    }
-  }
-  newItemRecipe[newItemRecipe.activeSize] = list;
-}
-
-function renderNewItemRecipeRows() {
-  const tabSmall = document.getElementById('add-recipe-tab-small');
-  const tabLarge = document.getElementById('add-recipe-tab-large');
-  if (tabSmall) tabSmall.style.background = newItemRecipe.activeSize === 'small' ? 'var(--accent-lt)' : '';
-  if (tabLarge) tabLarge.style.background = newItemRecipe.activeSize === 'large' ? 'var(--accent-lt)' : '';
-
-  const rows = newItemRecipe[newItemRecipe.activeSize] || [];
-  const container = document.getElementById('add-recipe-rows');
-  if (!container) return;
-  container.innerHTML = '';
-
-  const emptyMsg = document.getElementById('add-recipe-empty-msg');
-  if (rows.length === 0) {
-    if (emptyMsg) emptyMsg.style.display = '';
-  } else {
-    if (emptyMsg) emptyMsg.style.display = 'none';
-    rows.forEach((row, i) => {
-      container.appendChild(buildNewItemRowEl(row.ingredient_id, row.qty_used));
-    });
-  }
-}
-
-function buildNewItemRowEl(selectedId, qty) {
-  const wrap = document.createElement('div');
-  wrap.className = 'field-row';
-  wrap.style.alignItems = 'center';
-
-  const options = allIngredientsList.map(ing =>
-    `<option value="${ing.id}" ${ing.id == selectedId ? 'selected' : ''}>${escapeHtml(ing.name)} (${escapeHtml(ing.unit)})</option>`
-  ).join('');
-
-  wrap.innerHTML = `
-    <div class="field-group" style="flex:2">
-      <select class="field-select recipe-ing-select">
-        <option value="">— choose ingredient —</option>
-        ${options}
-      </select>
-    </div>
-    <div class="field-group" style="flex:1">
-      <input class="field-input recipe-qty-input" type="number" step="0.01" min="0.01" placeholder="Qty used" value="${qty ?? ''}"/>
-    </div>
-    <button type="button" class="act-btn act-hold" style="height:38px" onclick="this.closest('.field-row').remove(); toggleNewItemEmptyMsg();">🗑️</button>
-  `;
-  return wrap;
-}
-
-function addNewItemRecipeRow() {
-  const emptyMsg = document.getElementById('add-recipe-empty-msg');
-  if (emptyMsg) emptyMsg.style.display = 'none';
-  const container = document.getElementById('add-recipe-rows');
-  container.appendChild(buildNewItemRowEl('', ''));
-}
-
-function toggleNewItemEmptyMsg() {
-  const container = document.getElementById('add-recipe-rows');
-  const emptyMsg = document.getElementById('add-recipe-empty-msg');
-  if (emptyMsg && container) emptyMsg.style.display = container.children.length === 0 ? '' : 'none';
-}
 
 // ── Add: preview step ──
 function addMenuItem() {
@@ -535,13 +378,6 @@ function doAddMenuItem() {
   fd.append('description', document.getElementById('add-desc').value);
   fd.append('price_small', document.getElementById('add-price-small').value);
   fd.append('price_large', document.getElementById('add-price-large').value);
-  fd.append('recipe',      JSON.stringify({
-    small: newItemRecipe.small,
-    large: newItemRecipe.large
-  }));
-
-  const addImage = document.getElementById('add-image').files[0];
-  if (addImage) fd.append('image', addImage);
 
   const btn = document.getElementById('add-confirm-btn');
   KofeeValidator.setLoading(btn, 'Adding…');
@@ -681,7 +517,6 @@ function openEdit(p) {
   document.getElementById('e-desc').value        = p.description || '';
   document.getElementById('e-price-small').value = p.price_small;
   document.getElementById('e-price-large').value = p.price_large;
-  document.getElementById('e-image').value        = '';
   document.getElementById('edit-modal').classList.add('open');
 }
 function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); }
@@ -781,45 +616,15 @@ function updateRowInDOM(id, p) {
   if (editBtn) editBtn.setAttribute('onclick', `openEdit(${JSON.stringify(p).replace(/"/g, '&quot;')})`);
 }
 
-// ── Delete item ──────────────────────────────
-let pendingDelete = null;
-function confirmDelete(id, name) {
-  pendingDelete = id;
-  document.getElementById('del-msg').textContent = `Are you sure you want to delete "${name}"?`;
-  document.getElementById('delete-modal').classList.add('open');
-}
-function closeDelete() {
-  pendingDelete = null;
-  document.getElementById('delete-modal').classList.remove('open');
-}
-function doDelete() {
-  if (!pendingDelete) return;
-  const id = pendingDelete;
-  const fd = new FormData();
-  fd.append('action', 'delete');
-  fd.append('id', id);
-
-  fetch('../api/add_item.php', { method: 'POST', body: fd })
-    .then(response => response.json())
-    .then(result => {
-      if (!result.ok) throw new Error(result.error || 'Unable to delete item.');
-      closeDelete();
-      document.getElementById('prow-' + id)?.remove();
-      showToast('✅ Item deleted.');
-      applyFilters();
-    })
-    .catch(error => showToast('⚠️ ' + error.message, 'error'));
-}
-
 
 // ── Close modals on backdrop / Escape ──────────
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); closeRecipe(); }
+    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); closeRecipe(); }
+  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
 });
 
 // ── Recipe builder ──────────────────────────────

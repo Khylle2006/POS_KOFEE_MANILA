@@ -7,19 +7,6 @@ $pdo   = get_db();
 $toast = '';
 $toast_type = 'success';
 
-function createInventoryStockRequest($pdo, $employeeId, $ingredientId, $ingredientName, $qty, $requestType = 'Inventory Restock', $reason = 'Pending approval') {
-    $details = "Ingredient ID: {$ingredientId}; Ingredient: {$ingredientName}; Qty: {$qty}; Type: {$requestType}; Reason: {$reason}";
-    $stmt = $pdo->prepare(
-        'INSERT INTO hr_requests (employee_id, request_type, details, status)
-         VALUES (:employee_id, :request_type, :details, "pending")'
-    );
-    return $stmt->execute([
-        ':employee_id' => $employeeId,
-        ':request_type' => $requestType,
-        ':details' => $details,
-    ]);
-}
-
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -51,85 +38,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Restock (add to existing) — requires HR approval before stock changes
+    // Restock (add to existing)
     if ($action === 'restock') {
         $id  = (int)($_POST['ingredient_id'] ?? 0);
         $qty = (float)($_POST['qty']         ?? 0);
         if ($id && $qty > 0) {
-            $user = current_user();
-            $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
-            $emp->execute([':uid' => $user['id'] ?? 0]);
-            $employee = $emp->fetch();
-
-            if (!$employee) {
-                $toast = '⚠️ Your account is not linked to an employee profile. Ask HR to link it first.';
-                $toast_type = 'error';
-            } else {
-                $ing = $pdo->prepare('SELECT name, quantity FROM ingredients WHERE id = :id LIMIT 1');
-                $ing->execute([':id' => $id]);
-                $ingredient = $ing->fetch();
-
-                // Update the inventory quantity directly
-                $newQuantity = ((float)$ingredient['quantity']) + $qty;
-                $pdo->prepare(
-                    'UPDATE ingredients SET quantity = :q WHERE id = :id'
-                )->execute([':q' => $newQuantity, ':id' => $id]);
-
-                // Also log the restock request
-                createInventoryStockRequest(
-                    $pdo,
-                    (int)$employee['id'],
-                    $id,
-                    $ingredient['name'] ?? 'Unknown item',
-                    $qty,
-                    'Inventory Restock',
-                    'Restock request approved'
-                );
-
-                $toast = '✅ Inventory updated! Added ' . $qty . ' units.';
-            }
+            $pdo->prepare('UPDATE ingredients SET quantity = quantity + :q WHERE id = :id')
+                ->execute([':q'=>$qty,':id'=>$id]);
+            $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
+                ->execute([':i'=>$id,':q'=>$qty,':u'=>$_SESSION['user_id']]);
+            $toast = '✅ Restocked successfully!';
         } else {
             $toast = '⚠️ Enter a valid quantity.';
             $toast_type = 'error';
         }
     }
 
-    // Set stock (set exact value) — also requires HR approval before stock changes
+    // Set stock (set exact value)
     if ($action === 'set_stock') {
         $id  = (int)($_POST['ingredient_id'] ?? 0);
         $qty = (float)($_POST['qty']         ?? -1);
         if ($id && $qty >= 0) {
-            $user = current_user();
-            $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
-            $emp->execute([':uid' => $user['id'] ?? 0]);
-            $employee = $emp->fetch();
-
-            if (!$employee) {
-                $toast = '⚠️ Your account is not linked to an employee profile. Ask HR to link it first.';
-                $toast_type = 'error';
-            } else {
-                $ing = $pdo->prepare('SELECT name FROM ingredients WHERE id = :id LIMIT 1');
-                $ing->execute([':id' => $id]);
-                $ingredient = $ing->fetch();
-
-                // Update the inventory quantity directly
-                $pdo->prepare(
-                    'UPDATE ingredients SET quantity = :q WHERE id = :id'
-                )->execute([':q' => $qty, ':id' => $id]);
-
-                // Also log the stock adjustment request
-                createInventoryStockRequest(
-                    $pdo,
-                    (int)$employee['id'],
-                    $id,
-                    $ingredient['name'] ?? 'Unknown item',
-                    $qty,
-                    'Inventory Adjustment',
-                    'Stock set to ' . $qty . ' - approved'
-                );
-
-                $toast = '✅ Stock updated to ' . $qty . ' units.';
-            }
+            $pdo->prepare('UPDATE ingredients SET quantity = :q WHERE id = :id')
+                ->execute([':q'=>$qty,':id'=>$id]);
+            $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
+                ->execute([':i'=>$id,':q'=>$qty,':u'=>$_SESSION['user_id']]);
+            $toast = '✅ Stock set to ' . $qty . '!';
         } else {
             $toast = '⚠️ Enter a valid quantity (0 or more).';
             $toast_type = 'error';
@@ -556,7 +490,7 @@ function selectItem(ing) {
                  placeholder="Set stock to… (${esc(ing.unit)})"
                  value="${qty.toFixed(1)}"
                  step="0.1" min="0" required/>
-          <button type="submit" class="btn-confirm" style="background:#1565c0">✔ Update</button>
+          <button type="submit" class="btn-confirm" style="background:#1565c0">✔ Set</button>
         </div>
       </form>
     </div>
