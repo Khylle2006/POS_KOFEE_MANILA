@@ -188,8 +188,6 @@ $list_stmt = $pdo->prepare("
 ");
 $list_stmt->execute($params);
 $invoices = $list_stmt->fetchAll();
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -206,6 +204,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-invoices" class="page active">
   <div class="page-header">
@@ -227,14 +226,22 @@ include("../includes/sidebar.php");
         <h2>New Invoice — <?= htmlspecialchars($new_po['req_title']) ?></h2>
         <p class="muted-cell" style="margin-bottom:16px">PO #<?= str_pad($new_po['id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($new_po['supplier_name']) ?> · PO Total: <?= php_currency($new_po['total_amount']) ?></p>
 
-        <form method="POST">
+        <form method="POST" id="invoice-form">
           <input type="hidden" name="action" value="create"/>
           <input type="hidden" name="po_id" value="<?= $new_po['id'] ?>"/>
 
+          <div id="invoice-error" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
-            <input class="field-input" type="text" name="invoice_number" placeholder="Invoice Number *" required/>
-            <input class="field-input" type="date" name="invoice_date" placeholder="Invoice Date"/>
-            <input class="field-input" type="date" name="due_date" placeholder="Due Date"/>
+            <div>
+              <input class="field-input" type="text" name="invoice_number" id="f-inv-num" placeholder="Invoice Number *" required/>
+            </div>
+            <div>
+              <input class="field-input" type="date" name="invoice_date" id="f-inv-date" placeholder="Invoice Date"/>
+            </div>
+            <div>
+              <input class="field-input" type="date" name="due_date" id="f-due-date" placeholder="Due Date"/>
+            </div>
           </div>
 
           <div class="inv-line-row" style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;border-bottom:1.5px solid var(--border)">
@@ -257,7 +264,7 @@ include("../includes/sidebar.php");
 
           <div style="margin-top:16px;text-align:right;display:flex;gap:10px;justify-content:flex-end">
             <a href="invoices.php" class="btn-cancel">Cancel</a>
-            <button type="submit" class="btn-save">🧾 Log Invoice</button>
+            <button type="submit" class="btn-save" id="invoice-submit-btn">🧾 Log Invoice</button>
           </div>
         </form>
       </div>
@@ -424,5 +431,32 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
+<script src="../js/validator.js"></script>
+<script>
+const invForm = document.getElementById('invoice-form');
+if (invForm && window.KofeeValidator) {
+  KofeeValidator.attach(invForm, {
+    customValidate: function(form) {
+      const errBox = document.getElementById('invoice-error');
+      if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+
+      const invNum = form.querySelector('[name="invoice_number"]');
+      if (!invNum || !invNum.value.trim()) {
+        return { field: invNum, message: 'Invoice number is required.' };
+      }
+
+      const invDate = form.querySelector('[name="invoice_date"]')?.value;
+      const dueDate = form.querySelector('[name="due_date"]')?.value;
+
+      if (invDate && dueDate && new Date(dueDate).getTime() < new Date(invDate).getTime()) {
+        return { field: form.querySelector('[name="due_date"]'), message: 'Due date cannot be before invoice date.' };
+      }
+
+      return true;
+    },
+    loadingText: 'Logging Invoice…'
+  });
+}
+</script>
 </body>
 </html>

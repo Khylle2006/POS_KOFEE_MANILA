@@ -145,7 +145,6 @@ foreach ($leaves as $l) {
     elseif ($l['status']==='rejected') $rejected_c++;
 }
 
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -159,6 +158,7 @@ include("../includes/sidebar.php");
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-leave" class="page active">
   <div class="page-header">
@@ -254,7 +254,7 @@ include("../includes/sidebar.php");
       <h3>➕ File Leave Request</h3>
       <button class="modal-close" onclick="closeFile()">✕</button>
     </div>
-    <form method="POST">
+    <form method="POST" id="leave-file-form">
       <input type="hidden" name="action" value="file"/>
 
       <div class="field-group mg-b">
@@ -264,7 +264,7 @@ include("../includes/sidebar.php");
 
       <div class="field-group mg-b">
         <label class="field-label">Leave Type</label>
-        <select class="field-input" name="leave_type">
+        <select class="field-input" name="leave_type" id="leave-type">
           <?php foreach ($leave_types as $t): ?><option value="<?= $t ?>"><?= $t ?></option><?php endforeach; ?>
         </select>
       </div>
@@ -272,22 +272,23 @@ include("../includes/sidebar.php");
       <div class="field-row mg-b">
         <div class="field-group">
           <label class="field-label">Start Date <span class="req">*</span></label>
-          <input class="field-input" type="date" name="start_date" required/>
+          <input class="field-input" type="date" name="start_date" id="leave-start-date" required/>
         </div>
         <div class="field-group">
           <label class="field-label">End Date <span class="req">*</span></label>
-          <input class="field-input" type="date" name="end_date" required/>
+          <input class="field-input" type="date" name="end_date" id="leave-end-date" required/>
         </div>
       </div>
+      <div id="leave-days-preview" style="display:none;font-size:12.5px;font-weight:600;color:var(--espresso);margin:-8px 0 14px 2px"></div>
 
       <div class="field-group mg-b">
         <label class="field-label">Reason</label>
-        <textarea class="field-input" name="reason" rows="3" placeholder="Optional"></textarea>
+        <textarea class="field-input" name="reason" id="leave-reason" rows="3" placeholder="Optional explanation for this leave request"></textarea>
       </div>
 
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeFile()">Cancel</button>
-        <button type="submit" class="btn-save">✔ Submit Request</button>
+        <button type="submit" class="btn-save" id="leave-submit-btn">✔ Submit Request</button>
       </div>
     </form>
   </div>
@@ -299,9 +300,92 @@ include("../includes/sidebar.php");
 <script>setTimeout(()=>{const t=document.getElementById('toast-msg'); if(t) t.style.opacity='0';},3500);</script>
 <?php endif; ?>
 
+<script src="../js/validator.js"></script>
 <script>
-function openFile()  { document.getElementById('file-modal')?.classList.add('open'); }
-function closeFile() { document.getElementById('file-modal')?.classList.remove('open'); }
+function openFile()  {
+  const modal = document.getElementById('file-modal');
+  if (modal) {
+    modal.classList.add('open');
+    const sDate = document.getElementById('leave-start-date');
+    if (sDate && !sDate.value) {
+      // Default start date to today
+      const today = new Date().toISOString().split('T')[0];
+      sDate.value = today;
+    }
+    calcDays();
+  }
+}
+
+function closeFile() {
+  const modal = document.getElementById('file-modal');
+  if (modal) {
+    modal.classList.remove('open');
+    if (window.KofeeValidator) {
+      document.querySelectorAll('#leave-file-form input, #leave-file-form select, #leave-file-form textarea').forEach(el => {
+        KofeeValidator.clearError(el);
+      });
+    }
+  }
+}
+
+function calcDays() {
+  const sInput = document.getElementById('leave-start-date');
+  const eInput = document.getElementById('leave-end-date');
+  const preview = document.getElementById('leave-days-preview');
+  if (!sInput || !eInput || !preview) return;
+
+  if (sInput.value && eInput.value) {
+    const sTime = new Date(sInput.value).getTime();
+    const eTime = new Date(eInput.value).getTime();
+    if (eTime < sTime) {
+      if (window.KofeeValidator) {
+        KofeeValidator.showError(eInput, 'End date cannot be earlier than start date.');
+      }
+      preview.style.display = 'none';
+      return;
+    } else {
+      if (window.KofeeValidator) {
+        KofeeValidator.clearError(eInput);
+      }
+      const days = Math.round((eTime - sTime) / 86400000) + 1;
+      preview.textContent = `📅 Duration: ${days} day${days > 1 ? 's' : ''}`;
+      preview.style.display = 'block';
+    }
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+document.getElementById('leave-start-date')?.addEventListener('change', calcDays);
+document.getElementById('leave-end-date')?.addEventListener('change', calcDays);
+
+const leaveForm = document.getElementById('leave-file-form');
+if (leaveForm && window.KofeeValidator) {
+  KofeeValidator.attach(leaveForm, {
+    customValidate: function(form) {
+      const s = form.querySelector('[name="start_date"]');
+      const e = form.querySelector('[name="end_date"]');
+      if (!s.value) return { field: s, message: 'Please select a start date.' };
+      if (!e.value) return { field: e, message: 'Please select an end date.' };
+      if (new Date(e.value).getTime() < new Date(s.value).getTime()) {
+        return { field: e, message: 'End date cannot be earlier than start date.' };
+      }
+      return true;
+    },
+    loadingText: 'Submitting…'
+  });
+}
+
+// Add loading indicators to review forms
+document.querySelectorAll('.lc-actions form').forEach(f => {
+  f.addEventListener('submit', function() {
+    const btn = f.querySelector('button[type="submit"]');
+    if (btn && window.KofeeValidator) {
+      KofeeValidator.setLoading(btn, '…');
+    }
+  });
+});
+
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFile(); });
 </script>
 

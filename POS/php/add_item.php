@@ -4,7 +4,6 @@ require_once '../includes/permissions.php';
 require_login();
 require_permission('menu.manage');
 include("../api/add_item.php");
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -17,6 +16,8 @@ include("../includes/sidebar.php");
   <?php ?>
 </head>
 <body>
+
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-menu-manager" class="page active">
   <div class="page-header">
@@ -282,23 +283,81 @@ function closeAdd() { document.getElementById('add-modal').classList.remove('ope
 
 // ── Add: preview step ──
 function addMenuItem() {
-  const name = document.getElementById('add-name').value.trim();
-  if (!name) { showToast('⚠️ Name is required.', 'error'); return; }
+  const cat = document.getElementById('add-category');
+  const name = document.getElementById('add-name');
+  const priceSmall = document.getElementById('add-price-small');
+  const priceLarge = document.getElementById('add-price-large');
 
-  const priceSmall = document.getElementById('add-price-small').value;
-  const priceLarge = document.getElementById('add-price-large').value;
-  if (!priceSmall || parseFloat(priceSmall) <= 0) { showToast('⚠️ Enter a valid Regular Price.', 'error'); return; }
-  if (!priceLarge || parseFloat(priceLarge) <= 0) { showToast('⚠️ Enter a valid Up Size Price.', 'error'); return; }
+  let valid = true;
+  let firstInvalid = null;
 
-  const catSelect = document.getElementById('add-category');
-  const catName   = catSelect.options[catSelect.selectedIndex]?.textContent || '—';
+  if (!cat.value) {
+    KofeeValidator.showError(cat, 'Please choose a category.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = cat;
+  } else {
+    KofeeValidator.clearError(cat);
+  }
+
+  if (!name.value.trim()) {
+    KofeeValidator.showError(name, 'Drink name is required.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = name;
+  } else if (name.value.trim().length < 2) {
+    KofeeValidator.showError(name, 'Drink name must be at least 2 characters.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = name;
+  } else {
+    KofeeValidator.clearError(name);
+  }
+
+  if (!priceSmall.value || parseFloat(priceSmall.value) <= 0) {
+    KofeeValidator.showError(priceSmall, 'Regular price must be greater than 0.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = priceSmall;
+  } else {
+    KofeeValidator.clearError(priceSmall);
+  }
+
+  if (!priceLarge.value || parseFloat(priceLarge.value) <= 0) {
+    KofeeValidator.showError(priceLarge, 'Up size price must be greater than 0.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = priceLarge;
+  } else {
+    KofeeValidator.clearError(priceLarge);
+  }
+
+  saveCurrentNewItemRows();
+
+  const currentRows = Array.from(document.querySelectorAll('#add-recipe-rows .field-row'));
+  for (const row of currentRows) {
+    const sel = row.querySelector('.recipe-ing-select');
+    const inp = row.querySelector('.recipe-qty-input');
+    if (sel && sel.value && (!inp.value || parseFloat(inp.value) <= 0)) {
+      KofeeValidator.showError(inp, 'Enter quantity greater than 0.');
+      valid = false;
+      if (!firstInvalid) firstInvalid = inp;
+    }
+  }
+
+  if (!valid && firstInvalid) {
+    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    firstInvalid.focus();
+    return;
+  }
+
+  const catName   = cat.options[cat.selectedIndex]?.textContent || '—';
   const desc      = document.getElementById('add-desc').value.trim();
+  const regCount  = newItemRecipe.small.length;
+  const upCount   = newItemRecipe.large.length;
 
   document.getElementById('add-confirm-summary').innerHTML = `
-    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Name</span><strong>${escapeHtml(name)}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Name</span><strong>${escapeHtml(name.value.trim())}</strong></div>
     <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Category</span><strong>${escapeHtml(catName)}</strong></div>
-    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Regular Price</span><strong>₱${parseFloat(priceSmall).toFixed(2)}</strong></div>
-    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Up Size Price</span><strong>₱${parseFloat(priceLarge).toFixed(2)}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Regular Price</span><strong>₱${parseFloat(priceSmall.value).toFixed(2)}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Up Size Price</span><strong>₱${parseFloat(priceLarge.value).toFixed(2)}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Recipe (Regular)</span><strong>${regCount} ingredient${regCount === 1 ? '' : 's'}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Recipe (Up Size)</span><strong>${upCount} ingredient${upCount === 1 ? '' : 's'}</strong></div>
     ${desc ? `<div style="padding:6px 0 0;color:var(--text-muted);font-style:italic">"${escapeHtml(desc)}"</div>` : ''}
   `;
 
@@ -309,9 +368,9 @@ function closeAddConfirm() {
   document.getElementById('add-confirm-modal').classList.remove('open');
 }
 
-// ── Add: actual commit (was the old addMenuItem body) ──
+// ── Add: actual commit ──
 function doAddMenuItem() {
-  closeAddConfirm();
+  saveCurrentNewItemRows();
 
   const fd = new FormData();
   fd.append('action',      'add');
@@ -322,18 +381,27 @@ function doAddMenuItem() {
   fd.append('price_large', document.getElementById('add-price-large').value);
 
   const btn = document.getElementById('add-confirm-btn');
+  KofeeValidator.setLoading(btn, 'Adding…');
+
   fetch("../api/add_item.php", { method: "POST", body: fd })
     .then(r => r.json())
     .then(res => {
       if (res.ok) {
-        showToast('✅ Item added!');
+        showToast('✅ Item added with recipe!');
+        closeAddConfirm();
         closeAdd();
         location.reload();
       } else {
+        closeAddConfirm();
+        KofeeValidator.resetLoading(btn, '✅ Yes, Add Item');
         showToast('⚠️ ' + res.error, 'error');
       }
     })
-    .catch(() => showToast('⚠️ Network error.', 'error'));
+    .catch(() => {
+      closeAddConfirm();
+      KofeeValidator.resetLoading(btn, '✅ Yes, Add Item');
+      showToast('⚠️ Network error.', 'error');
+    });
 }
 
 const SELF = window.location.pathname; // posts back to same file
@@ -455,32 +523,79 @@ function openEdit(p) {
 function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); }
 
 function saveEdit() {
+  const cat = document.getElementById('e-category');
+  const name = document.getElementById('e-name');
+  const priceSmall = document.getElementById('e-price-small');
+  const priceLarge = document.getElementById('e-price-large');
+
+  let valid = true;
+  let firstInvalid = null;
+
+  if (!name.value.trim()) {
+    KofeeValidator.showError(name, 'Drink name is required.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = name;
+  } else {
+    KofeeValidator.clearError(name);
+  }
+
+  if (!priceSmall.value || parseFloat(priceSmall.value) <= 0) {
+    KofeeValidator.showError(priceSmall, 'Regular price must be greater than 0.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = priceSmall;
+  } else {
+    KofeeValidator.clearError(priceSmall);
+  }
+
+  if (!priceLarge.value || parseFloat(priceLarge.value) <= 0) {
+    KofeeValidator.showError(priceLarge, 'Up size price must be greater than 0.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = priceLarge;
+  } else {
+    KofeeValidator.clearError(priceLarge);
+  }
+
+  if (!valid && firstInvalid) {
+    firstInvalid.focus();
+    return;
+  }
+
   const id = document.getElementById('e-id').value;
+  const btn = document.querySelector('#edit-modal .btn-msave');
+  KofeeValidator.setLoading(btn, 'Saving…');
+
   const fd = new FormData();
   fd.append('action',      'edit');
   fd.append('id',          id);
-  fd.append('category_id', document.getElementById('e-category').value);
-  fd.append('name',        document.getElementById('e-name').value);
+  fd.append('category_id', cat.value);
+  fd.append('name',        name.value.trim());
   fd.append('description', document.getElementById('e-desc').value);
-  fd.append('price_small', document.getElementById('e-price-small').value);
-  fd.append('price_large', document.getElementById('e-price-large').value);
+  fd.append('price_small', priceSmall.value);
+  fd.append('price_large', priceLarge.value);
+  const editImage = document.getElementById('e-image').files[0];
+  if (editImage) fd.append('image', editImage);
 
   fetch(SELF, { method: 'POST', body: fd })
     .then(r => r.json())
     .then(res => {
+      KofeeValidator.resetLoading(btn, '💾 Save Changes');
       if (res.ok) {
         closeEdit();
         showToast('✅ Item updated!');
         updateRowInDOM(id, {
-          name: document.getElementById('e-name').value,
+          name: name.value.trim(),
           description: document.getElementById('e-desc').value,
-          price_small: document.getElementById('e-price-small').value,
-          price_large: document.getElementById('e-price-large').value,
-          category_id: document.getElementById('e-category').value,
+          price_small: priceSmall.value,
+          price_large: priceLarge.value,
+          category_id: cat.value,
         });
       } else {
         showToast('⚠️ ' + res.error, 'error');
       }
+    })
+    .catch(() => {
+      KofeeValidator.resetLoading(btn, '💾 Save Changes');
+      showToast('⚠️ Network error.', 'error');
     });
 }
 
@@ -513,8 +628,140 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
 });
 
+// ── Recipe builder ──────────────────────────────
+let recipeState = {
+  productId: null,
+  ingredientList: [],      // [{id, name, unit, cat_name}]
+  recipe: { small: [], large: [] },
+  activeSize: 'small',
+};
+
+function openRecipe(productId, productName) {
+  recipeState.productId = productId;
+  document.getElementById('recipe-item-name').textContent = productName;
+  document.getElementById('recipe-rows').innerHTML = '<p style="font-size:12.5px;color:var(--text-muted)">Loading…</p>';
+  document.getElementById('recipe-modal').classList.add('open');
+
+  fetch(`../api/recipe.php?product_id=${productId}`)
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok) { showToast('⚠️ ' + res.error, 'error'); closeRecipe(); return; }
+      recipeState.ingredientList = res.ingredients;
+      recipeState.recipe = res.recipe;
+      recipeState.activeSize = 'small';
+      renderRecipeRows();
+    })
+    .catch(() => { showToast('⚠️ Network error.', 'error'); closeRecipe(); });
+}
+
+function closeRecipe() {
+  document.getElementById('recipe-modal').classList.remove('open');
+}
+
+function switchRecipeSize(size) {
+  recipeState.activeSize = size;
+  renderRecipeRows();
+}
+
+function renderRecipeRows() {
+  document.getElementById('recipe-tab-small').style.background = recipeState.activeSize === 'small' ? 'var(--accent-lt)' : '';
+  document.getElementById('recipe-tab-large').style.background = recipeState.activeSize === 'large' ? 'var(--accent-lt)' : '';
+
+  const rows = recipeState.recipe[recipeState.activeSize] || [];
+  const container = document.getElementById('recipe-rows');
+  container.innerHTML = '';
+
+  if (rows.length === 0) {
+    document.getElementById('recipe-empty-msg').style.display = '';
+  } else {
+    document.getElementById('recipe-empty-msg').style.display = 'none';
+    rows.forEach((row, i) => container.appendChild(buildRecipeRowEl(row.ingredient_id, row.qty_used, i)));
+  }
+}
+
+function buildRecipeRowEl(selectedId, qty, index) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field-row';
+  wrap.style.alignItems = 'center';
+  wrap.dataset.rowIndex = index;
+
+  const options = recipeState.ingredientList.map(ing =>
+    `<option value="${ing.id}" ${ing.id == selectedId ? 'selected' : ''}>${escapeHtml(ing.name)} (${escapeHtml(ing.unit)})</option>`
+  ).join('');
+
+  wrap.innerHTML = `
+    <div class="field-group" style="flex:2">
+      <select class="field-select recipe-ing-select">
+        <option value="">— choose ingredient —</option>
+        ${options}
+      </select>
+    </div>
+    <div class="field-group" style="flex:1">
+      <input class="field-input recipe-qty-input" type="number" step="0.01" min="0.01" placeholder="Qty used" value="${qty ?? ''}"/>
+    </div>
+    <button type="button" class="act-btn act-hold" style="height:38px" onclick="this.closest('.field-row').remove(); toggleRecipeEmptyMsg();">🗑️</button>
+  `;
+  return wrap;
+}
+
+function addRecipeRow() {
+  document.getElementById('recipe-empty-msg').style.display = 'none';
+  const container = document.getElementById('recipe-rows');
+  container.appendChild(buildRecipeRowEl('', '', container.children.length));
+}
+
+function toggleRecipeEmptyMsg() {
+  const container = document.getElementById('recipe-rows');
+  document.getElementById('recipe-empty-msg').style.display = container.children.length === 0 ? '' : 'none';
+}
+
+function saveRecipe() {
+  const rows = Array.from(document.querySelectorAll('#recipe-rows .field-row'));
+  const ingredients = [];
+
+  for (const row of rows) {
+    const ingredientId = row.querySelector('.recipe-ing-select').value;
+    const qty = row.querySelector('.recipe-qty-input').value;
+    if (!ingredientId || !qty) continue; // skip incomplete rows silently
+    if (parseFloat(qty) <= 0) {
+      showToast('⚠️ Quantities must be greater than 0.', 'error');
+      return;
+    }
+    ingredients.push({ ingredient_id: parseInt(ingredientId, 10), qty_used: parseFloat(qty) });
+  }
+
+  const btn = document.querySelector('#recipe-modal .btn-msave');
+  KofeeValidator.setLoading(btn, 'Saving…');
+
+  fetch('../api/recipe.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      product_id: recipeState.productId,
+      size: recipeState.activeSize,
+      ingredients,
+    }),
+  })
+    .then(r => r.json())
+    .then(res => {
+      KofeeValidator.resetLoading(btn, '💾 Save Recipe');
+      if (!res.ok) { showToast('⚠️ ' + res.error, 'error'); return; }
+      recipeState.recipe[recipeState.activeSize] = ingredients.map(i => ({
+        ingredient_id: i.ingredient_id,
+        qty_used: i.qty_used,
+        name: (recipeState.ingredientList.find(x => x.id == i.ingredient_id) || {}).name || '',
+        unit: (recipeState.ingredientList.find(x => x.id == i.ingredient_id) || {}).unit || '',
+      }));
+      showToast(`✅ ${recipeState.activeSize === 'small' ? 'Regular' : 'Up Size'} recipe saved!`);
+    })
+    .catch(() => {
+      KofeeValidator.resetLoading(btn, '💾 Save Recipe');
+      showToast('⚠️ Network error.', 'error');
+    });
+}
 
 </script>
 
+<script src="../js/validator.js"></script>
 </body>
 </html>

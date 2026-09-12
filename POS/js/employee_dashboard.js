@@ -118,8 +118,12 @@ function retakePhoto() {
 async function confirmCapture() {
   if (!capturedDataUrl) return;
   const btn = document.getElementById('camera-confirm-btn');
-  btn.disabled = true;
-  btn.textContent = 'Submitting…';
+  if (window.KofeeValidator) {
+    KofeeValidator.setLoading(btn, 'Submitting…');
+  } else {
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+  }
 
   try {
     const res = await fetch('../api/mark_attendance.php', {
@@ -132,8 +136,12 @@ async function confirmCapture() {
     if (!data.ok) {
       document.getElementById('camera-error').textContent = '⚠️ ' + data.error;
       document.getElementById('camera-error').style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = '✔ Confirm & Submit';
+      if (window.KofeeValidator) {
+        KofeeValidator.resetLoading(btn, '✔ Confirm & Submit');
+      } else {
+        btn.disabled = false;
+        btn.textContent = '✔ Confirm & Submit';
+      }
       return;
     }
 
@@ -144,8 +152,12 @@ async function confirmCapture() {
   } catch (err) {
     document.getElementById('camera-error').textContent = '⚠️ Network error: ' + err.message;
     document.getElementById('camera-error').style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = '✔ Confirm & Submit';
+    if (window.KofeeValidator) {
+      KofeeValidator.resetLoading(btn, '✔ Confirm & Submit');
+    } else {
+      btn.disabled = false;
+      btn.textContent = '✔ Confirm & Submit';
+    }
   }
 }
 
@@ -195,8 +207,12 @@ async function submitLeave() {
   errEl.style.display = 'none';
 
   const btn = document.getElementById('leave-submit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Submitting…';
+  if (window.KofeeValidator) {
+    KofeeValidator.setLoading(btn, 'Submitting…');
+  } else {
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+  }
 
   try {
     const res = await fetch('../api/submit_leave.php', {
@@ -209,8 +225,12 @@ async function submitLeave() {
     if (!data.ok) {
       errEl.textContent = '⚠️ ' + data.error;
       errEl.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = '✔ Submit Request';
+      if (window.KofeeValidator) {
+        KofeeValidator.resetLoading(btn, '✔ Submit Request');
+      } else {
+        btn.disabled = false;
+        btn.textContent = '✔ Submit Request';
+      }
       return;
     }
 
@@ -220,8 +240,12 @@ async function submitLeave() {
   } catch (err) {
     errEl.textContent = '⚠️ Network error: ' + err.message;
     errEl.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = '✔ Submit Request';
+    if (window.KofeeValidator) {
+      KofeeValidator.resetLoading(btn, '✔ Submit Request');
+    } else {
+      btn.disabled = false;
+      btn.textContent = '✔ Submit Request';
+    }
   }
 }
 

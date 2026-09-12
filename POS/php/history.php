@@ -3,9 +3,6 @@ require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
 require_permission('orders.history');
-
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -19,6 +16,8 @@ include("../includes/sidebar.php");
   <link rel="stylesheet" href="../css/history.css"/>
 </head>
 <body>
+
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-history" class="page active">
   <div class="page-header">

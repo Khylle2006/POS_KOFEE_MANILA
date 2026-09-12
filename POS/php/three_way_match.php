@@ -167,8 +167,6 @@ if ($invoice) {
     $po_stmt = $pdo->prepare('SELECT * FROM purchase_orders WHERE id = :id'); $po_stmt->execute([':id' => $invoice['po_id']]); $po = $po_stmt->fetch();
     $result  = run_three_way_match($pdo, $invoice, $po);
 }
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -189,6 +187,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-3way" class="page active">
   <div class="page-header">

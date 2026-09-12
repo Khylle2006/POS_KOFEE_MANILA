@@ -29,7 +29,19 @@ foreach ($editableRoles as $r) {
     if ($r['role_key'] === $selected) { $selectedLabel = $r['label']; break; }
 }
 
-include("../includes/sidebar.php");
+// ── Group permissions by category ──────────────
+// Shown as clickable category tabs above the list so managing a role with
+// lots of permissions (e.g. Procurement) doesn't mean scrolling through
+// every category at once.
+$permsByCategory = [];
+foreach ($permissions as $p) {
+    $permsByCategory[$p['category']][] = $p;
+}
+ksort($permsByCategory);
+$categoryKeys = array_keys($permsByCategory);
+
+$currentGrants  = $grants[$selected] ?? [];
+$grantedTotal   = count(array_intersect(array_column($permissions, 'perm_key'), $currentGrants));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -43,6 +55,7 @@ include("../includes/sidebar.php");
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-permissions" class="page active">
   <div class="page-header">

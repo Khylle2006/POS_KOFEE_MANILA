@@ -480,28 +480,13 @@ function selectItem(ing) {
     </div>
 
     <div class="restock-section">
-      <h3>➕ Add to Stock</h3>
-      <form method="POST">
-        <input type="hidden" name="action"        value="restock"/>
-        <input type="hidden" name="ingredient_id" value="${ing.id}"/>
-        ${returnFields()}
-        <div class="restock-row">
-          <input type="number" name="qty"
-                 placeholder="Add quantity (${esc(ing.unit)})"
-                 step="0.1" min="0.1" required/>
-          <button type="submit" class="btn-confirm">➕ Add</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="restock-section">
-      <h3>✏️ Set Exact Stock</h3>
-      <form method="POST">
+      <h3>✏️ Update Exact Stock</h3>
+      <form method="POST" id="set-stock-form" onsubmit="return handleSetStockSubmit(event, this)">
         <input type="hidden" name="action"        value="set_stock"/>
         <input type="hidden" name="ingredient_id" value="${ing.id}"/>
         ${returnFields()}
         <div class="restock-row">
-          <input type="number" name="qty"
+          <input type="number" name="qty" id="set-stock-qty"
                  placeholder="Set stock to… (${esc(ing.unit)})"
                  value="${qty.toFixed(1)}"
                  step="0.1" min="0" required/>
@@ -606,6 +591,11 @@ function setReturnFields(vId, cId, sId) {
 function closeModal() {
   document.getElementById('item-modal').classList.remove('open');
   document.getElementById('qty-row').style.display = '';
+  if (window.KofeeValidator) {
+    document.querySelectorAll('#item-form input, #item-form select').forEach(el => {
+      KofeeValidator.clearError(el);
+    });
+  }
 }
 
 // ── Archive modal ──────────────────────────────
@@ -625,6 +615,24 @@ function openPurge(id, name) {
 }
 function closePurge() { document.getElementById('purge-modal').classList.remove('open'); }
 
+// ── Form handlers with KofeeValidator ──
+function handleSetStockSubmit(e, form) {
+  const qtyInput = form.querySelector('[name="qty"]');
+  const val = parseFloat(qtyInput.value);
+  if (isNaN(val) || val < 0) {
+    e.preventDefault();
+    if (window.KofeeValidator) {
+      KofeeValidator.showError(qtyInput, 'Quantity must be 0 or greater.');
+    }
+    return false;
+  }
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn && window.KofeeValidator) {
+    KofeeValidator.setLoading(btn, 'Updating…');
+  }
+  return true;
+}
+
 // Backdrop / Escape
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target===el){ closeModal(); closeDelete(); closePurge(); } });
@@ -632,7 +640,43 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 document.addEventListener('keydown', e => {
   if (e.key==='Escape'){ closeModal(); closeDelete(); closePurge(); }
 });
-</script>
 
+// Attach validation to item-form
+const itemForm = document.getElementById('item-form');
+if (itemForm && window.KofeeValidator) {
+  KofeeValidator.attach(itemForm, {
+    customValidate: function(form) {
+      const cat = form.querySelector('[name="cat_id"]');
+      const name = form.querySelector('[name="name"]');
+      const qty = form.querySelector('[name="quantity"]');
+      const reorder = form.querySelector('[name="reorder_at"]');
+
+      if (!cat.value) return { field: cat, message: 'Please select a category.' };
+      if (!name.value.trim() || name.value.trim().length < 2) {
+        return { field: name, message: 'Item name must be at least 2 characters.' };
+      }
+      if (qty && qty.value !== '' && parseFloat(qty.value) < 0) {
+        return { field: qty, message: 'Quantity cannot be negative.' };
+      }
+      if (reorder && reorder.value !== '' && parseFloat(reorder.value) < 0) {
+        return { field: reorder, message: 'Reorder point cannot be negative.' };
+      }
+      return true;
+    },
+    loadingText: 'Saving…'
+  });
+}
+
+// Attach loading states to archive/purge forms
+document.querySelectorAll('#delete-modal form, #purge-modal form').forEach(f => {
+  f.addEventListener('submit', function() {
+    const btn = f.querySelector('button[type="submit"]');
+    if (btn && window.KofeeValidator) {
+      KofeeValidator.setLoading(btn, '…');
+    }
+  });
+});
+</script>
+<script src="../js/validator.js"></script>
 </body>
 </html>
