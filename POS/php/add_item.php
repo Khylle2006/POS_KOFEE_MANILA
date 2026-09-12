@@ -4,7 +4,6 @@ require_once '../includes/permissions.php';
 require_login();
 require_permission('menu.manage');
 include("../api/add_item.php");
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -17,6 +16,8 @@ include("../includes/sidebar.php");
   <?php ?>
 </head>
 <body>
+
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-menu-manager" class="page active">
   <div class="page-header">

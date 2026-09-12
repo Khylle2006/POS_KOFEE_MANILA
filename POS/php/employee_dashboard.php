@@ -75,8 +75,6 @@ $hour = (int)date('G');
 $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
 $fname = $user['firstname'] ?: $user['username'];
 $initials = strtoupper(substr($fname, 0, 1));
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -104,6 +102,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-employee-home" class="page active">
   <div class="page-header">

@@ -3,8 +3,6 @@ require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
 require_permission('orders.new');
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -19,6 +17,8 @@ include("../includes/sidebar.php");
   <link rel="stylesheet" href="../css/receipt_modal.css?v=<?= filemtime(__DIR__.'/../css/receipt_modal.css') ?>">
 </head>
 <body>
+
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-menu" class="page active">
 

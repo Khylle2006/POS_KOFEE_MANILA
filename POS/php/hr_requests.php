@@ -212,7 +212,6 @@ foreach ($requests as $r) {
     elseif ($r['status']==='completed') $completed_c++;
 }
 
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -235,6 +234,7 @@ include("../includes/sidebar.php");
 </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-hrrequests" class="page active">
   <div class="page-header">

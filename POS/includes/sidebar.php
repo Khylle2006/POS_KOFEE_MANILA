@@ -124,6 +124,153 @@ function navBtnClasses(bool $active): string {
 
 $groupLabel = 'kfs-group-label';
 ?>
+<!-- ── Kofee Manila Smooth Page Transition & Loader ── -->
+<style>
+  @view-transition {
+    navigation: auto;
+  }
+  #kofee-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 9999999;
+    background: radial-gradient(circle at center, #26160d 0%, #120905 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.32s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.32s ease;
+    pointer-events: all;
+    user-select: none;
+  }
+  #kofee-loader.loader-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .kfs-loader-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .kfs-cup-wrap {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #d9a06b;
+    animation: kfsGlow 2.4s ease-in-out infinite;
+  }
+  .kfs-cup-wrap svg {
+    width: 46px;
+    height: 46px;
+  }
+  .kfs-steam-lines {
+    position: absolute;
+    top: -6px;
+    display: flex;
+    gap: 5px;
+  }
+  .kfs-steam-line {
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: linear-gradient(to top, rgba(217, 160, 107, 0.85), transparent);
+    animation: kfsSteam 1.6s ease-in-out infinite;
+  }
+  .kfs-steam-line:nth-child(2) {
+    animation-delay: 0.35s;
+    height: 15px;
+  }
+  .kfs-steam-line:nth-child(3) {
+    animation-delay: 0.7s;
+  }
+  @keyframes kfsSteam {
+    0% { transform: translateY(0) scaleX(1); opacity: 0; }
+    35% { opacity: 0.85; }
+    70% { transform: translateY(-8px) scaleX(1.4); opacity: 0.3; }
+    100% { transform: translateY(-16px) scaleX(2); opacity: 0; }
+  }
+  @keyframes kfsGlow {
+    0%, 100% { filter: drop-shadow(0 0 6px rgba(201, 123, 61, 0.25)); }
+    50% { filter: drop-shadow(0 0 16px rgba(201, 123, 61, 0.65)); }
+  }
+  .kfs-loader-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+  }
+  .kfs-loader-title {
+    font-family: 'Playfair Display', 'Poppins', Georgia, serif;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: 0.16em;
+    color: #FBF3E9;
+    text-transform: uppercase;
+  }
+  .kfs-loader-sub {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: #d9a06b;
+  }
+  .kfs-loader-bar {
+    width: 140px;
+    height: 3.5px;
+    background: rgba(251, 243, 233, 0.12);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    margin-top: 4px;
+  }
+  .kfs-loader-bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, #c47d3e, #f0c396, #c47d3e, transparent);
+    border-radius: 999px;
+    animation: kfsProgress 1.4s ease-in-out infinite;
+  }
+  @keyframes kfsProgress {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(260%); }
+  }
+</style>
+
+<div id="kofee-loader" aria-live="polite" role="status" aria-label="Loading page">
+  <div class="kfs-loader-card">
+    <div class="kfs-cup-wrap">
+      <div class="kfs-steam-lines">
+        <div class="kfs-steam-line"></div>
+        <div class="kfs-steam-line"></div>
+        <div class="kfs-steam-line"></div>
+      </div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+        <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+        <line x1="6" y1="1" x2="6" y2="4"/>
+        <line x1="10" y1="1" x2="10" y2="4"/>
+        <line x1="14" y1="1" x2="14" y2="4"/>
+      </svg>
+    </div>
+    <div class="kfs-loader-brand">
+      <span class="kfs-loader-title">Kofee Manila</span>
+      <span class="kfs-loader-sub">Brewing workspace…</span>
+    </div>
+    <div class="kfs-loader-bar">
+      <div class="kfs-loader-bar-fill"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Top bar: always visible, holds the Menu toggle ── -->
 <header class="kfs-topbar">
@@ -387,4 +534,79 @@ function toggleSidebar(force) {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') toggleSidebar(false);
 });
+
+// ── Kofee Manila Loading Screen Controller ──
+(function() {
+    function showKofeeLoader(text) {
+        const loader = document.getElementById('kofee-loader');
+        if (!loader) return;
+        if (text) {
+            const sub = loader.querySelector('.kfs-loader-sub');
+            if (sub) sub.textContent = text;
+        }
+        loader.classList.remove('loader-hidden');
+    }
+
+    function hideKofeeLoader() {
+        const loader = document.getElementById('kofee-loader');
+        if (loader) {
+            loader.classList.add('loader-hidden');
+        }
+    }
+
+    window.showKofeeLoader = showKofeeLoader;
+    window.hideKofeeLoader = hideKofeeLoader;
+
+    // Smoothly fade out the loader once the current page content is ready
+    if (document.readyState === 'complete') {
+        setTimeout(hideKofeeLoader, 100);
+    } else {
+        window.addEventListener('load', () => {
+            setTimeout(hideKofeeLoader, 100);
+        });
+        // Failsafe: hide after 1.5s max in case an external font/asset stalls
+        setTimeout(hideKofeeLoader, 1500);
+    }
+
+    // Handle bfcache (browser back/forward button restores)
+    window.addEventListener('pageshow', (e) => {
+        if (e.persisted) {
+            hideKofeeLoader();
+        }
+    });
+
+    // Intercept internal link navigation
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('a');
+        if (a && a.href) {
+            if (
+                a.target === '_blank' ||
+                a.hasAttribute('download') ||
+                a.getAttribute('href').startsWith('#') ||
+                a.getAttribute('href').startsWith('javascript:') ||
+                e.ctrlKey || e.metaKey || e.shiftKey
+            ) {
+                return;
+            }
+            try {
+                const targetUrl = new URL(a.href, window.location.href);
+                if (targetUrl.origin === window.location.origin) {
+                    showKofeeLoader();
+                }
+            } catch (_) {}
+        }
+    }, true);
+
+    // Intercept sidebar navigation buttons and logout
+    document.querySelectorAll('.kfs-nav-btn, .kfs-logout-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            showKofeeLoader();
+        });
+    });
+
+    // Intercept page unloads (form posts that redirect or reload)
+    window.addEventListener('beforeunload', () => {
+        showKofeeLoader();
+    });
+})();
 </script>

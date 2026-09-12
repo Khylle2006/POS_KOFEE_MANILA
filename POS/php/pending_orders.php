@@ -5,8 +5,6 @@ require_login();
 require_permission('orders.pending');
 
 $user = current_user();
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -19,6 +17,8 @@ include("../includes/sidebar.php");
   <link rel="stylesheet" href="../css/pending_orders.css"/>
 </head>
 <body>
+
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-pending" class="page active">
   <div class="page-header">

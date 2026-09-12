@@ -256,8 +256,6 @@ $discrepancy_stmt = $pdo->query("
     ORDER BY g.received_at DESC
 ");
 $open_discrepancies = $discrepancy_stmt->fetchAll();
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -277,6 +275,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-grn" class="page active">
   <div class="page-header">

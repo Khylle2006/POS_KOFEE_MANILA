@@ -94,8 +94,6 @@ $login_stmt = $pdo->query("
     ORDER BY u.username
 ");
 $eligible_logins = $login_stmt->fetchAll();
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -107,6 +105,7 @@ include("../includes/sidebar.php");
   <link rel="stylesheet" href="../css/sidebar.css"/>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-suppliers" class="page active">
   <div class="page-header">

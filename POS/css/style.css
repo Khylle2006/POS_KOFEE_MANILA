@@ -7,6 +7,10 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,500&family=Inter:wght@400;500;600;700;800&display=swap');
 
+@view-transition {
+  navigation: auto;
+}
+
 :root {
   /* Brand (matches login.php) */
   --espresso:       #241A2E;

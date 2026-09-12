@@ -158,8 +158,6 @@ $late       = count(array_filter($rows, fn($r) => $r['status'] === 'late'));
 $absent     = count(array_filter($rows, fn($r) => $r['status'] === 'absent'));
 $leave_c    = count(array_filter($rows, fn($r) => $r['status'] === 'on_leave'));
 $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null));
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -228,6 +226,8 @@ include("../includes/sidebar.php");
 </style>
 </head>
 <body>
+
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-attendance" class="page active">
   <div class="page-header">

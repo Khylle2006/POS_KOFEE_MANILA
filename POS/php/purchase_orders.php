@@ -74,8 +74,6 @@ $list_stmt = $pdo->prepare("
 ");
 $list_stmt->execute($params);
 $pos = $list_stmt->fetchAll();
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -95,6 +93,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-po" class="page active">
   <div class="page-header">

@@ -190,8 +190,6 @@ $list_stmt = $pdo->prepare("
 ");
 $list_stmt->execute($params);
 $payments = $list_stmt->fetchAll();
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -203,6 +201,7 @@ include("../includes/sidebar.php");
   <link rel="stylesheet" href="../css/sidebar.css"/>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-payments" class="page active">
   <div class="page-header">

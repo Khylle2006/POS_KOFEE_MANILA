@@ -131,8 +131,6 @@ $ready_pos = $ready_stmt->fetchAll();
 // ── Supplier leaderboard ──────────────────────────────
 $suppliers_stmt = $pdo->query("SELECT * FROM suppliers ORDER BY rating_avg IS NULL, rating_avg DESC, name ASC");
 $suppliers = $suppliers_stmt->fetchAll();
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -153,6 +151,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-supplier-perf" class="page active">
   <div class="page-header">
