@@ -636,6 +636,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 <script>setTimeout(() => { const t = document.getElementById('toast-msg'); if(t) t.style.opacity='0'; }, 3500);</script>
 <?php endif; ?>
 
+<script src="../js/validator.js"></script>
 <script src="../js/manage_users.js"></script>
 </body>
 </html>

@@ -224,12 +224,12 @@ include("../includes/sidebar.php");
         <h2>Schedule Payment</h2>
         <p class="muted-cell" style="margin-bottom:16px">Invoice <?= htmlspecialchars($new_invoice['invoice_number']) ?> · <?= htmlspecialchars($new_invoice['supplier_name']) ?> · PO #<?= str_pad($new_invoice['po_id'],5,'0',STR_PAD_LEFT) ?></p>
 
-        <form method="POST">
+        <form method="POST" id="schedule-payment-form">
           <input type="hidden" name="action" value="schedule"/>
           <input type="hidden" name="invoice_id" value="<?= $new_invoice['id'] ?>"/>
 
-          <label style="font-size:12.5px;display:block;margin-bottom:12px">Amount (₱)
-            <input class="field-input" type="number" step="0.01" min="0" name="amount" value="<?= $new_invoice['total_amount'] ?>" style="margin-top:4px"/>
+          <label style="font-size:12.5px;display:block;margin-bottom:12px">Amount (₱) <span style="color:var(--red)">*</span>
+            <input class="field-input" type="number" step="0.01" min="0.01" name="amount" id="pay-amount" value="<?= $new_invoice['total_amount'] ?>" required style="margin-top:4px"/>
           </label>
           <label style="font-size:12.5px;display:block;margin-bottom:12px">Payment Method
             <select class="field-input" name="payment_method" style="margin-top:4px">
@@ -248,7 +248,7 @@ include("../includes/sidebar.php");
 
           <div style="text-align:right;display:flex;gap:10px;justify-content:flex-end">
             <a href="payments.php" class="btn-cancel">Cancel</a>
-            <button type="submit" class="btn-save">🗓️ Schedule Payment</button>
+            <button type="submit" class="btn-save" id="schedule-pay-btn">🗓️ Schedule Payment</button>
           </div>
         </form>
       </div>
@@ -399,6 +399,33 @@ include("../includes/sidebar.php");
 
   </div>
 </div>
+<script src="../js/validator.js"></script>
+<script>
+const payForm = document.getElementById('schedule-payment-form');
+if (payForm && window.KofeeValidator) {
+  KofeeValidator.attach(payForm, {
+    customValidate: function(form) {
+      const amt = form.querySelector('[name="amount"]');
+      if (!amt || parseFloat(amt.value) <= 0) {
+        return { field: amt, message: 'Please enter an amount greater than 0.' };
+      }
+      return true;
+    },
+    loadingText: 'Scheduling…'
+  });
+}
 
+// Loading state on payment actions
+document.querySelectorAll('form').forEach(f => {
+  if (f.querySelector('[name="action"][value="complete"]') || f.querySelector('[name="action"][value="cancel"]')) {
+    f.addEventListener('submit', function() {
+      const btn = f.querySelector('button[type="submit"]');
+      if (btn && window.KofeeValidator) {
+        KofeeValidator.setLoading(btn, '…');
+      }
+    });
+  }
+});
+</script>
 </body>
 </html>

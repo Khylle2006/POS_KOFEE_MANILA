@@ -166,6 +166,82 @@ select, textarea {
 }
 textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 
+/* ── Form Validation Feedback & Modern States ──── */
+.field-error, .invalid-feedback {
+  display: none;
+  color: #c62828;
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-top: 4px;
+  line-height: 1.3;
+  align-items: center;
+  gap: 4px;
+}
+.field-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.field-label .req, label .req {
+  color: #c62828;
+  margin-left: 2px;
+}
+
+/* Invalid states: native :user-invalid or manual .is-invalid */
+.field-input:user-invalid,
+input:user-invalid,
+select:user-invalid,
+textarea:user-invalid,
+.field-input.is-invalid,
+input.is-invalid,
+select.is-invalid,
+textarea.is-invalid {
+  border-color: #d32f2f !important;
+  background-color: #fff8f7 !important;
+  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.12) !important;
+}
+
+.field-input:user-invalid + .field-error,
+input:user-invalid + .field-error,
+select:user-invalid + .field-error,
+textarea:user-invalid + .field-error,
+.field-input.is-invalid + .field-error,
+input.is-invalid + .field-error,
+select.is-invalid + .field-error,
+textarea.is-invalid + .field-error,
+.field-group.has-error .field-error,
+.mfield.has-error .field-error {
+  display: flex !important;
+}
+
+/* Valid states */
+.field-input.is-valid,
+input.is-valid,
+select.is-valid {
+  border-color: #2e7d32 !important;
+}
+
+/* Button Loading State */
+button.is-loading, .btn-save.is-loading, .btn-msave.is-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.btn-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Badges ────────────────────────────────────── */
 .badge, .status-badge {
   display: inline-flex; align-items: center; gap: 5px;

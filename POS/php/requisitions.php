@@ -221,6 +221,9 @@ include("../includes/sidebar.php");
       <h1>Purchase Requisitions</h1>
       <p>Request supplies and review budget-checked requests</p>
     </div>
+    <?php if (has_permission('procurement.requisition.create')): ?>
+      <button class="btn-add" onclick="openCreate()">➕ New Requisition</button>
+    <?php endif; ?>
   </div>
 
   <div class="page-body">
@@ -296,6 +299,7 @@ include("../includes/sidebar.php");
       <input type="hidden" name="action" value="create"/>
       <input type="hidden" name="items" id="items-json"/>
       <div class="modal-body">
+        <div id="create-form-error" style="display:none;margin:0 0 12px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
         <div class="field-group">
           <label class="field-label">Title <span style="color:var(--red)">*</span></label>
           <input class="field-input" type="text" name="title" id="f-title" placeholder="e.g. Q3 espresso machine parts" required/>
@@ -323,7 +327,7 @@ include("../includes/sidebar.php");
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeCreate()">Cancel</button>
-        <button type="submit" class="btn-save">✔ Submit for Review</button>
+        <button type="submit" class="btn-save" id="create-submit-btn">✔ Submit for Review</button>
       </div>
     </form>
   </div>
@@ -466,10 +470,82 @@ function openView(r) {
 }
 function closeView() { document.getElementById('view-modal').classList.remove('open'); }
 
+function openCreate() {
+  document.getElementById('create-modal').classList.add('open');
+  const errBox = document.getElementById('create-form-error');
+  if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+  if (!document.querySelectorAll('#item-rows .item-row').length) {
+    addItemRow();
+  }
+}
+
+function closeCreate() {
+  document.getElementById('create-modal').classList.remove('open');
+  if (window.KofeeValidator) {
+    document.querySelectorAll('#create-form input, #create-form select, #create-form textarea').forEach(el => {
+      KofeeValidator.clearError(el);
+    });
+  }
+}
+
+// Attach create form validation & submission
+document.getElementById('create-form')?.addEventListener('submit', function(e) {
+  const errBox = document.getElementById('create-form-error');
+  if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+
+  const titleInput = document.getElementById('f-title');
+  if (!titleInput.value.trim()) {
+    e.preventDefault();
+    if (window.KofeeValidator) {
+      KofeeValidator.showError(titleInput, 'Title is required.');
+    }
+    titleInput.focus();
+    return;
+  }
+
+  const items = [];
+  let invalidQty = false;
+  document.querySelectorAll('#item-rows .item-row').forEach(row => {
+    const name  = row.querySelector('.name')?.value.trim() || '';
+    const qty   = parseFloat(row.querySelector('.qty')?.value) || 0;
+    const unit  = row.querySelector('.unit')?.value.trim() || 'pcs';
+    const price = parseFloat(row.querySelector('.price')?.value) || 0;
+    if (name) {
+      if (qty <= 0) invalidQty = true;
+      items.push({ name, qty, unit, price });
+    }
+  });
+
+  if (!items.length) {
+    e.preventDefault();
+    if (errBox) {
+      errBox.textContent = '⚠️ Add at least one item with a name to file this requisition.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (invalidQty) {
+    e.preventDefault();
+    if (errBox) {
+      errBox.textContent = '⚠️ All items must have a quantity greater than 0.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+
+  document.getElementById('items-json').value = JSON.stringify(items);
+  const btn = document.getElementById('create-submit-btn');
+  if (btn && window.KofeeValidator) {
+    KofeeValidator.setLoading(btn, 'Submitting…');
+  }
+});
+
 function submitReview(id, status) {
   const overrideNote = document.getElementById('v-budget-override').value.trim();
   if (status === 'approved' && currentReqNeedsOverride && !overrideNote) {
     alert('This requisition exceeds the remaining budget — add an override note to approve anyway, or reject / ask for reallocation.');
+    document.getElementById('v-budget-override').focus();
     return;
   }
   const fd = new FormData();
@@ -494,6 +570,6 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCreate(); closeView(); } });
 </script>
-
+<script src="../js/validator.js"></script>
 </body>
 </html>

@@ -184,7 +184,7 @@ include("../includes/sidebar.php");
       <h3 id="modal-title">➕ Add Supplier</h3>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
-    <form method="POST">
+    <form method="POST" id="supplier-form">
       <input type="hidden" name="action" value="save"/>
       <input type="hidden" name="id" id="f-id" value=""/>
       <div class="modal-body">
@@ -271,12 +271,40 @@ function openEdit(s) {
   document.getElementById('f-user-id').value = s.user_id || '';
   document.getElementById('supplier-modal').classList.add('open');
 }
-function closeModal() { document.getElementById('supplier-modal').classList.remove('open'); }
+function closeModal() {
+  document.getElementById('supplier-modal').classList.remove('open');
+  if (window.KofeeValidator) {
+    document.querySelectorAll('#supplier-form input, #supplier-form select').forEach(inp => {
+      KofeeValidator.clearError(inp);
+    });
+  }
+}
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) closeModal(); });
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-</script>
 
+const supForm = document.getElementById('supplier-form');
+if (supForm && window.KofeeValidator) {
+  KofeeValidator.attach(supForm, {
+    customValidate: function(form) {
+      const name = form.querySelector('[name="name"]');
+      if (!name || !name.value.trim() || name.value.trim().length < 2) {
+        return { field: name, message: 'Supplier name must be at least 2 characters.' };
+      }
+      const email = form.querySelector('[name="email"]');
+      if (email && email.value.trim()) {
+        const reg = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!reg.test(email.value.trim())) {
+          return { field: email, message: 'Please enter a valid email address.' };
+        }
+      }
+      return true;
+    },
+    loadingText: 'Saving…'
+  });
+}
+</script>
+<script src="../js/validator.js"></script>
 </body>
 </html>

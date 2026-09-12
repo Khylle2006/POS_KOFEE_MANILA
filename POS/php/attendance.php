@@ -424,7 +424,7 @@ include("../includes/sidebar.php");
       </div>
       <div class="review-footer-primary">
         <button type="button" class="btn-cancel" onclick="closeReview()">Cancel</button>
-        <button type="submit" form="review-form" class="btn-save">✔ Save changes</button>
+        <button type="submit" form="review-form" class="btn-save" id="review-save-btn">✔ Save changes</button>
       </div>
     </div>
   </div>
@@ -530,7 +530,14 @@ function statusLabel(status) {
   return (status || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-function closeReview() { document.getElementById('review-modal').classList.remove('open'); }
+function closeReview() {
+  document.getElementById('review-modal').classList.remove('open');
+  if (window.KofeeValidator) {
+    document.querySelectorAll('#review-form input, #review-form select, #review-form textarea').forEach(el => {
+      KofeeValidator.clearError(el);
+    });
+  }
+}
 
 function openReviewPhoto(url) {
   document.getElementById('photo-preview-img').src = url;
@@ -539,20 +546,30 @@ function openReviewPhoto(url) {
 function closeReviewPhoto() { document.getElementById('photo-preview-modal').classList.remove('open'); }
 
 function submitClockOut() {
+  const btn = document.getElementById('review-clockout-btn');
+  if (btn && window.KofeeValidator) KofeeValidator.setLoading(btn, 'Clocking out…');
   document.getElementById('clockout-form').submit();
 }
 
 function submitDelete() {
   if (confirm('Are you sure you want to delete this attendance record?')) {
+    const btn = document.getElementById('review-delete-btn');
+    if (btn && window.KofeeValidator) KofeeValidator.setLoading(btn, 'Deleting…');
     document.getElementById('delete-form').submit();
   }
 }
 
 function updateTotalHours() {
-  const tin  = document.getElementById('review-time-in').value;
-  const tout = document.getElementById('review-time-out').value;
+  const tinInput  = document.getElementById('review-time-in');
+  const toutInput = document.getElementById('review-time-out');
+  const tin  = tinInput ? tinInput.value : '';
+  const tout = toutInput ? toutInput.value : '';
   const out  = document.getElementById('review-total-hours');
-  if (!tin || !tout) { out.textContent = '—'; return; }
+  if (!tin || !tout) {
+    if (out) out.textContent = '—';
+    if (window.KofeeValidator && toutInput) KofeeValidator.clearError(toutInput);
+    return;
+  }
 
   const [inH, inM]   = tin.split(':').map(Number);
   const [outH, outM] = tout.split(':').map(Number);
@@ -560,11 +577,21 @@ function updateTotalHours() {
   const endMin   = outH * 60 + outM;
   const diff     = endMin - startMin;
 
-  if (diff <= 0) { out.textContent = '—'; return; }
+  if (diff < 0) {
+    if (out) out.textContent = 'Invalid time';
+    if (window.KofeeValidator && toutInput) {
+      KofeeValidator.showError(toutInput, 'Time out cannot be earlier than Time in.');
+    }
+    return;
+  }
+
+  if (window.KofeeValidator && toutInput) {
+    KofeeValidator.clearError(toutInput);
+  }
 
   const h = Math.floor(diff / 60);
   const m = diff % 60;
-  out.textContent = h + 'h ' + String(m).padStart(2, '0') + 'm';
+  if (out) out.textContent = h + 'h ' + String(m).padStart(2, '0') + 'm';
 }
 
 function formatDisplayDate(isoDate) {
@@ -593,7 +620,22 @@ function filterTable() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeMark(); closeReview(); closeReviewPhoto(); }
 });
-</script>
 
+const reviewForm = document.getElementById('review-form');
+if (reviewForm && window.KofeeValidator) {
+  KofeeValidator.attach(reviewForm, {
+    customValidate: function(form) {
+      const tin = form.querySelector('[name="time_in"]').value;
+      const tout = form.querySelector('[name="time_out"]').value;
+      if (tin && tout && tout < tin) {
+        return { field: form.querySelector('[name="time_out"]'), message: 'Time out cannot be earlier than Time in.' };
+      }
+      return true;
+    },
+    loadingText: 'Saving…'
+  });
+}
+</script>
+<script src="../js/validator.js"></script>
 </body>
 </html>

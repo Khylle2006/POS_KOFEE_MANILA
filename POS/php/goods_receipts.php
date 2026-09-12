@@ -299,9 +299,11 @@ include("../includes/sidebar.php");
         <p class="muted-cell" style="margin-bottom:14px">PO #<?= str_pad($po['id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($po['supplier_name']) ?> · <?= htmlspecialchars($po['department']) ?></p>
 
         <?php if (in_array($po['status'], ['sent','acknowledged'], true) && has_permission('procurement.receiving')): ?>
-        <form method="POST">
+        <form method="POST" id="receipt-form">
           <input type="hidden" name="action" value="record_receipt"/>
           <input type="hidden" name="po_id" value="<?= $po['id'] ?>"/>
+
+          <div id="receipt-error" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
 
           <div class="grn-item-row" style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;border-bottom:1.5px solid var(--border)">
             <div>Item</div><div>Ordered</div><div>Remaining</div><div>Receiving Qty</div><div>Condition / Notes</div>
@@ -314,7 +316,7 @@ include("../includes/sidebar.php");
               </div>
               <div><?= number_format($ri['quantity'],2) ?></div>
               <div><?= number_format($remaining,2) ?></div>
-              <div><input class="field-input" type="number" step="0.01" min="0" style="padding:6px 8px"
+              <div><input class="field-input rec-qty" type="number" step="0.01" min="0" style="padding:6px 8px"
                      name="items[<?= $ri['id'] ?>][received_qty]" placeholder="0" <?= $remaining <= 0 ? 'disabled' : '' ?>/></div>
               <div style="display:flex;gap:6px">
                 <select class="field-input" style="padding:6px 8px;width:110px" name="items[<?= $ri['id'] ?>][condition]">
@@ -331,7 +333,7 @@ include("../includes/sidebar.php");
             <textarea class="field-input" name="grn_notes" placeholder="Overall receiving notes (optional)" style="width:100%;min-height:60px"></textarea>
           </div>
           <div style="margin-top:12px;text-align:right">
-            <button type="submit" class="btn-save">📦 Record Receipt</button>
+            <button type="submit" class="btn-save" id="receipt-submit-btn">📦 Record Receipt</button>
           </div>
         </form>
         <?php else: ?>
@@ -414,6 +416,59 @@ include("../includes/sidebar.php");
 
   </div>
 </div>
+<script src="../js/validator.js"></script>
+<script>
+document.getElementById('receipt-form')?.addEventListener('submit', function(e) {
+  const errBox = document.getElementById('receipt-error');
+  if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
 
+  const qtyInputs = this.querySelectorAll('.rec-qty');
+  let hasValidQty = false;
+  let hasNegative = false;
+
+  qtyInputs.forEach(inp => {
+    if (!inp.disabled) {
+      const val = parseFloat(inp.value) || 0;
+      if (val < 0) hasNegative = true;
+      if (val > 0) hasValidQty = true;
+    }
+  });
+
+  if (hasNegative) {
+    e.preventDefault();
+    if (errBox) {
+      errBox.textContent = '⚠️ Receiving quantities cannot be negative.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (!hasValidQty) {
+    e.preventDefault();
+    if (errBox) {
+      errBox.textContent = '⚠️ Enter a receiving quantity greater than 0 for at least one item.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+
+  const btn = document.getElementById('receipt-submit-btn');
+  if (btn && window.KofeeValidator) {
+    KofeeValidator.setLoading(btn, 'Recording…');
+  }
+});
+
+// Loading state on discrepancy resolution
+document.querySelectorAll('form').forEach(f => {
+  if (f.querySelector('[name="action"][value="resolve_discrepancy"]')) {
+    f.addEventListener('submit', function() {
+      const btn = f.querySelector('button[type="submit"]');
+      if (btn && window.KofeeValidator) {
+        KofeeValidator.setLoading(btn, '…');
+      }
+    });
+  }
+});
+</script>
 </body>
 </html>
