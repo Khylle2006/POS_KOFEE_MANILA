@@ -117,6 +117,7 @@ include("../includes/sidebar.php");
                     <?= $available ? 'Mark Unavailable' : 'Mark Available' ?>
                   </button>
                   <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'>✏️ Edit</button>
+                  <button class="act-btn" onclick="openRecipe(<?= $p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES) ?>)">🧪 Recipe</button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -182,7 +183,7 @@ include("../includes/sidebar.php");
 
 <!-- add modal -->
 <div class="modal-overlay" id="add-modal">
-  <div class="modal">
+  <div class="modal" style="max-width:520px">
     <div class="modal-header">
       <h3>➕ Add Menu Item</h3>
       <button class="modal-close" onclick="closeAdd()">✕</button>
@@ -219,6 +220,23 @@ include("../includes/sidebar.php");
           <input class="field-input" type="number" id="add-price-large" step="0.01" min="0"/>
         </div>
       </div>
+
+      <hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
+      <div style="font-size:13px;font-weight:700;color:var(--espresso);margin-bottom:6px">
+        🧪 Recipe & Ingredients (Auto-deducted on order)
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+        Pick the ingredients consumed per cup for Regular and Up Size.
+      </p>
+      <div class="filter-bar" style="margin-bottom:10px">
+        <button type="button" class="act-btn" id="add-recipe-tab-small" onclick="switchNewItemRecipeSize('small')">Regular</button>
+        <button type="button" class="act-btn" id="add-recipe-tab-large" onclick="switchNewItemRecipeSize('large')">Up Size</button>
+      </div>
+      <div id="add-recipe-rows"></div>
+      <button type="button" class="act-btn" style="margin-top:8px" onclick="addNewItemRecipeRow()">➕ Add Ingredient</button>
+      <p id="add-recipe-empty-msg" style="font-size:12px;color:var(--text-muted);margin-top:8px">
+        No ingredients added for this size yet.
+      </p>
     </div>
     <div class="modal-actions">
       <button class="btn-mcancel" onclick="closeAdd()">Cancel</button>
@@ -272,21 +290,152 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
+<!-- Recipe builder modal -->
+<div class="modal-overlay" id="recipe-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>🧪 Recipe — <span id="recipe-item-name"></span></h3>
+      <button class="modal-close" onclick="closeRecipe()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">
+        Set which inventory ingredients this drink consumes, and how much per cup.
+        Regular and Up Size can use different amounts.
+      </p>
+      <div class="filter-bar" style="margin-bottom:12px">
+        <button type="button" class="act-btn" id="recipe-tab-small" onclick="switchRecipeSize('small')">Regular</button>
+        <button type="button" class="act-btn" id="recipe-tab-large" onclick="switchRecipeSize('large')">Up Size</button>
+      </div>
+      <div id="recipe-rows"></div>
+      <button type="button" class="act-btn" style="margin-top:8px" onclick="addRecipeRow()">➕ Add Ingredient</button>
+      <p id="recipe-empty-msg" style="font-size:12.5px;color:var(--text-muted);margin-top:8px;display:none">
+        No ingredients set for this size yet — this size won't deduct any stock at checkout.
+      </p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-mcancel" onclick="closeRecipe()">Cancel</button>
+      <button class="btn-msave" onclick="saveRecipe()">💾 Save Recipe</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast" style="display:none"></div>
 
 <script>
 
-function openAdd() {
+let allIngredientsList = [];
+async function ensureIngredientsLoaded() {
+  if (allIngredientsList.length > 0) return allIngredientsList;
+  try {
+    const res = await fetch('../api/get_ingredients.php');
+    allIngredientsList = await res.json();
+    if (!recipeState.ingredientList || recipeState.ingredientList.length === 0) {
+      recipeState.ingredientList = allIngredientsList;
+    }
+  } catch(e) {
+    console.error('Failed to load ingredients:', e);
+  }
+  return allIngredientsList;
+}
+
+let newItemRecipe = {
+  activeSize: 'small',
+  small: [],
+  large: []
+};
+
+async function openAdd() {
   document.getElementById('add-category').value    = '';
   document.getElementById('add-name').value        = '';
   document.getElementById('add-desc').value        = '';
   document.getElementById('add-price-small').value = '';
   document.getElementById('add-price-large').value = '';
   document.getElementById('add-image').value        = '';
+  newItemRecipe = { activeSize: 'small', small: [], large: [] };
+  await ensureIngredientsLoaded();
+  renderNewItemRecipeRows();
   document.getElementById('add-modal').classList.add('open');
 }
 function closeAdd() { document.getElementById('add-modal').classList.remove('open'); }
+
+function switchNewItemRecipeSize(size) {
+  saveCurrentNewItemRows();
+  newItemRecipe.activeSize = size;
+  renderNewItemRecipeRows();
+}
+
+function saveCurrentNewItemRows() {
+  const rows = Array.from(document.querySelectorAll('#add-recipe-rows .field-row'));
+  const list = [];
+  for (const row of rows) {
+    const sel = row.querySelector('.recipe-ing-select');
+    const inp = row.querySelector('.recipe-qty-input');
+    if (sel && inp && sel.value && inp.value) {
+      list.push({ ingredient_id: parseInt(sel.value, 10), qty_used: parseFloat(inp.value) });
+    }
+  }
+  newItemRecipe[newItemRecipe.activeSize] = list;
+}
+
+function renderNewItemRecipeRows() {
+  const tabSmall = document.getElementById('add-recipe-tab-small');
+  const tabLarge = document.getElementById('add-recipe-tab-large');
+  if (tabSmall) tabSmall.style.background = newItemRecipe.activeSize === 'small' ? 'var(--accent-lt)' : '';
+  if (tabLarge) tabLarge.style.background = newItemRecipe.activeSize === 'large' ? 'var(--accent-lt)' : '';
+
+  const rows = newItemRecipe[newItemRecipe.activeSize] || [];
+  const container = document.getElementById('add-recipe-rows');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const emptyMsg = document.getElementById('add-recipe-empty-msg');
+  if (rows.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = '';
+  } else {
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    rows.forEach((row, i) => {
+      container.appendChild(buildNewItemRowEl(row.ingredient_id, row.qty_used));
+    });
+  }
+}
+
+function buildNewItemRowEl(selectedId, qty) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field-row';
+  wrap.style.alignItems = 'center';
+
+  const options = allIngredientsList.map(ing =>
+    `<option value="${ing.id}" ${ing.id == selectedId ? 'selected' : ''}>${escapeHtml(ing.name)} (${escapeHtml(ing.unit)})</option>`
+  ).join('');
+
+  wrap.innerHTML = `
+    <div class="field-group" style="flex:2">
+      <select class="field-select recipe-ing-select">
+        <option value="">— choose ingredient —</option>
+        ${options}
+      </select>
+    </div>
+    <div class="field-group" style="flex:1">
+      <input class="field-input recipe-qty-input" type="number" step="0.01" min="0.01" placeholder="Qty used" value="${qty ?? ''}"/>
+    </div>
+    <button type="button" class="act-btn act-hold" style="height:38px" onclick="this.closest('.field-row').remove(); toggleNewItemEmptyMsg();">🗑️</button>
+  `;
+  return wrap;
+}
+
+function addNewItemRecipeRow() {
+  const emptyMsg = document.getElementById('add-recipe-empty-msg');
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  const container = document.getElementById('add-recipe-rows');
+  container.appendChild(buildNewItemRowEl('', ''));
+}
+
+function toggleNewItemEmptyMsg() {
+  const container = document.getElementById('add-recipe-rows');
+  const emptyMsg = document.getElementById('add-recipe-empty-msg');
+  if (emptyMsg && container) emptyMsg.style.display = container.children.length === 0 ? '' : 'none';
+}
 
 // ── Add: preview step ──
 function addMenuItem() {
@@ -302,11 +451,17 @@ function addMenuItem() {
   const catName   = catSelect.options[catSelect.selectedIndex]?.textContent || '—';
   const desc      = document.getElementById('add-desc').value.trim();
 
+  saveCurrentNewItemRows();
+  const regCount = newItemRecipe.small.length;
+  const upCount  = newItemRecipe.large.length;
+
   document.getElementById('add-confirm-summary').innerHTML = `
     <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Name</span><strong>${escapeHtml(name)}</strong></div>
     <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Category</span><strong>${escapeHtml(catName)}</strong></div>
     <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Regular Price</span><strong>₱${parseFloat(priceSmall).toFixed(2)}</strong></div>
     <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Up Size Price</span><strong>₱${parseFloat(priceLarge).toFixed(2)}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Recipe (Regular)</span><strong>${regCount} ingredient${regCount === 1 ? '' : 's'}</strong></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span>Recipe (Up Size)</span><strong>${upCount} ingredient${upCount === 1 ? '' : 's'}</strong></div>
     ${desc ? `<div style="padding:6px 0 0;color:var(--text-muted);font-style:italic">"${escapeHtml(desc)}"</div>` : ''}
   `;
 
@@ -320,6 +475,7 @@ function closeAddConfirm() {
 // ── Add: actual commit (was the old addMenuItem body) ──
 function doAddMenuItem() {
   closeAddConfirm();
+  saveCurrentNewItemRows();
 
   const fd = new FormData();
   fd.append('action',      'add');
@@ -328,6 +484,11 @@ function doAddMenuItem() {
   fd.append('description', document.getElementById('add-desc').value);
   fd.append('price_small', document.getElementById('add-price-small').value);
   fd.append('price_large', document.getElementById('add-price-large').value);
+  fd.append('recipe',      JSON.stringify({
+    small: newItemRecipe.small,
+    large: newItemRecipe.large
+  }));
+
   const addImage = document.getElementById('add-image').files[0];
   if (addImage) fd.append('image', addImage);
 
@@ -336,7 +497,7 @@ function doAddMenuItem() {
     .then(r => r.json())
     .then(res => {
       if (res.ok) {
-        showToast('✅ Item added!');
+        showToast('✅ Item added with recipe!');
         closeAdd();
         location.reload();
       } else {
@@ -549,13 +710,137 @@ function doDelete() {
 // ── Close modals on backdrop / Escape ──────────
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
+    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); closeRecipe(); }
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
+  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); closeRecipe(); }
 });
 
+// ── Recipe builder ──────────────────────────────
+let recipeState = {
+  productId: null,
+  ingredientList: [],      // [{id, name, unit, cat_name}]
+  recipe: { small: [], large: [] },
+  activeSize: 'small',
+};
+
+function openRecipe(productId, productName) {
+  recipeState.productId = productId;
+  document.getElementById('recipe-item-name').textContent = productName;
+  document.getElementById('recipe-rows').innerHTML = '<p style="font-size:12.5px;color:var(--text-muted)">Loading…</p>';
+  document.getElementById('recipe-modal').classList.add('open');
+
+  fetch(`../api/recipe.php?product_id=${productId}`)
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok) { showToast('⚠️ ' + res.error, 'error'); closeRecipe(); return; }
+      recipeState.ingredientList = res.ingredients;
+      recipeState.recipe = res.recipe;
+      recipeState.activeSize = 'small';
+      renderRecipeRows();
+    })
+    .catch(() => { showToast('⚠️ Network error.', 'error'); closeRecipe(); });
+}
+
+function closeRecipe() {
+  document.getElementById('recipe-modal').classList.remove('open');
+}
+
+function switchRecipeSize(size) {
+  recipeState.activeSize = size;
+  renderRecipeRows();
+}
+
+function renderRecipeRows() {
+  document.getElementById('recipe-tab-small').style.background = recipeState.activeSize === 'small' ? 'var(--accent-lt)' : '';
+  document.getElementById('recipe-tab-large').style.background = recipeState.activeSize === 'large' ? 'var(--accent-lt)' : '';
+
+  const rows = recipeState.recipe[recipeState.activeSize] || [];
+  const container = document.getElementById('recipe-rows');
+  container.innerHTML = '';
+
+  if (rows.length === 0) {
+    document.getElementById('recipe-empty-msg').style.display = '';
+  } else {
+    document.getElementById('recipe-empty-msg').style.display = 'none';
+    rows.forEach((row, i) => container.appendChild(buildRecipeRowEl(row.ingredient_id, row.qty_used, i)));
+  }
+}
+
+function buildRecipeRowEl(selectedId, qty, index) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field-row';
+  wrap.style.alignItems = 'center';
+  wrap.dataset.rowIndex = index;
+
+  const options = recipeState.ingredientList.map(ing =>
+    `<option value="${ing.id}" ${ing.id == selectedId ? 'selected' : ''}>${escapeHtml(ing.name)} (${escapeHtml(ing.unit)})</option>`
+  ).join('');
+
+  wrap.innerHTML = `
+    <div class="field-group" style="flex:2">
+      <select class="field-select recipe-ing-select">
+        <option value="">— choose ingredient —</option>
+        ${options}
+      </select>
+    </div>
+    <div class="field-group" style="flex:1">
+      <input class="field-input recipe-qty-input" type="number" step="0.01" min="0.01" placeholder="Qty used" value="${qty ?? ''}"/>
+    </div>
+    <button type="button" class="act-btn act-hold" style="height:38px" onclick="this.closest('.field-row').remove(); toggleRecipeEmptyMsg();">🗑️</button>
+  `;
+  return wrap;
+}
+
+function addRecipeRow() {
+  document.getElementById('recipe-empty-msg').style.display = 'none';
+  const container = document.getElementById('recipe-rows');
+  container.appendChild(buildRecipeRowEl('', '', container.children.length));
+}
+
+function toggleRecipeEmptyMsg() {
+  const container = document.getElementById('recipe-rows');
+  document.getElementById('recipe-empty-msg').style.display = container.children.length === 0 ? '' : 'none';
+}
+
+function saveRecipe() {
+  const rows = Array.from(document.querySelectorAll('#recipe-rows .field-row'));
+  const ingredients = [];
+
+  for (const row of rows) {
+    const ingredientId = row.querySelector('.recipe-ing-select').value;
+    const qty = row.querySelector('.recipe-qty-input').value;
+    if (!ingredientId || !qty) continue; // skip incomplete rows silently
+    if (parseFloat(qty) <= 0) {
+      showToast('⚠️ Quantities must be greater than 0.', 'error');
+      return;
+    }
+    ingredients.push({ ingredient_id: parseInt(ingredientId, 10), qty_used: parseFloat(qty) });
+  }
+
+  fetch('../api/recipe.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      product_id: recipeState.productId,
+      size: recipeState.activeSize,
+      ingredients,
+    }),
+  })
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok) { showToast('⚠️ ' + res.error, 'error'); return; }
+      recipeState.recipe[recipeState.activeSize] = ingredients.map(i => ({
+        ingredient_id: i.ingredient_id,
+        qty_used: i.qty_used,
+        name: (recipeState.ingredientList.find(x => x.id == i.ingredient_id) || {}).name || '',
+        unit: (recipeState.ingredientList.find(x => x.id == i.ingredient_id) || {}).unit || '',
+      }));
+      showToast(`✅ ${recipeState.activeSize === 'small' ? 'Regular' : 'Up Size'} recipe saved!`);
+    })
+    .catch(() => showToast('⚠️ Network error.', 'error'));
+}
 
 </script>
 

@@ -61,6 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         try {
+            $pdo->beginTransaction();
+
             $pdo->prepare("
                 INSERT INTO products (category_id, name, description, price_small, price_large, stock)
                 VALUES (:cat, :name, :desc, :ps, :pl, 1)
@@ -72,15 +74,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':pl'   => $price_large,
             ]);
 
-            echo json_encode(['ok' => true]);
-        } catch (PDOException $e) {
-
             $id = (int)$pdo->lastInsertId();
             $image_path = save_product_image($id, 'image');
-            if ($image_path) $pdo->prepare('UPDATE products SET image_path=:image WHERE id=:id')->execute([':image'=>$image_path, ':id'=>$id]);
-            echo json_encode(['ok' => true]);
-        } catch (Throwable $e) {
+            if ($image_path) {
+                $pdo->prepare('UPDATE products SET image_path=:image WHERE id=:id')->execute([':image'=>$image_path, ':id'=>$id]);
+            }
 
+            // Save recipe if provided
+            $recipeData = json_decode($_POST['recipe'] ?? '', true);
+            if (is_array($recipeData)) {
+                $insertRecipe = $pdo->prepare("
+                    INSERT INTO product_ingredients (product_id, size, ingredient_id, qty_used)
+                    VALUES (:pid, :size, :ingredient_id, :qty_used)
+                ");
+                foreach (['small', 'large'] as $sz) {
+                    $lines = $recipeData[$sz] ?? [];
+                    if (is_array($lines)) {
+                        foreach ($lines as $line) {
+                            $iid = (int)($line['ingredient_id'] ?? 0);
+                            $qty = (float)($line['qty_used'] ?? 0);
+                            if ($iid > 0 && $qty > 0) {
+                                $insertRecipe->execute([
+                                    ':pid'           => $id,
+                                    ':size'          => $sz,
+                                    ':ingredient_id' => $iid,
+                                    ':qty_used'      => $qty
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            $pdo->commit();
+            echo json_encode(['ok' => true, 'id' => $id]);
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             http_response_code(500);
             echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
         }

@@ -193,7 +193,7 @@ function statusLabel(s) {
 const configs = {
   pending:   { icon:'⏳', title:'Mark as Pending',   msg:'Move this order back to pending?',        cls:'ok-pending',  label:'Mark Pending'   },
   completed: { icon:'✅', title:'Complete Order',     msg:'Mark this order as completed?',           cls:'ok-complete', label:'Complete'        },
-  cancelled: { icon:'❌', title:'Cancel Order',       msg:'Are you sure you want to cancel this order? This can be undone.', cls:'ok-cancel', label:'Yes, Cancel' },
+  cancelled: { icon:'❌', title:'Cancel Order',       msg:'Are you sure you want to cancel this order? Used ingredients will be refunded to inventory.', cls:'ok-cancel', label:'Yes, Cancel' },
 };
 
 function askConfirm(orderId, status) {

@@ -88,8 +88,26 @@
 /* Sold-out state: still visible (so staff know it exists) but visibly inert */
 .menu-card.sold-out { cursor: not-allowed; background: #FAF6EF; }
 .menu-card.sold-out .item-img { opacity: .4; }
-.menu-card.sold-out .item-name { color: var(--text-muted); }
 .item-soldout { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+.item-soldout.warning-badge {
+  background: #FFF3CD;
+  color: #856404;
+  border: 1px solid #FFEEBA;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin-top: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: inline-block;
+  line-height: 1.25;
+}
+.item-soldout.warning-badge .missing-text {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: #995A00;
+  display: block;
+  margin-top: 2px;
+}
 
 .empty-cat { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .empty-icon { font-size: 40px; margin-bottom: 10px; }
