@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3"
+  },
+  "scripts": {
+    "build": "@tailwindcss/cli -i ./src/input.css -o ./css/index.css --minify",
+    "watch": "@tailwindcss/cli -i ./src/input.css -o ./css/index.css --watch"
+  }
+}
