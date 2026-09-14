@@ -1,9 +1,8 @@
 <?php
 // save_order.php
-// FIX: was using $conn (mysqli); converted to PDO.
-// FIX: was trying to insert 'items' as a raw column which doesn't exist;
 //      now properly inserts into orders + order_items tables.
-require_once '../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/ingredient_deduction.php';
 
 header('Content-Type: application/json');
 
@@ -13,6 +12,7 @@ if (empty($_SESSION['logged_in'])) {
     echo json_encode(["success" => false, "error" => "Unauthorized"]);
     exit;
 }
+require_clocked_in_for_pos(true);
 
 $data = json_decode(file_get_contents("php://input"), true);
 
@@ -43,14 +43,15 @@ try {
     $order_id = (int)$pdo->lastInsertId();
 
     $stmtItem = $pdo->prepare("
-        INSERT INTO order_items (order_id, product_id, quantity, price, subtotal)
-        VALUES (:order_id, :product_id, :qty, :price, :subtotal)
+        INSERT INTO order_items (order_id, product_id, quantity, price, subtotal, size)
+        VALUES (:order_id, :product_id, :qty, :price, :subtotal, :size)
     ");
 
     foreach ($items as $item) {
         $product_id = (int)$item['id'];
         $qty        = (int)$item['qty'];
         $price      = (float)$item['price'];
+        $size       = in_array($item['size'] ?? 'small', ['small', 'large'], true) ? $item['size'] : 'small';
 
         $stmtItem->execute([
             ':order_id'   => $order_id,
@@ -58,6 +59,7 @@ try {
             ':qty'        => $qty,
             ':price'      => $price,
             ':subtotal'   => $price * $qty,
+            ':size'       => $size,
         ]);
     }
 
