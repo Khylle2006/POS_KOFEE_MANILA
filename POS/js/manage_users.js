@@ -97,7 +97,6 @@ function openEdit(r) {
     document.getElementById('code-field').style.display = 'none'; // code is immutable once set
   }
   toggleSection('employee');
-
   document.getElementById('staff-modal').classList.add('open');
 }
 
