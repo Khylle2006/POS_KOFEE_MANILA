@@ -13,7 +13,6 @@ include("../api/add_item.php");
   <title>Menu Manager — Kofee POS</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <?php ?>
 </head>
 <body>
@@ -24,22 +23,17 @@ include("../api/add_item.php");
   <div class="page-header">
     <div>
       <h1>Menu Manager</h1>
-      <p><?= $view === 'archived' ? 'Review archived products' : 'Edit and manage your drink menu' ?></p>
+      <p>Edit and manage your drink menu</p>
 
     
       
     </div>
-     <?php if ($view === 'active'): ?>
-     <button class="btn-msave" onclick="openAdd()">➕ Add Item</button>
-     <?php endif; ?>
+   <button class="btn-msave" onclick="openAdd()">
+    ➕ Add Item
+</button>
   </div>
 
   <div class="page-body">
-
-    <div class="view-tabs" style="padding:14px 32px 0;display:flex;gap:8px">
-      <a class="filter-pill <?= $view === 'active' ? 'active' : '' ?>" href="add_item.php">📦 Active</a>
-      <a class="filter-pill <?= $view === 'archived' ? 'active' : '' ?>" href="add_item.php?view=archived">🗄 Archived <?= $archived_count ? '(' . $archived_count . ')' : '' ?></a>
-    </div>
 
     <div class="filter-bar" style="align-items:center">
       <input class="filter-input" type="text" id="search-products"
@@ -116,7 +110,7 @@ include("../api/add_item.php");
               </td>
               <td>
                 <div class="act-group">
-                  <?php if ($view === 'active' && has_permission('menu.edit')): ?>
+                  <?php if (has_permission('menu.edit')): ?>
                   <button class="act-btn <?= $available ? 'act-hold' : 'act-activate' ?>"
                           id="toggle-<?= $p['id'] ?>"
                           data-state="<?= $available ? 'on' : 'off' ?>"
@@ -125,14 +119,8 @@ include("../api/add_item.php");
                   </button>
                   <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'>✏️ Edit</button>
                   <?php endif; ?>
-                  <?php if ($view === 'active' && has_permission('menu.delete')): ?>
-                  <button class="act-btn act-block" onclick='confirmDelete(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'>🗑️</button>
-                  <?php endif; ?>
-                  <?php if ($view === 'archived' && has_permission('menu.edit')): ?>
-                  <button class="act-btn act-activate" onclick='restoreProduct(<?= (int)$p['id'] ?>)'>↩️ Restore</button>
-                  <?php endif; ?>
-                  <?php if ($view === 'archived' && has_permission('menu.delete')): ?>
-                  <button class="act-btn act-block" onclick='purgeProduct(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'>🗑️ Delete Forever</button>
+                  <?php if (has_permission('menu.delete')): ?>
+                  <button class="act-btn act-block" onclick="confirmDelete(<?= $p['id'] ?>, <?= json_encode($p['name']) ?>)">🗑️</button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -244,6 +232,21 @@ include("../api/add_item.php");
     <div class="modal-actions">
       <button type="button" class="btn-mcancel" onclick="closeAddConfirm()">Cancel</button>
       <button type="button" class="btn-msave" id="add-confirm-btn" onclick="doAddMenuItem()">✅ Yes, Add Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-body" style="text-align:center">
+      <div style="font-size:46px;margin-bottom:12px">🗑️</div>
+      <h3 style="font-size:17px;margin-bottom:8px">Delete Item?</h3>
+      <p id="del-msg" style="font-size:13px;color:var(--text-muted)"></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-mcancel" onclick="closeDelete()">Cancel</button>
+      <button class="btn-msave" style="background:var(--red)" onclick="doDelete()">Yes, Delete</button>
     </div>
   </div>
 </div>
@@ -614,77 +617,148 @@ function updateRowInDOM(id, p) {
   if (editBtn) editBtn.setAttribute('onclick', `openEdit(${JSON.stringify(p).replace(/"/g, '&quot;')})`);
 }
 
-// Delete and archive actions
-async function confirmDelete(id, name) {
-  const result = await Swal.fire({
-    title: 'Delete Product?',
-    text: `Are you sure you want to delete "${name}"?`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Yes, Delete',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: 'var(--red)',
-    reverseButtons: true,
-  });
-  if (result.isConfirmed) await submitProductAction('delete', id);
-}
 
-async function restoreProduct(id) {
-  const result = await Swal.fire({
-    title: 'Restore Product?',
-    text: 'This product will be available in the active menu again.',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Restore',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: 'var(--caramel)',
-    reverseButtons: true,
-  });
-  if (result.isConfirmed) await submitProductAction('restore', id);
-}
-
-async function purgeProduct(id, name) {
-  const result = await Swal.fire({
-    title: 'Delete Permanently?',
-    text: `Delete "${name}" forever? This cannot be undone.`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Delete Forever',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: 'var(--red)',
-    reverseButtons: true,
-  });
-  if (result.isConfirmed) await submitProductAction('purge', id);
-}
-
-async function submitProductAction(action, id) {
-  const fd = new FormData();
-  fd.append('action', action);
-  fd.append('id', id);
-  try {
-    const response = await fetch('../api/add_item.php', { method: 'POST', body: fd });
-    const result = await response.json();
-    if (!response.ok || !result.ok) throw new Error(result.error || 'Action failed.');
-    await Swal.fire({
-      title: action === 'restore' ? 'Restored' : action === 'purge' ? 'Deleted' : 'Archived',
-      text: result.message,
-      icon: 'success',
-      confirmButtonColor: 'var(--caramel)',
-    });
-    location.reload();
-  } catch (error) {
-    await Swal.fire({ title: 'Action Failed', text: error.message, icon: 'error', confirmButtonColor: 'var(--red)' });
-  }
-}
-
+// ── Close modals on backdrop / Escape ──────────
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) { closeAdd(); closeEdit(); closeAvail(); closeAddConfirm(); }
+    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeAvail(); closeAddConfirm(); }
+  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
 });
+
+// ── Recipe builder ──────────────────────────────
+let recipeState = {
+  productId: null,
+  ingredientList: [],      // [{id, name, unit, cat_name}]
+  recipe: { small: [], large: [] },
+  activeSize: 'small',
+};
+
+function openRecipe(productId, productName) {
+  recipeState.productId = productId;
+  document.getElementById('recipe-item-name').textContent = productName;
+  document.getElementById('recipe-rows').innerHTML = '<p style="font-size:12.5px;color:var(--text-muted)">Loading…</p>';
+  document.getElementById('recipe-modal').classList.add('open');
+
+  fetch(`../api/recipe.php?product_id=${productId}`)
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok) { showToast('⚠️ ' + res.error, 'error'); closeRecipe(); return; }
+      recipeState.ingredientList = res.ingredients;
+      recipeState.recipe = res.recipe;
+      recipeState.activeSize = 'small';
+      renderRecipeRows();
+    })
+    .catch(() => { showToast('⚠️ Network error.', 'error'); closeRecipe(); });
+}
+
+function closeRecipe() {
+  document.getElementById('recipe-modal').classList.remove('open');
+}
+
+function switchRecipeSize(size) {
+  recipeState.activeSize = size;
+  renderRecipeRows();
+}
+
+function renderRecipeRows() {
+  document.getElementById('recipe-tab-small').style.background = recipeState.activeSize === 'small' ? 'var(--accent-lt)' : '';
+  document.getElementById('recipe-tab-large').style.background = recipeState.activeSize === 'large' ? 'var(--accent-lt)' : '';
+
+  const rows = recipeState.recipe[recipeState.activeSize] || [];
+  const container = document.getElementById('recipe-rows');
+  container.innerHTML = '';
+
+  if (rows.length === 0) {
+    document.getElementById('recipe-empty-msg').style.display = '';
+  } else {
+    document.getElementById('recipe-empty-msg').style.display = 'none';
+    rows.forEach((row, i) => container.appendChild(buildRecipeRowEl(row.ingredient_id, row.qty_used, i)));
+  }
+}
+
+function buildRecipeRowEl(selectedId, qty, index) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field-row';
+  wrap.style.alignItems = 'center';
+  wrap.dataset.rowIndex = index;
+
+  const options = recipeState.ingredientList.map(ing =>
+    `<option value="${ing.id}" ${ing.id == selectedId ? 'selected' : ''}>${escapeHtml(ing.name)} (${escapeHtml(ing.unit)})</option>`
+  ).join('');
+
+  wrap.innerHTML = `
+    <div class="field-group" style="flex:2">
+      <select class="field-select recipe-ing-select">
+        <option value="">— choose ingredient —</option>
+        ${options}
+      </select>
+    </div>
+    <div class="field-group" style="flex:1">
+      <input class="field-input recipe-qty-input" type="number" step="0.01" min="0.01" placeholder="Qty used" value="${qty ?? ''}"/>
+    </div>
+    <button type="button" class="act-btn act-hold" style="height:38px" onclick="this.closest('.field-row').remove(); toggleRecipeEmptyMsg();">🗑️</button>
+  `;
+  return wrap;
+}
+
+function addRecipeRow() {
+  document.getElementById('recipe-empty-msg').style.display = 'none';
+  const container = document.getElementById('recipe-rows');
+  container.appendChild(buildRecipeRowEl('', '', container.children.length));
+}
+
+function toggleRecipeEmptyMsg() {
+  const container = document.getElementById('recipe-rows');
+  document.getElementById('recipe-empty-msg').style.display = container.children.length === 0 ? '' : 'none';
+}
+
+function saveRecipe() {
+  const rows = Array.from(document.querySelectorAll('#recipe-rows .field-row'));
+  const ingredients = [];
+
+  for (const row of rows) {
+    const ingredientId = row.querySelector('.recipe-ing-select').value;
+    const qty = row.querySelector('.recipe-qty-input').value;
+    if (!ingredientId || !qty) continue; // skip incomplete rows silently
+    if (parseFloat(qty) <= 0) {
+      showToast('⚠️ Quantities must be greater than 0.', 'error');
+      return;
+    }
+    ingredients.push({ ingredient_id: parseInt(ingredientId, 10), qty_used: parseFloat(qty) });
+  }
+
+  const btn = document.querySelector('#recipe-modal .btn-msave');
+  KofeeValidator.setLoading(btn, 'Saving…');
+
+  fetch('../api/recipe.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      product_id: recipeState.productId,
+      size: recipeState.activeSize,
+      ingredients,
+    }),
+  })
+    .then(r => r.json())
+    .then(res => {
+      KofeeValidator.resetLoading(btn, '💾 Save Recipe');
+      if (!res.ok) { showToast('⚠️ ' + res.error, 'error'); return; }
+      recipeState.recipe[recipeState.activeSize] = ingredients.map(i => ({
+        ingredient_id: i.ingredient_id,
+        qty_used: i.qty_used,
+        name: (recipeState.ingredientList.find(x => x.id == i.ingredient_id) || {}).name || '',
+        unit: (recipeState.ingredientList.find(x => x.id == i.ingredient_id) || {}).unit || '',
+      }));
+      showToast(`✅ ${recipeState.activeSize === 'small' ? 'Regular' : 'Up Size'} recipe saved!`);
+    })
+    .catch(() => {
+      KofeeValidator.resetLoading(btn, '💾 Save Recipe');
+      showToast('⚠️ Network error.', 'error');
+    });
+}
 
 </script>
 

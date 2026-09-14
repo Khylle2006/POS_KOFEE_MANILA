@@ -13,7 +13,7 @@
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
-  body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--text-main);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--text-main);-webkit-font-smoothing:antialiased}
   a{text-decoration:none;color:inherit}
   img,svg{display:block;max-width:100%}
   h1,h2,h3,.font-display{font-family:'Playfair Display',serif}
@@ -21,7 +21,7 @@
 
   /* ---------- Nav ---------- */
   header{position:sticky;top:0;z-index:50;background:rgba(251,243,233,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--latte)}
-  nav{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;max-width:1120px;margin:0 auto;position:relative}
+  nav{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;max-width:1120px;margin:0 auto}
   .brand{display:flex;align-items:center;gap:10px}
   .brand-mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(150deg,var(--caramel) 0%,var(--espresso) 140%);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px -4px rgba(201,123,61,.55)}
   .brand-mark svg{width:20px;height:20px}
@@ -94,19 +94,6 @@
   .row span:first-child{color:var(--text-muted)}
   .row span:last-child{font-weight:700;color:var(--espresso)}
 
-  /* Careers */
-  .careers{background:#fff;border-top:1px solid var(--latte);border-bottom:1px solid var(--latte)}
-  .careers-inner{max-width:1120px;margin:0 auto;padding:88px 24px}
-  .careers-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:28px}
-  .role-card{border:1.5px solid var(--latte);border-radius:18px;padding:24px;background:var(--cream);transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
-  .role-card:hover{transform:translateY(-4px);box-shadow:0 16px 28px -18px rgba(36,26,46,.25);border-color:var(--caramel-light)}
-  .role-icon{width:42px;height:42px;border-radius:12px;background:#fff;color:var(--caramel);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px;border:1px solid var(--latte)}
-  .role-card h3{font-size:16px;color:var(--espresso);margin-bottom:7px}
-  .role-card p{font-size:12.5px;color:var(--text-muted);line-height:1.65}
-  .career-footer{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 24px;border:1.5px solid var(--latte);border-radius:18px;background:linear-gradient(110deg,#fff,var(--accent-lt))}
-  .career-footer h3{font-size:18px;color:var(--espresso);margin-bottom:5px}
-  .career-footer p{font-size:13px;color:var(--text-muted);line-height:1.6}
-
   /* CTA band */
   .cta-band{background:linear-gradient(165deg,var(--espresso) 0%,var(--espresso-deep) 120%);color:var(--cream);text-align:center;padding:80px 24px;border-radius:28px;max-width:1120px;margin:0 auto}
   .cta-band h2{font-size:30px;margin-bottom:14px}
@@ -121,85 +108,14 @@
   .footer-links a:hover{color:var(--caramel)}
 
   @media (max-width:880px){
-    .nav-links{
-      display:none;
-      flex-direction:column;
-      position:absolute;
-      top:100%;
-      left:0;
-      right:0;
-      background:rgba(251,243,233,.98);
-      backdrop-filter:blur(10px);
-      border-bottom:1.5px solid var(--latte);
-      padding:16px 24px;
-      gap:14px;
-      box-shadow:0 12px 24px -6px rgba(36,26,46,.12);
-      z-index:100;
-    }
-    .nav-links.open{display:flex}
-    .nav-links a{font-size:14.5px;padding:8px 0;border-bottom:1px dashed var(--latte)}
-    .nav-links a:last-child{border-bottom:none}
-    .nav-toggle{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      width:38px;
-      height:38px;
-      border-radius:10px;
-      background:var(--latte);
-      border:none;
-      font-size:18px;
-      color:var(--espresso);
-      cursor:pointer;
-      margin-left:4px;
-    }
-    .hero-inner{grid-template-columns:1fr;padding:56px 24px 70px;text-align:center;gap:36px}
-    .eyebrow{margin-left:auto;margin-right:auto}
-    .hero h1{font-size:clamp(28px,6vw,40px)}
-    .hero p{margin-left:auto;margin-right:auto}
-    .hero-ctas{justify-content:center}
-    .hero-stats{justify-content:center;gap:24px;margin-top:34px;padding-top:24px;border-top:1px solid rgba(251,243,233,.12)}
+    .nav-links{display:none}
+    .nav-toggle{display:block}
+    .hero-inner{grid-template-columns:1fr;padding-top:64px}
+    .hero h1{font-size:34px}
     .hero-art{order:-1}
-    .cup-wrap{margin:0 auto;width:min(210px,60vw)}
-    .hero-glow{width:min(300px,80vw);height:min(300px,80vw)}
-    .menu-grid{grid-template-columns:repeat(2,1fr);gap:16px}
-    .about-inner{grid-template-columns:1fr;gap:36px;padding:60px 24px}
-    .about-art{aspect-ratio:16/9;max-height:260px}
-    .visit-grid{grid-template-columns:1fr;gap:18px}
-    .careers-grid{grid-template-columns:1fr 1fr}
-    .career-footer{align-items:flex-start;flex-direction:column}
-  }
-
-  @media (max-width:540px){
-    .wrap{padding:0 16px}
-    nav{padding:12px 16px}
-    .brand-text .tag{display:none}
-    .nav-cta .btn{padding:8px 15px;font-size:12px}
-    .hero-inner{padding:40px 16px 52px}
-    .hero-ctas{flex-direction:column;width:100%}
-    .hero-ctas .btn{width:100%}
-    .hero-stats{gap:16px}
-    .hero-stats div b{font-size:20px}
-    .hero-stats div span{font-size:10.5px}
-    section{padding:54px 0}
-    .section-head{margin-bottom:28px}
-    .section-title{font-size:25px}
-    .menu-grid{grid-template-columns:repeat(2,1fr);gap:12px}
-    .menu-card{padding:20px 12px;border-radius:16px}
-    .menu-card .ic{width:46px;height:46px;font-size:22px;margin-bottom:12px}
-    .menu-card h3{font-size:14px}
-    .visit-card{padding:20px 16px;border-radius:16px}
-    .row{flex-direction:column;align-items:flex-start;gap:3px;padding:8px 0}
-    .careers-inner{padding:54px 16px}
-    .careers-grid{grid-template-columns:1fr;gap:12px}
-    .role-card{padding:20px 18px}
-    .cta-band{padding:48px 18px;border-radius:20px}
-    .footer-inner{flex-direction:column;text-align:center;gap:16px}
-    .footer-links{justify-content:center;gap:16px}
-  }
-
-  @media (max-width:360px){
-    .menu-grid{grid-template-columns:1fr}
+    .menu-grid{grid-template-columns:repeat(2,1fr)}
+    .about-inner{grid-template-columns:1fr}
+    .visit-grid{grid-template-columns:1fr}
   }
 </style>
 </head>
@@ -224,12 +140,11 @@
       <a href="#menu">Menu</a>
       <a href="#about">About</a>
       <a href="#visit">Visit Us</a>
-      <a href="#careers">Hiring</a>
     </div>
     <div class="nav-cta">
       <a href="auth/login.php" class="btn btn-primary">Login</a>
     </div>
-    <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    <button class="nav-toggle">☰</button>
   </nav>
 </header>
 
@@ -325,47 +240,11 @@
   </div>
 </section>
 
-<section class="careers" id="careers">
-  <div class="careers-inner">
-    <div class="section-head center">
-      <div class="section-eyebrow">Come Work With Us</div>
-      <h2 class="section-title">Good coffee needs good people</h2>
-      <p class="section-sub" style="margin:0 auto">We are building a warm, thoughtful team that cares about every cup and every guest.</p>
-    </div>
-    <div class="careers-grid">
-      <article class="role-card">
-        <div class="role-icon">☕</div>
-        <h3>Barista</h3>
-        <p>Prepare quality drinks, learn the craft, and make each customer feel welcome.</p>
-      </article>
-      <article class="role-card">
-        <div class="role-icon">🤝</div>
-        <h3>Counter Crew</h3>
-        <p>Keep orders moving with friendly service, careful preparation, and a sharp eye for detail.</p>
-      </article>
-      <article class="role-card">
-        <div class="role-icon">★</div>
-        <h3>Shift Lead</h3>
-        <p>Support the team on the floor, guide daily operations, and help the café run smoothly.</p>
-      </article>
-    </div>
-    <div class="career-footer">
-      <div>
-        <h3>Ready to join the crew?</h3>
-        <p>Send your name, preferred role, and a short introduction to start the conversation.</p>
-      </div>
-      <a class="btn btn-primary" href="mailto:careers@kofeemanila.com?subject=Kofee%20Manila%20Job%20Application">Apply by Email</a>
-    </div>
-  </div>
-</section>
-
 <section>
-  <div class="wrap">
-    <div class="cta-band">
-      <h2 class="font-display">Ready for your next cup?</h2>
-      <p>Order ahead or drop by the counter — either way, it's fresh.</p>
-      <a href="#menu" class="btn btn-primary">Order Now</a>
-    </div>
+  <div class="cta-band">
+    <h2 class="font-display">Ready for your next cup?</h2>
+    <p>Order ahead or drop by the counter — either way, it's fresh.</p>
+    <a href="#menu" class="btn btn-primary">Order Now</a>
   </div>
 </section>
 
@@ -376,39 +255,10 @@
       <a href="#menu">Menu</a>
       <a href="#about">About</a>
       <a href="#visit">Visit Us</a>
-      <a href="#careers">Hiring</a>
-      <a href="auth/login.php">Login</a>
+      <a href="#">Login</a>
     </div>
   </div>
 </footer>
 
-<script>
-  const navToggle = document.getElementById('navToggle');
-  const navLinks = document.querySelector('.nav-links');
-
-  if (navToggle && navLinks) {
-    navToggle.addEventListener('click', () => {
-      const isOpen = navLinks.classList.toggle('open');
-      navToggle.setAttribute('aria-expanded', isOpen);
-      navToggle.textContent = isOpen ? '✕' : '☰';
-    });
-
-    navLinks.querySelectorAll('a').forEach(link => {
-      link.addEventListener('click', () => {
-        navLinks.classList.remove('open');
-        navToggle.setAttribute('aria-expanded', 'false');
-        navToggle.textContent = '☰';
-      });
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!navToggle.contains(e.target) && !navLinks.contains(e.target)) {
-        navLinks.classList.remove('open');
-        navToggle.setAttribute('aria-expanded', 'false');
-        navToggle.textContent = '☰';
-      }
-    });
-  }
-</script>
 </body>
 </html>
