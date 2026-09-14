@@ -76,8 +76,6 @@ $hour = (int)date('G');
 $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
 $fname = $user['firstname'] ?: $user['username'];
 $initials = strtoupper(substr($fname, 0, 1));
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -105,6 +103,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-employee-home" class="page active">
   <div class="page-header">
@@ -309,6 +308,7 @@ include("../includes/sidebar.php");
       <input type="hidden" name="action" value="create"/>
       <input type="hidden" name="items" id="items-json"/>
       <div class="modal-body">
+        <div id="create-form-error" style="display:none;margin:0 0 12px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
         <div class="field-group">
           <label class="field-label">Title <span style="color:var(--red)">*</span></label>
           <input class="field-input" type="text" name="title" id="f-title" placeholder="e.g. Q3 espresso machine parts" required/>
@@ -492,20 +492,50 @@ function showToast(message, type = 'success') {
 document.getElementById('create-form').addEventListener('submit', function(e) {
   e.preventDefault();
   
+  const errBox = document.getElementById('create-form-error');
+  if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+
+  const titleInput = document.getElementById('f-title');
+  if (!titleInput.value.trim()) {
+    if (errBox) {
+      errBox.textContent = '⚠️ Requisition title is required.';
+      errBox.style.display = 'block';
+    }
+    titleInput.focus();
+    return;
+  }
+
   const items = [];
+  let invalidQty = false;
+
   document.querySelectorAll('#item-rows .item-row').forEach(row => {
     const selectEl = row.querySelector('.item-select');
     const inventoryId = selectEl.value;
     const inventoryItem = window.INVENTORY_ITEMS.find(i => i.id == inventoryId);
     const name = inventoryItem ? inventoryItem.name : '';
-    const qty   = row.querySelector('.qty').value;
+    const qtyInput = row.querySelector('.qty');
+    const qty   = parseFloat(qtyInput.value) || 0;
     const unit  = row.querySelector('.unit').value.trim();
-    const price = row.querySelector('.price').value;
-    if (name) items.push({ name, inventory_id: inventoryId, qty, unit, price });
+    const price = parseFloat(row.querySelector('.price').value) || 0;
+    if (name) {
+      if (qty <= 0) invalidQty = true;
+      items.push({ name, inventory_id: inventoryId, qty, unit, price });
+    }
   });
   
   if (!items.length) {
-    alert('Add at least one item.');
+    if (errBox) {
+      errBox.textContent = '⚠️ Please add at least one item to the requisition.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (invalidQty) {
+    if (errBox) {
+      errBox.textContent = '⚠️ Each item must have a quantity greater than 0.';
+      errBox.style.display = 'block';
+    }
     return;
   }
   
@@ -517,6 +547,11 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
   formData.append('notes', document.querySelector('textarea[name="notes"]').value);
   formData.append('items', JSON.stringify(items));
   
+  const submitBtn = this.querySelector('button[type="submit"]');
+  if (window.KofeeValidator && submitBtn) {
+    KofeeValidator.setLoading(submitBtn, 'Submitting…');
+  }
+
   // Submit via AJAX
   fetch('../php/requisitions.php', {
     method: 'POST',
@@ -524,6 +559,9 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
   })
   .then(r => r.text())
   .then(html => {
+    if (window.KofeeValidator && submitBtn) {
+      KofeeValidator.resetLoading(submitBtn);
+    }
     // Check if response contains success indicator
     if (html.includes('toast-success') || html.includes('Requisition submitted')) {
       showToast('✅ Requisition submitted for review!', 'success');
@@ -532,12 +570,24 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
       document.getElementById('create-form').reset();
       document.getElementById('f-title').value = '';
       document.getElementById('item-rows').innerHTML = '';
+      document.getElementById('running-total').textContent = '₱0.00';
     } else {
+      if (errBox) {
+        errBox.textContent = '⚠️ Failed to submit requisition. Please check your inputs.';
+        errBox.style.display = 'block';
+      }
       showToast('⚠️ Failed to submit requisition', 'error');
     }
   })
   .catch(e => {
+    if (window.KofeeValidator && submitBtn) {
+      KofeeValidator.resetLoading(submitBtn);
+    }
     console.error('Error:', e);
+    if (errBox) {
+      errBox.textContent = '⚠️ Network error while submitting requisition.';
+      errBox.style.display = 'block';
+    }
     showToast('⚠️ Error submitting requisition', 'error');
   });
 });
@@ -547,6 +597,7 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCreate(); } });
 </script>
+<script src="../js/validator.js"></script>
 <script src="../js/employee_dashboard.js?v=<?= filemtime(__DIR__.'/../js/employee_dashboard.js') ?>"></script>
 
 </body>

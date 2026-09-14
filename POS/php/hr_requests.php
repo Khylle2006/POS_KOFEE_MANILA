@@ -13,92 +13,7 @@ $toast_type = 'success';
 // Admin/HR = reviewers only. Everyone else = requesters only.
 $is_reviewer = in_array($role, ['admin', 'hr']);
 
-$request_types = [
-    'Certificate of Employment',
-    'ID Replacement',
-    'Schedule Change',
-    'Payslip Copy',
-    'Document Correction',
-    'Inventory Restock',
-    'Inventory Adjustment',
-    'Other'
-];
-
-
-
-
-function createInventoryRequest($pdo, $employeeId, $ingredientName, $qty, $reason) {
-    $details = "Ingredient: {$ingredientName} | Qty: {$qty} | Reason: {$reason}";
-    $stmt = $pdo->prepare("
-        INSERT INTO hr_requests (employee_id, request_type, details, status)
-        VALUES (:employee_id, 'Inventory Restock', :details, 'pending')
-    ");
-    $stmt->execute([
-        ':employee_id' => $employeeId,
-        ':details' => $details
-    ]);
-}
-
-
-
-
-
-
-function parseInventoryRequestDetails($details) {
-    preg_match('/Ingredient ID:\s*(\d+)/i', $details, $ingredientMatch);
-    preg_match('/Qty:\s*([0-9]+(?:\.[0-9]+)?)/i', $details, $qtyMatch);
-    preg_match('/Type:\s*([^;]+)/i', $details, $typeMatch);
-
-    return [
-        'ingredient_id' => isset($ingredientMatch[1]) ? (int)$ingredientMatch[1] : 0,
-        'qty' => isset($qtyMatch[1]) ? (float)$qtyMatch[1] : 0.0,
-        'type' => isset($typeMatch[1]) ? trim($typeMatch[1]) : '',
-    ];
-}
-
-function applyApprovedInventoryRequest($pdo, $request) {
-    $parsed = parseInventoryRequestDetails($request['details'] ?? '');
-    if (!$parsed['ingredient_id'] || $parsed['qty'] <= 0) {
-        return false;
-    }
-
-    $type = $parsed['type'];
-    if ($type === 'Inventory Adjustment') {
-        $stmt = $pdo->prepare('UPDATE ingredients SET quantity = :q WHERE id = :id');
-        $stmt->execute([
-            ':q' => $parsed['qty'],
-            ':id' => $parsed['ingredient_id'],
-        ]);
-
-        $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
-            ->execute([
-                ':i' => $parsed['ingredient_id'],
-                ':q' => $parsed['qty'],
-                ':u' => $request['reviewed_by'] ?? null,
-            ]);
-
-        return true;
-    }
-
-    if ($type === 'Inventory Restock') {
-        $stmt = $pdo->prepare('UPDATE ingredients SET quantity = quantity + :q WHERE id = :id');
-        $stmt->execute([
-            ':q' => $parsed['qty'],
-            ':id' => $parsed['ingredient_id'],
-        ]);
-
-        $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
-            ->execute([
-                ':i' => $parsed['ingredient_id'],
-                ':q' => $parsed['qty'],
-                ':u' => $request['reviewed_by'] ?? null,
-            ]);
-
-        return true;
-    }
-
-    return false;
-}
+$request_types = ['Certificate of Employment','ID Replacement','Schedule Change','Payslip Copy','Document Correction','Other'];
 
 // ── Resolve the logged-in user's own employee profile (for self-service filing) ──
 $my_employee = null;
@@ -136,17 +51,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id     = (int)($_POST['id'] ?? 0);
             $status = $_POST['status'] ?? '';
             if ($id && in_array($status, ['approved','rejected','completed'])) {
-                $request = $pdo->prepare('SELECT * FROM hr_requests WHERE id=:id LIMIT 1');
-                $request->execute([':id' => $id]);
-                $row = $request->fetch();
-
-                if ($status === 'approved' && $row && in_array($row['request_type'], ['Inventory Restock', 'Inventory Adjustment'])) {
-                    applyApprovedInventoryRequest($pdo, $row);
-                }
-
                 $pdo->prepare('UPDATE hr_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
                     ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
-
                 $labels = ['approved'=>'✅ Request approved.', 'rejected'=>'❌ Request rejected.', 'completed'=>'📦 Request marked completed.'];
                 $toast  = $labels[$status];
             }
@@ -212,7 +118,6 @@ foreach ($requests as $r) {
     elseif ($r['status']==='completed') $completed_c++;
 }
 
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -235,6 +140,7 @@ include("../includes/sidebar.php");
 </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-hrrequests" class="page active">
   <div class="page-header">
@@ -344,7 +250,7 @@ include("../includes/sidebar.php");
       <h3>➕ New Request</h3>
       <button class="modal-close" onclick="closeFile()">✕</button>
     </div>
-    <form method="POST">
+    <form method="POST" id="hr-request-form">
       <input type="hidden" name="action" value="file"/>
 
       <div class="field-group mg-b">
@@ -354,19 +260,20 @@ include("../includes/sidebar.php");
 
       <div class="field-group mg-b">
         <label class="field-label">Request Type <span class="req">*</span></label>
-        <select class="field-input" name="request_type" required>
+        <select class="field-input" name="request_type" id="hr-request-type" required>
+          <option value="">Select a request type…</option>
           <?php foreach ($request_types as $t): ?><option value="<?= $t ?>"><?= $t ?></option><?php endforeach; ?>
         </select>
       </div>
 
       <div class="field-group mg-b">
-        <label class="field-label">Details</label>
-        <textarea class="field-input" name="details" rows="3" placeholder="Optional notes"></textarea>
+        <label class="field-label">Details / Notes</label>
+        <textarea class="field-input" name="details" id="hr-details" rows="3" placeholder="Provide any additional context or details for HR"></textarea>
       </div>
 
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeFile()">Cancel</button>
-        <button type="submit" class="btn-save">✔ Submit Request</button>
+        <button type="submit" class="btn-save" id="hr-submit-btn">✔ Submit Request</button>
       </div>
     </form>
   </div>
@@ -378,9 +285,49 @@ include("../includes/sidebar.php");
 <script>setTimeout(()=>{const t=document.getElementById('toast-msg'); if(t) t.style.opacity='0';},3500);</script>
 <?php endif; ?>
 
+<script src="../js/validator.js"></script>
 <script>
 function openFile()  { document.getElementById('file-modal')?.classList.add('open'); }
-function closeFile() { document.getElementById('file-modal')?.classList.remove('open'); }
+function closeFile() {
+  const modal = document.getElementById('file-modal');
+  if (modal) {
+    modal.classList.remove('open');
+    if (window.KofeeValidator) {
+      document.querySelectorAll('#hr-request-form input, #hr-request-form select, #hr-request-form textarea').forEach(el => {
+        KofeeValidator.clearError(el);
+      });
+    }
+  }
+}
+
+const hrForm = document.getElementById('hr-request-form');
+if (hrForm && window.KofeeValidator) {
+  KofeeValidator.attach(hrForm, {
+    customValidate: function(form) {
+      const typeSel = form.querySelector('[name="request_type"]');
+      const details = form.querySelector('[name="details"]');
+      if (!typeSel.value) {
+        return { field: typeSel, message: 'Please select a request type.' };
+      }
+      if (typeSel.value === 'Other' && (!details.value.trim() || details.value.trim().length < 5)) {
+        return { field: details, message: 'Please explain your request in the details field (at least 5 characters).' };
+      }
+      return true;
+    },
+    loadingText: 'Submitting…'
+  });
+}
+
+// Add loading indicators on review actions
+document.querySelectorAll('.data-table form').forEach(f => {
+  f.addEventListener('submit', function() {
+    const btn = f.querySelector('button[type="submit"]');
+    if (btn && window.KofeeValidator) {
+      KofeeValidator.setLoading(btn, '…');
+    }
+  });
+});
+
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFile(); });
 </script>
 

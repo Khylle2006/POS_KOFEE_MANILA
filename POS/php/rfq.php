@@ -201,8 +201,6 @@ if (!$rfq && !$requisition) {
         ORDER BY FIELD(rfqs.status,'open','awarded','closed'), rfqs.created_at DESC
     ")->fetchAll();
 }
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -228,6 +226,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-rfq" class="page active">
   <div class="page-header">

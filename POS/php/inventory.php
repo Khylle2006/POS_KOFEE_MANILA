@@ -7,19 +7,6 @@ $pdo   = get_db();
 $toast = '';
 $toast_type = 'success';
 
-function createInventoryStockRequest($pdo, $employeeId, $ingredientId, $ingredientName, $qty, $requestType = 'Inventory Restock', $reason = 'Pending approval') {
-    $details = "Ingredient ID: {$ingredientId}; Ingredient: {$ingredientName}; Qty: {$qty}; Type: {$requestType}; Reason: {$reason}";
-    $stmt = $pdo->prepare(
-        'INSERT INTO hr_requests (employee_id, request_type, details, status)
-         VALUES (:employee_id, :request_type, :details, "pending")'
-    );
-    return $stmt->execute([
-        ':employee_id' => $employeeId,
-        ':request_type' => $requestType,
-        ':details' => $details,
-    ]);
-}
-
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -51,85 +38,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Restock (add to existing) — requires HR approval before stock changes
+    // Restock (add to existing)
     if ($action === 'restock') {
         $id  = (int)($_POST['ingredient_id'] ?? 0);
         $qty = (float)($_POST['qty']         ?? 0);
         if ($id && $qty > 0) {
-            $user = current_user();
-            $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
-            $emp->execute([':uid' => $user['id'] ?? 0]);
-            $employee = $emp->fetch();
-
-            if (!$employee) {
-                $toast = '⚠️ Your account is not linked to an employee profile. Ask HR to link it first.';
-                $toast_type = 'error';
-            } else {
-                $ing = $pdo->prepare('SELECT name, quantity FROM ingredients WHERE id = :id LIMIT 1');
-                $ing->execute([':id' => $id]);
-                $ingredient = $ing->fetch();
-
-                // Update the inventory quantity directly
-                $newQuantity = ((float)$ingredient['quantity']) + $qty;
-                $pdo->prepare(
-                    'UPDATE ingredients SET quantity = :q WHERE id = :id'
-                )->execute([':q' => $newQuantity, ':id' => $id]);
-
-                // Also log the restock request
-                createInventoryStockRequest(
-                    $pdo,
-                    (int)$employee['id'],
-                    $id,
-                    $ingredient['name'] ?? 'Unknown item',
-                    $qty,
-                    'Inventory Restock',
-                    'Restock request approved'
-                );
-
-                $toast = '✅ Inventory updated! Added ' . $qty . ' units.';
-            }
+            $pdo->prepare('UPDATE ingredients SET quantity = quantity + :q WHERE id = :id')
+                ->execute([':q'=>$qty,':id'=>$id]);
+            $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
+                ->execute([':i'=>$id,':q'=>$qty,':u'=>$_SESSION['user_id']]);
+            $toast = '✅ Restocked successfully!';
         } else {
             $toast = '⚠️ Enter a valid quantity.';
             $toast_type = 'error';
         }
     }
 
-    // Set stock (set exact value) — also requires HR approval before stock changes
+    // Set stock (set exact value)
     if ($action === 'set_stock') {
         $id  = (int)($_POST['ingredient_id'] ?? 0);
         $qty = (float)($_POST['qty']         ?? -1);
         if ($id && $qty >= 0) {
-            $user = current_user();
-            $emp = $pdo->prepare('SELECT id FROM employees WHERE user_id = :uid LIMIT 1');
-            $emp->execute([':uid' => $user['id'] ?? 0]);
-            $employee = $emp->fetch();
-
-            if (!$employee) {
-                $toast = '⚠️ Your account is not linked to an employee profile. Ask HR to link it first.';
-                $toast_type = 'error';
-            } else {
-                $ing = $pdo->prepare('SELECT name FROM ingredients WHERE id = :id LIMIT 1');
-                $ing->execute([':id' => $id]);
-                $ingredient = $ing->fetch();
-
-                // Update the inventory quantity directly
-                $pdo->prepare(
-                    'UPDATE ingredients SET quantity = :q WHERE id = :id'
-                )->execute([':q' => $qty, ':id' => $id]);
-
-                // Also log the stock adjustment request
-                createInventoryStockRequest(
-                    $pdo,
-                    (int)$employee['id'],
-                    $id,
-                    $ingredient['name'] ?? 'Unknown item',
-                    $qty,
-                    'Inventory Adjustment',
-                    'Stock set to ' . $qty . ' - approved'
-                );
-
-                $toast = '✅ Stock updated to ' . $qty . ' units.';
-            }
+            $pdo->prepare('UPDATE ingredients SET quantity = :q WHERE id = :id')
+                ->execute([':q'=>$qty,':id'=>$id]);
+            $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
+                ->execute([':i'=>$id,':q'=>$qty,':u'=>$_SESSION['user_id']]);
+            $toast = '✅ Stock set to ' . $qty . '!';
         } else {
             $toast = '⚠️ Enter a valid quantity (0 or more).';
             $toast_type = 'error';
@@ -547,16 +481,16 @@ function selectItem(ing) {
 
     <div class="restock-section">
       <h3>✏️ Update Exact Stock</h3>
-      <form method="POST">
+      <form method="POST" id="set-stock-form" onsubmit="return handleSetStockSubmit(event, this)">
         <input type="hidden" name="action"        value="set_stock"/>
         <input type="hidden" name="ingredient_id" value="${ing.id}"/>
         ${returnFields()}
         <div class="restock-row">
-          <input type="number" name="qty"
+          <input type="number" name="qty" id="set-stock-qty"
                  placeholder="Set stock to… (${esc(ing.unit)})"
                  value="${qty.toFixed(1)}"
                  step="0.1" min="0" required/>
-          <button type="submit" class="btn-confirm" style="background:#1565c0">✔ Update</button>
+          <button type="submit" class="btn-confirm" style="background:#1565c0">✔ Set</button>
         </div>
       </form>
     </div>
@@ -657,6 +591,11 @@ function setReturnFields(vId, cId, sId) {
 function closeModal() {
   document.getElementById('item-modal').classList.remove('open');
   document.getElementById('qty-row').style.display = '';
+  if (window.KofeeValidator) {
+    document.querySelectorAll('#item-form input, #item-form select').forEach(el => {
+      KofeeValidator.clearError(el);
+    });
+  }
 }
 
 // ── Archive modal ──────────────────────────────
@@ -676,6 +615,24 @@ function openPurge(id, name) {
 }
 function closePurge() { document.getElementById('purge-modal').classList.remove('open'); }
 
+// ── Form handlers with KofeeValidator ──
+function handleSetStockSubmit(e, form) {
+  const qtyInput = form.querySelector('[name="qty"]');
+  const val = parseFloat(qtyInput.value);
+  if (isNaN(val) || val < 0) {
+    e.preventDefault();
+    if (window.KofeeValidator) {
+      KofeeValidator.showError(qtyInput, 'Quantity must be 0 or greater.');
+    }
+    return false;
+  }
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn && window.KofeeValidator) {
+    KofeeValidator.setLoading(btn, 'Updating…');
+  }
+  return true;
+}
+
 // Backdrop / Escape
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target===el){ closeModal(); closeDelete(); closePurge(); } });
@@ -683,7 +640,43 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 document.addEventListener('keydown', e => {
   if (e.key==='Escape'){ closeModal(); closeDelete(); closePurge(); }
 });
-</script>
 
+// Attach validation to item-form
+const itemForm = document.getElementById('item-form');
+if (itemForm && window.KofeeValidator) {
+  KofeeValidator.attach(itemForm, {
+    customValidate: function(form) {
+      const cat = form.querySelector('[name="cat_id"]');
+      const name = form.querySelector('[name="name"]');
+      const qty = form.querySelector('[name="quantity"]');
+      const reorder = form.querySelector('[name="reorder_at"]');
+
+      if (!cat.value) return { field: cat, message: 'Please select a category.' };
+      if (!name.value.trim() || name.value.trim().length < 2) {
+        return { field: name, message: 'Item name must be at least 2 characters.' };
+      }
+      if (qty && qty.value !== '' && parseFloat(qty.value) < 0) {
+        return { field: qty, message: 'Quantity cannot be negative.' };
+      }
+      if (reorder && reorder.value !== '' && parseFloat(reorder.value) < 0) {
+        return { field: reorder, message: 'Reorder point cannot be negative.' };
+      }
+      return true;
+    },
+    loadingText: 'Saving…'
+  });
+}
+
+// Attach loading states to archive/purge forms
+document.querySelectorAll('#delete-modal form, #purge-modal form').forEach(f => {
+  f.addEventListener('submit', function() {
+    const btn = f.querySelector('button[type="submit"]');
+    if (btn && window.KofeeValidator) {
+      KofeeValidator.setLoading(btn, '…');
+    }
+  });
+});
+</script>
+<script src="../js/validator.js"></script>
 </body>
 </html>

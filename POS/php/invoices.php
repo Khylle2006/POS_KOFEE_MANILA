@@ -188,8 +188,6 @@ $list_stmt = $pdo->prepare("
 ");
 $list_stmt->execute($params);
 $invoices = $list_stmt->fetchAll();
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -206,6 +204,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-invoices" class="page active">
   <div class="page-header">
@@ -227,14 +226,22 @@ include("../includes/sidebar.php");
         <h2>New Invoice — <?= htmlspecialchars($new_po['req_title']) ?></h2>
         <p class="muted-cell" style="margin-bottom:16px">PO #<?= str_pad($new_po['id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($new_po['supplier_name']) ?> · PO Total: <?= php_currency($new_po['total_amount']) ?></p>
 
-        <form method="POST">
+        <form method="POST" id="invoice-form">
           <input type="hidden" name="action" value="create"/>
           <input type="hidden" name="po_id" value="<?= $new_po['id'] ?>"/>
 
+          <div id="invoice-error" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
-            <input class="field-input" type="text" name="invoice_number" placeholder="Invoice Number *" required/>
-            <input class="field-input" type="date" name="invoice_date" placeholder="Invoice Date"/>
-            <input class="field-input" type="date" name="due_date" placeholder="Due Date"/>
+            <div>
+              <input class="field-input" type="text" name="invoice_number" id="f-inv-num" placeholder="Invoice Number *" required/>
+            </div>
+            <div>
+              <input class="field-input" type="date" name="invoice_date" id="f-inv-date" placeholder="Invoice Date"/>
+            </div>
+            <div>
+              <input class="field-input" type="date" name="due_date" id="f-due-date" placeholder="Due Date"/>
+            </div>
           </div>
 
           <div class="inv-line-row" style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;border-bottom:1.5px solid var(--border)">
@@ -257,7 +264,7 @@ include("../includes/sidebar.php");
 
           <div style="margin-top:16px;text-align:right;display:flex;gap:10px;justify-content:flex-end">
             <a href="invoices.php" class="btn-cancel">Cancel</a>
-            <button type="submit" class="btn-save">🧾 Log Invoice</button>
+            <button type="submit" class="btn-save" id="invoice-submit-btn">🧾 Log Invoice</button>
           </div>
         </form>
       </div>
@@ -315,20 +322,81 @@ include("../includes/sidebar.php");
     <?php else: ?>
       <!-- ── List view ── -->
       <?php if (has_permission('procurement.invoice.create')): ?>
-      <div class="table-card" style="padding:16px 18px;margin-bottom:18px">
-        <h3 style="font-size:13.5px;margin-bottom:10px">🧾 Log a New Invoice</h3>
-        <?php if (empty($eligible_pos)): ?>
-          <p class="muted-cell">No delivered Purchase Orders awaiting invoicing right now.</p>
-        <?php else: ?>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <?php foreach ($eligible_pos as $ep): ?>
-              <button class="act-btn" onclick="window.location.href='invoices.php?new_for_po=<?= $ep['id'] ?>'">
-                #<?= str_pad($ep['id'],5,'0',STR_PAD_LEFT) ?> — <?= htmlspecialchars($ep['supplier_name']) ?> (<?= php_currency($ep['total_amount']) ?>)
-              </button>
-            <?php endforeach; ?>
+<div class="table-card" style="padding:0;margin-bottom:18px;overflow:hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1.5px solid var(--border)">
+    <h3 style="font-size:13.5px;font-weight:700;color:var(--espresso);display:flex;align-items:center;gap:6px;margin:0">
+      🧾 Log a New Invoice
+    </h3>
+    <?php if (!empty($eligible_pos)): ?>
+      <span class="count-badge" style="background:var(--blue-lt);color:var(--blue)"><?= count($eligible_pos) ?></span>
+    <?php endif; ?>
+  </div>
+
+  <?php if (empty($eligible_pos)): ?>
+    <div style="padding:30px 18px;text-align:center;color:var(--text-muted);font-size:13px">
+      📦 No delivered Purchase Orders awaiting invoicing right now.
+    </div>
+  <?php else: ?>
+    <div>
+      <?php foreach ($eligible_pos as $ep): ?>
+        <div class="kf-invoice-row" onclick="window.location.href='invoices.php?new_for_po=<?= $ep['id'] ?>'">
+          <div class="kf-invoice-icon" style="background:var(--blue-lt)">📦</div>
+          <div class="kf-invoice-info">
+            <div class="kf-invoice-num">
+              PO #<?= str_pad($ep['id'],5,'0',STR_PAD_LEFT) ?>
+            </div>
+            <div class="kf-invoice-supplier">
+              <?= htmlspecialchars($ep['supplier_name']) ?>
+            </div>
           </div>
-        <?php endif; ?>
-      </div>
+          <div class="kf-invoice-amount">
+            <?= php_currency($ep['total_amount']) ?>
+          </div>
+          <button class="act-btn act-activate" onclick="event.stopPropagation();window.location.href='invoices.php?new_for_po=<?= $ep['id'] ?>'">
+            Log Invoice
+          </button>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+</div>
+
+<style>
+.kf-invoice-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 18px;
+  border-bottom: 1px solid #F2E6D6;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.kf-invoice-row:last-child { border-bottom: none; }
+.kf-invoice-row:hover { background: #FEFAF4; }
+
+.kf-invoice-icon {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.kf-invoice-info { flex: 1; min-width: 0; }
+.kf-invoice-num {
+  font-size: 13px; font-weight: 700; color: var(--espresso);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kf-invoice-supplier {
+  font-size: 11.5px; color: var(--text-muted); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kf-invoice-amount {
+  font-size: 14px; font-weight: 800; color: var(--espresso);
+  flex-shrink: 0; white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .kf-invoice-row { flex-wrap: wrap; }
+  .kf-invoice-amount { order: 3; margin-left: 48px; }
+  .kf-invoice-info { order: 2; }
+}
+</style>
       <?php endif; ?>
 
       <div class="filter-bar" style="padding:0">
@@ -363,5 +431,32 @@ include("../includes/sidebar.php");
   </div>
 </div>
 
+<script src="../js/validator.js"></script>
+<script>
+const invForm = document.getElementById('invoice-form');
+if (invForm && window.KofeeValidator) {
+  KofeeValidator.attach(invForm, {
+    customValidate: function(form) {
+      const errBox = document.getElementById('invoice-error');
+      if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+
+      const invNum = form.querySelector('[name="invoice_number"]');
+      if (!invNum || !invNum.value.trim()) {
+        return { field: invNum, message: 'Invoice number is required.' };
+      }
+
+      const invDate = form.querySelector('[name="invoice_date"]')?.value;
+      const dueDate = form.querySelector('[name="due_date"]')?.value;
+
+      if (invDate && dueDate && new Date(dueDate).getTime() < new Date(invDate).getTime()) {
+        return { field: form.querySelector('[name="due_date"]'), message: 'Due date cannot be before invoice date.' };
+      }
+
+      return true;
+    },
+    loadingText: 'Logging Invoice…'
+  });
+}
+</script>
 </body>
 </html>

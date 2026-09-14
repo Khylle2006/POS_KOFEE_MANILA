@@ -28,7 +28,7 @@ if (!function_exists('icon')) {
             'sun'         => '<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/>',
             'coin'        => '<circle cx="12" cy="12" r="9"/><path d="M9.2 15.4c.5.9 1.5 1.5 2.8 1.5 1.8 0 3-1 3-2.3 0-3.2-5.6-1.7-5.6-4.9 0-1.3 1.2-2.3 3-2.3 1.2 0 2.2.5 2.7 1.4M12 6.4v1.2M12 16.4v1.2"/>',
             'chevron'     => '<path d="M9 6l6 6-6 6"/>',
-            'dashboard'   => '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+        'dashboard'   => '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
             'rfq'         => '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
             'truck'       => '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/>',
             'invoice'     => '<path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
@@ -44,12 +44,12 @@ if (!function_exists('icon')) {
 }
 
 $user    = current_user();
-$role    = $user['role'] ?? 'crew';
+$role    = $user['role']  ?? 'crew';   // primary role — used only for the display badge
+$roles   = $user['roles'] ?? [$role];  // ALL roles this account holds — used for access checks
 $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
     'dashboard'    => has_permission('dashboard.view'),
-    'employee_dashboard' => has_permission('employee_dashboard.view'),
     'new_order'    => has_permission('orders.new'),
     'pending'      => has_permission('orders.pending'),
     'history'      => has_permission('orders.history'),
@@ -57,34 +57,17 @@ $access = [
     'menu_manager' => has_permission('menu.manage'),
     'inventory'    => has_permission('inventory.view'),
     'users'        => has_permission('users.manage'),
-
-    // ── Procurement module — gated on the specific permission each
-    //    page's workflow actually needs, so the link only shows to
-    //    roles who can do something once they get there. ──────────
-    'procurement_home'    => has_permission('procurement.view'),
-    'requisitions'         => has_permission('procurement.requisitions') || has_permission('procurement.requisition.create') || has_permission('procurement.requisition.review'),
-    'rfq'                  => has_permission('procurement.rfq.manage') || has_permission('procurement.bidding.review') || has_permission('procurement.negotiation'),
-    'purchase_orders'      => has_permission('procurement.po.manage') || has_permission('procurement.receiving') || has_permission('procurement.negotiation'),
-    'goods_receipts'       => has_permission('procurement.receiving') || has_permission('procurement.grn.discrepancy.manage'),
-    'invoices'             => has_permission('procurement.invoice.create') || has_permission('procurement.invoice.match'),
-    'three_way_match'      => has_permission('procurement.invoice.match'),
-    'payments'             => has_permission('procurement.payment.process'),
-    'supplier_performance' => has_permission('procurement.performance.rate') || has_permission('procurement.close'),
-    'suppliers'            => has_permission('procurement.suppliers.manage'),
-    'procurement_reports'  => has_permission('procurement.reports.view'),
-    'supplier_portal'      => has_permission('procurement.supplier.portal'),
-    'hr_employees' => in_array($role, ['admin', 'hr'], true),
-    'hr_attendance'=> in_array($role, ['admin', 'hr'], true),
-    'hr_leave'     => in_array($role, ['admin', 'hr'], true),
-    'hr_requests'  => in_array($role, ['admin', 'hr'], true),
-    'manage_permissions' => ($role === 'admin'),
+    'hr_employees' => (bool)array_intersect(['admin', 'hr'], $roles),
+    'hr_attendance'=> (bool)array_intersect(['admin', 'hr'], $roles),
+    'hr_leave'     => true,
+    'hr_requests'  => true,
+    'manage_permissions' => in_array('admin', $roles, true),
 ];
 
 // ── Live badge counts (best-effort; never break the sidebar if a
 //    table isn't set up yet in this install) ──────────────────────
 $pending_count = 0;
 $requests_count = 0;
-$procurement_badge = 0;
 try {
     $pdo = get_db();
     if ($access['pending']) {
@@ -95,25 +78,6 @@ try {
         try { $c += (int)$pdo->query("SELECT COUNT(*) FROM hr_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
         try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
         $requests_count = $c;
-    }
-    // Procurement "needs your attention" badge — only tallies the queues
-    // this particular user can actually act on, so it never nags a
-    // requester about bids they have no permission to evaluate.
-    if ($access['procurement_home']) {
-        $pc = 0;
-        if (has_permission('procurement.requisition.review')) {
-            try { $pc += (int)$pdo->query("SELECT COUNT(*) FROM purchase_requisitions WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
-        }
-        if (has_permission('procurement.bidding.review')) {
-            try { $pc += (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'submitted'")->fetchColumn(); } catch (Throwable $e) {}
-        }
-        if (has_permission('procurement.grn.discrepancy.manage')) {
-            try { $pc += (int)$pdo->query("SELECT COUNT(*) FROM goods_receipts WHERE status = 'discrepancy'")->fetchColumn(); } catch (Throwable $e) {}
-        }
-        if (has_permission('procurement.invoice.match')) {
-            try { $pc += (int)$pdo->query("SELECT COUNT(*) FROM invoices WHERE status = 'disputed'")->fetchColumn(); } catch (Throwable $e) {}
-        }
-        $procurement_badge = $pc;
     }
 } catch (Throwable $e) {
     // DB not reachable — sidebar still renders, just without counts.
@@ -153,7 +117,153 @@ function navBtnClasses(bool $active): string {
 
 $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
 ?>
-<script src="https://cdn.tailwindcss.com"></script>
+<!-- ── Kofee Manila Smooth Page Transition & Loader ── -->
+<style>
+  @view-transition {
+    navigation: auto;
+  }
+  #kofee-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 9999999;
+    background: radial-gradient(circle at center, #26160d 0%, #120905 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.32s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.32s ease;
+    pointer-events: all;
+    user-select: none;
+  }
+  #kofee-loader.loader-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .kfs-loader-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .kfs-cup-wrap {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #d9a06b;
+    animation: kfsGlow 2.4s ease-in-out infinite;
+  }
+  .kfs-cup-wrap svg {
+    width: 46px;
+    height: 46px;
+  }
+  .kfs-steam-lines {
+    position: absolute;
+    top: -6px;
+    display: flex;
+    gap: 5px;
+  }
+  .kfs-steam-line {
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: linear-gradient(to top, rgba(217, 160, 107, 0.85), transparent);
+    animation: kfsSteam 1.6s ease-in-out infinite;
+  }
+  .kfs-steam-line:nth-child(2) {
+    animation-delay: 0.35s;
+    height: 15px;
+  }
+  .kfs-steam-line:nth-child(3) {
+    animation-delay: 0.7s;
+  }
+  @keyframes kfsSteam {
+    0% { transform: translateY(0) scaleX(1); opacity: 0; }
+    35% { opacity: 0.85; }
+    70% { transform: translateY(-8px) scaleX(1.4); opacity: 0.3; }
+    100% { transform: translateY(-16px) scaleX(2); opacity: 0; }
+  }
+  @keyframes kfsGlow {
+    0%, 100% { filter: drop-shadow(0 0 6px rgba(201, 123, 61, 0.25)); }
+    50% { filter: drop-shadow(0 0 16px rgba(201, 123, 61, 0.65)); }
+  }
+  .kfs-loader-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+  }
+  .kfs-loader-title {
+    font-family: 'Playfair Display', 'Poppins', Georgia, serif;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: 0.16em;
+    color: #FBF3E9;
+    text-transform: uppercase;
+  }
+  .kfs-loader-sub {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: #d9a06b;
+  }
+  .kfs-loader-bar {
+    width: 140px;
+    height: 3.5px;
+    background: rgba(251, 243, 233, 0.12);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    margin-top: 4px;
+  }
+  .kfs-loader-bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, #c47d3e, #f0c396, #c47d3e, transparent);
+    border-radius: 999px;
+    animation: kfsProgress 1.4s ease-in-out infinite;
+  }
+  @keyframes kfsProgress {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(260%); }
+  }
+</style>
+
+<div id="kofee-loader" aria-live="polite" role="status" aria-label="Loading page">
+  <div class="kfs-loader-card">
+    <div class="kfs-cup-wrap">
+      <div class="kfs-steam-lines">
+        <div class="kfs-steam-line"></div>
+        <div class="kfs-steam-line"></div>
+        <div class="kfs-steam-line"></div>
+      </div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+        <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+        <line x1="6" y1="1" x2="6" y2="4"/>
+        <line x1="10" y1="1" x2="10" y2="4"/>
+        <line x1="14" y1="1" x2="14" y2="4"/>
+      </svg>
+    </div>
+    <div class="kfs-loader-brand">
+      <span class="kfs-loader-title">Kofee Manila</span>
+      <span class="kfs-loader-sub">Brewing workspace…</span>
+    </div>
+    <div class="kfs-loader-bar">
+      <div class="kfs-loader-bar-fill"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Top bar: always visible, holds the Menu toggle ── -->
 <header class="fixed top-0 inset-x-0 h-14 z-[200] flex items-center gap-3 px-4
@@ -275,14 +385,7 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     <?php if ($access['dashboard']): ?>
     <div class="<?= $groupLabel ?> pt-1.5">Main</div>
     <button class="<?= navBtnClasses($current === 'dashboard.php') ?>" onclick="window.location.href='dashboard.php'">
-        <?= icon('home') ?><span class="flex-1 truncate">Admin Dashboard</span>
-    </button>
-    
-    <?php endif; ?>
-
-    <?php if ($access['employee_dashboard']): ?>
-    <button class="<?= navBtnClasses($current === 'employee_dashboard.php') ?>" onclick="window.location.href='employee_dashboard.php'">
-        <?= icon('attendance') ?><span class="flex-1 truncate">Employee Dashboard</span>
+        <?= icon('home') ?><span class="flex-1 truncate">Dashboard</span>
     </button>
     <?php endif; ?>
 
@@ -306,110 +409,28 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </button>
     <?php endif; ?>
 
-    
-
-    <?php if ($access['menu_manager']): ?>
-    <button class="<?= navBtnClasses($current === 'add_item.php') ?>" onclick="window.location.href='add_item.php'">
-        <?= icon('menu') ?><span class="flex-1 truncate">Manage Menu</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['history']): ?>
-    <button class="<?= navBtnClasses($current === 'history.php') ?>" onclick="window.location.href='history.php'">
-        <?= icon('history') ?><span class="flex-1 truncate">Order History</span>
-    </button>
-    <?php endif; ?>
-
     <?php if ($access['inventory']): ?>
     <button class="<?= navBtnClasses($current === 'inventory.php') ?>" onclick="window.location.href='inventory.php'">
         <?= icon('inventory') ?><span class="flex-1 truncate">Inventory</span>
     </button>
     <?php endif; ?>
 
+    <?php if ($access['menu_manager']): ?>
+    <button class="<?= navBtnClasses($current === 'add_item.php') ?>" onclick="window.location.href='add_item.php'">
+        <?= icon('menu') ?><span class="flex-1 truncate">Menu</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['history']): ?>
+    <button class="<?= navBtnClasses($current === 'history.php') ?>" onclick="window.location.href='history.php'">
+        <?= icon('history') ?><span class="flex-1 truncate">History</span>
+    </button>
+    <?php endif; ?>
+
     <?php if ($access['analytics']): ?>
-    <div class="<?= $groupLabel ?>">Finance</div>
+    <div class="<?= $groupLabel ?>">Reports</div>
     <button class="<?= navBtnClasses($current === 'analytics.php') ?>" onclick="window.location.href='analytics.php'">
         <?= icon('analytics') ?><span class="flex-1 truncate">Analytics</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_home'] || $access['requisitions'] || $access['rfq'] || $access['purchase_orders'] || $access['goods_receipts'] || $access['invoices'] || $access['three_way_match'] || $access['payments'] || $access['supplier_performance'] || $access['suppliers'] || $access['procurement_reports'] || $access['supplier_portal']): ?>
-    <div class="<?= $groupLabel ?>">Procurement</div>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_home']): ?>
-    <button class="<?= navBtnClasses($current === 'procurement_dashboard.php') ?>" onclick="window.location.href='procurement_dashboard.php'">
-        <?= icon('dashboard') ?><span class="flex-1 truncate">Procurement Home</span>
-        <?php if ($procurement_badge > 0): ?>
-        <span class="flex-shrink-0 text-[10px] font-extrabold px-[7px] py-[1px] rounded-full
-                     bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)]"><?= $procurement_badge ?></span>
-        <?php endif; ?>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['requisitions']): ?>
-    <button class="<?= navBtnClasses($current === 'requisitions.php') ?>" onclick="window.location.href='requisitions.php'">
-        <?= icon('requests') ?><span class="flex-1 truncate">Requisitions</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['rfq']): ?>
-    <button class="<?= navBtnClasses($current === 'rfq.php') ?>" onclick="window.location.href='rfq.php'">
-        <?= icon('rfq') ?><span class="flex-1 truncate">RFQ &amp; Bidding</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['purchase_orders']): ?>
-    <button class="<?= navBtnClasses($current === 'purchase_orders.php') ?>" onclick="window.location.href='purchase_orders.php'">
-        <?= icon('inventory') ?><span class="flex-1 truncate">Purchase Orders</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['goods_receipts']): ?>
-    <button class="<?= navBtnClasses($current === 'goods_receipts.php') ?>" onclick="window.location.href='goods_receipts.php'">
-        <?= icon('truck') ?><span class="flex-1 truncate">Goods Receiving</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['invoices']): ?>
-    <button class="<?= navBtnClasses($current === 'invoices.php') ?>" onclick="window.location.href='invoices.php'">
-        <?= icon('invoice') ?><span class="flex-1 truncate">Invoices</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['three_way_match']): ?>
-    <button class="<?= navBtnClasses($current === 'three_way_match.php') ?>" onclick="window.location.href='three_way_match.php'">
-        <?= icon('scale') ?><span class="flex-1 truncate">3-Way Match</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['payments']): ?>
-    <button class="<?= navBtnClasses($current === 'payments.php') ?>" onclick="window.location.href='payments.php'">
-        <?= icon('card') ?><span class="flex-1 truncate">Payments</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['supplier_performance']): ?>
-    <button class="<?= navBtnClasses($current === 'supplier_performace.php') ?>" onclick="window.location.href='supplier_performace.php'">
-        <?= icon('star') ?><span class="flex-1 truncate">Supplier Performance</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['suppliers']): ?>
-    <button class="<?= navBtnClasses($current === 'suppliers.php') ?>" onclick="window.location.href='suppliers.php'">
-        <?= icon('employees') ?><span class="flex-1 truncate">Suppliers</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_reports']): ?>
-    <button class="<?= navBtnClasses($current === 'procurement_reports.php') ?>" onclick="window.location.href='procurement_reports.php'">
-        <?= icon('analytics') ?><span class="flex-1 truncate">Procurement Reports</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['supplier_portal']): ?>
-    <button class="<?= navBtnClasses($current === 'supplier_portal.php') ?>" onclick="window.location.href='supplier_portal.php'">
-        <?= icon('portal') ?><span class="flex-1 truncate">Supplier Portal</span>
     </button>
     <?php endif; ?>
 
@@ -439,19 +460,17 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </button>
     <?php endif; ?>
 
-    <?php if ($access['manage_permissions']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_permissions.php') ?>" onclick="window.location.href='manage_permissions.php'">
-        <?= icon('permissions') ?><span class="flex-1 truncate">Manage Permission</span>
-    </button>
-    <?php endif; ?>
-
     <?php if ($access['hr_leave']): ?>
     <button class="<?= navBtnClasses($current === 'leave_requests.php') ?>" onclick="window.location.href='leave_requests.php'">
         <?= icon('leave') ?><span class="flex-1 truncate">Leave</span>
     </button>
     <?php endif; ?>
 
-    
+    <?php if ($access['manage_permissions']): ?>
+    <button class="<?= navBtnClasses($current === 'manage_permissions.php') ?>" onclick="window.location.href='manage_permissions.php'">
+        <?= icon('permissions') ?><span class="flex-1 truncate">Manage Permission</span>
+    </button>
+    <?php endif; ?>
 
     <div class="flex-1"></div>
 
@@ -465,7 +484,9 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
             <div class="text-[12.5px] font-semibold text-[var(--cream,#fbf3e9)] truncate">
                 <?= htmlspecialchars($user['firstname'] ?: $user['username']) ?>
             </div>
-            <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] capitalize"><?= htmlspecialchars($role) ?></div>
+            <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] capitalize truncate" title="<?= htmlspecialchars(implode(', ', $roles)) ?>">
+                <?= htmlspecialchars(implode(' + ', $roles)) ?>
+            </div>
         </div>
     </div>
 
@@ -563,4 +584,79 @@ function toggleSidebar(force) {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') toggleSidebar(false);
 });
+
+// ── Kofee Manila Loading Screen Controller ──
+(function() {
+    function showKofeeLoader(text) {
+        const loader = document.getElementById('kofee-loader');
+        if (!loader) return;
+        if (text) {
+            const sub = loader.querySelector('.kfs-loader-sub');
+            if (sub) sub.textContent = text;
+        }
+        loader.classList.remove('loader-hidden');
+    }
+
+    function hideKofeeLoader() {
+        const loader = document.getElementById('kofee-loader');
+        if (loader) {
+            loader.classList.add('loader-hidden');
+        }
+    }
+
+    window.showKofeeLoader = showKofeeLoader;
+    window.hideKofeeLoader = hideKofeeLoader;
+
+    // Smoothly fade out the loader once the current page content is ready
+    if (document.readyState === 'complete') {
+        setTimeout(hideKofeeLoader, 100);
+    } else {
+        window.addEventListener('load', () => {
+            setTimeout(hideKofeeLoader, 100);
+        });
+        // Failsafe: hide after 1.5s max in case an external font/asset stalls
+        setTimeout(hideKofeeLoader, 1500);
+    }
+
+    // Handle bfcache (browser back/forward button restores)
+    window.addEventListener('pageshow', (e) => {
+        if (e.persisted) {
+            hideKofeeLoader();
+        }
+    });
+
+    // Intercept internal link navigation
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('a');
+        if (a && a.href) {
+            if (
+                a.target === '_blank' ||
+                a.hasAttribute('download') ||
+                a.getAttribute('href').startsWith('#') ||
+                a.getAttribute('href').startsWith('javascript:') ||
+                e.ctrlKey || e.metaKey || e.shiftKey
+            ) {
+                return;
+            }
+            try {
+                const targetUrl = new URL(a.href, window.location.href);
+                if (targetUrl.origin === window.location.origin) {
+                    showKofeeLoader();
+                }
+            } catch (_) {}
+        }
+    }, true);
+
+    // Intercept sidebar navigation buttons and logout
+    document.querySelectorAll('.kfs-nav-btn, .kfs-logout-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            showKofeeLoader();
+        });
+    });
+
+    // Intercept page unloads (form posts that redirect or reload)
+    window.addEventListener('beforeunload', () => {
+        showKofeeLoader();
+    });
+})();
 </script>

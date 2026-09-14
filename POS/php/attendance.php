@@ -84,12 +84,12 @@ $records = $stmt->fetchAll();
 $marked_ids = array_column($records, 'employee_id');
 $unmarked   = array_filter($employees, fn($e) => !in_array($e['id'], $marked_ids));
 
-$present = count(array_filter($records, fn($r) => $r['status'] === 'present'));
-$late    = count(array_filter($records, fn($r) => $r['status'] === 'late'));
-$absent  = count(array_filter($records, fn($r) => $r['status'] === 'absent'));
-$leave_c = count(array_filter($records, fn($r) => $r['status'] === 'on_leave'));
-
-include("../includes/sidebar.php");
+// ── Stats derived from ALL active employees, not just marked ones ──
+$present    = count(array_filter($rows, fn($r) => $r['status'] === 'present'));
+$late       = count(array_filter($rows, fn($r) => $r['status'] === 'late'));
+$absent     = count(array_filter($rows, fn($r) => $r['status'] === 'absent'));
+$leave_c    = count(array_filter($rows, fn($r) => $r['status'] === 'on_leave'));
+$not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -103,6 +103,8 @@ include("../includes/sidebar.php");
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 </head>
 <body>
+
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-attendance" class="page active">
   <div class="page-header">
@@ -223,10 +225,9 @@ include("../includes/sidebar.php");
           <option value="half_day">Half Day</option>
         </select>
       </div>
-
-      <div class="field-group mg-b">
-        <label class="field-label">Notes</label>
-        <input class="field-input" type="text" name="notes" placeholder="Optional"/>
+      <div class="review-footer-primary">
+        <button type="button" class="btn-cancel" onclick="closeReview()">Cancel</button>
+        <button type="submit" form="review-form" class="btn-save" id="review-save-btn">✔ Save changes</button>
       </div>
 
       <div class="modal-actions">
@@ -245,8 +246,179 @@ include("../includes/sidebar.php");
 <script>
 function openMark()  { document.getElementById('mark-modal').classList.add('open'); }
 function closeMark() { document.getElementById('mark-modal').classList.remove('open'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMark(); });
-</script>
 
+function openReview(btn) {
+  const d = btn.dataset;
+
+  document.getElementById('review-avatar').textContent = initials(d.name);
+  document.getElementById('review-emp-name').textContent = d.name;
+  document.getElementById('review-emp-meta').textContent =
+    '#' + d.code + ' · ' + (d.department || '—') + ' · ' + formatDisplayDate('<?= htmlspecialchars($view_date) ?>');
+
+  const hasRecord = d.hasRecord === '1';
+  const currentStatusKey   = hasRecord ? d.status : 'not_marked';
+  const currentStatusLabel = hasRecord ? statusLabel(d.status) : 'Not Marked';
+  const badge = document.getElementById('review-current-badge');
+  badge.textContent = currentStatusLabel;
+  badge.className = 'status-badge status-' + currentStatusKey;
+
+  document.getElementById('review-employee-id').value = d.employeeId;
+  document.getElementById('review-time-in').value  = d.timeIn  || '';
+  document.getElementById('review-time-out').value = d.timeOut || '';
+  document.getElementById('review-status').value   = d.status || 'present';
+  document.getElementById('review-notes').value    = d.notes  || '';
+
+  const clockoutBtn = document.getElementById('review-clockout-btn');
+  const deleteBtn   = document.getElementById('review-delete-btn');
+
+  clockoutBtn.style.display = (hasRecord && !d.timeOut && d.status !== 'absent') ? 'inline-block' : 'none';
+  deleteBtn.style.display   = hasRecord ? 'inline-block' : 'none';
+
+  document.getElementById('clockout-record-id').value = d.attendanceId || '';
+  document.getElementById('delete-record-id').value   = d.attendanceId || '';
+
+  // Proof photos, captured via the employee self-clock-in flow (if any)
+  const photoInWrap  = document.getElementById('review-photo-in-wrap');
+  const photoOutWrap = document.getElementById('review-photo-out-wrap');
+  const noPhotos     = document.getElementById('review-no-photos');
+
+  if (d.timeInPhoto) {
+    document.getElementById('review-photo-in').src = d.timeInPhoto;
+    photoInWrap.style.display = 'flex';
+  } else {
+    photoInWrap.style.display = 'none';
+  }
+  if (d.timeOutPhoto) {
+    document.getElementById('review-photo-out').src = d.timeOutPhoto;
+    photoOutWrap.style.display = 'flex';
+  } else {
+    photoOutWrap.style.display = 'none';
+  }
+  noPhotos.style.display = (d.timeInPhoto || d.timeOutPhoto) ? 'none' : '';
+
+  updateTotalHours();
+  document.getElementById('review-modal').classList.add('open');
+}
+
+function initials(name) {
+  return (name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(p => p[0].toUpperCase())
+    .join('');
+}
+
+function statusLabel(status) {
+  return (status || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function closeReview() {
+  document.getElementById('review-modal').classList.remove('open');
+  if (window.KofeeValidator) {
+    document.querySelectorAll('#review-form input, #review-form select, #review-form textarea').forEach(el => {
+      KofeeValidator.clearError(el);
+    });
+  }
+}
+
+function openReviewPhoto(url) {
+  document.getElementById('photo-preview-img').src = url;
+  document.getElementById('photo-preview-modal').classList.add('open');
+}
+function closeReviewPhoto() { document.getElementById('photo-preview-modal').classList.remove('open'); }
+
+function submitClockOut() {
+  const btn = document.getElementById('review-clockout-btn');
+  if (btn && window.KofeeValidator) KofeeValidator.setLoading(btn, 'Clocking out…');
+  document.getElementById('clockout-form').submit();
+}
+
+function submitDelete() {
+  if (confirm('Are you sure you want to delete this attendance record?')) {
+    const btn = document.getElementById('review-delete-btn');
+    if (btn && window.KofeeValidator) KofeeValidator.setLoading(btn, 'Deleting…');
+    document.getElementById('delete-form').submit();
+  }
+}
+
+function updateTotalHours() {
+  const tinInput  = document.getElementById('review-time-in');
+  const toutInput = document.getElementById('review-time-out');
+  const tin  = tinInput ? tinInput.value : '';
+  const tout = toutInput ? toutInput.value : '';
+  const out  = document.getElementById('review-total-hours');
+  if (!tin || !tout) {
+    if (out) out.textContent = '—';
+    if (window.KofeeValidator && toutInput) KofeeValidator.clearError(toutInput);
+    return;
+  }
+
+  const [inH, inM]   = tin.split(':').map(Number);
+  const [outH, outM] = tout.split(':').map(Number);
+  const startMin = inH * 60 + inM;
+  const endMin   = outH * 60 + outM;
+  const diff     = endMin - startMin;
+
+  if (diff < 0) {
+    if (out) out.textContent = 'Invalid time';
+    if (window.KofeeValidator && toutInput) {
+      KofeeValidator.showError(toutInput, 'Time out cannot be earlier than Time in.');
+    }
+    return;
+  }
+
+  if (window.KofeeValidator && toutInput) {
+    KofeeValidator.clearError(toutInput);
+  }
+
+  const h = Math.floor(diff / 60);
+  const m = diff % 60;
+  if (out) out.textContent = h + 'h ' + String(m).padStart(2, '0') + 'm';
+}
+
+function formatDisplayDate(isoDate) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function filterTable() {
+  const q = document.getElementById('emp-search').value.trim().toLowerCase();
+  const statusVal = document.getElementById('status-filter').value;
+  const rowsEls = document.querySelectorAll('#attendance-tbody tr.emp-row');
+  let visibleCount = 0;
+
+  rowsEls.forEach(function (tr) {
+    const matchesSearch = !q || (tr.dataset.search || '').includes(q);
+    const matchesStatus = statusVal === 'all' || tr.dataset.status === statusVal;
+    const show = matchesSearch && matchesStatus;
+    tr.style.display = show ? '' : 'none';
+    if (show) visibleCount++;
+  });
+
+  document.getElementById('no-results-row').style.display = (visibleCount === 0 && rowsEls.length > 0) ? 'block' : 'none';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeMark(); closeReview(); closeReviewPhoto(); }
+});
+
+const reviewForm = document.getElementById('review-form');
+if (reviewForm && window.KofeeValidator) {
+  KofeeValidator.attach(reviewForm, {
+    customValidate: function(form) {
+      const tin = form.querySelector('[name="time_in"]').value;
+      const tout = form.querySelector('[name="time_out"]').value;
+      if (tin && tout && tout < tin) {
+        return { field: form.querySelector('[name="time_out"]'), message: 'Time out cannot be earlier than Time in.' };
+      }
+      return true;
+    },
+    loadingText: 'Saving…'
+  });
+}
+</script>
+<script src="../js/validator.js"></script>
 </body>
 </html>
