@@ -9,7 +9,6 @@ require_permission('employee_dashboard.view');
 $pdo   = get_db();
 $user  = current_user();
 $today = date('Y-m-d');
-$clock_in_required = ($_GET['reason'] ?? '') === 'clock_in_required';
 
 const ANNUAL_LEAVE_DAYS = 15; // placeholder pool — adjust to your real policy
 $leave_types = ['Vacation','Sick','Emergency','Unpaid','Other'];
@@ -118,12 +117,6 @@ $initials = strtoupper(substr($fname, 0, 1));
   </div>
 
   <div class="page-body">
-
-    <?php if ($clock_in_required): ?>
-      <div class="notice-banner" style="background:var(--amber-lt);color:var(--amber);border-color:#f2ddb8">
-        ⚠️ Please clock in before accessing the POS system.
-      </div>
-    <?php endif; ?>
 
     <?php if (!$my_employee): ?>
       <div class="notice-banner">
