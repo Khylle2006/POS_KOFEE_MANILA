@@ -1,46 +1,18 @@
 <?php 
 
-require_once '../includes/auth.php';
-require_once '../includes/permissions.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/permissions.php';
 require_login();
 require_permission('menu.manage');
 
 
 $pdo = get_db();
-$pdo->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_path VARCHAR(255) NULL");
-$pdo->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted TINYINT(1) NOT NULL DEFAULT 0");
 
-function save_product_image(int $product_id, string $field, ?string $old_path = null): ?string {
-    if (empty($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) return $old_path;
-    if ($_FILES[$field]['error'] !== UPLOAD_ERR_OK) throw new RuntimeException('The image upload failed.');
-    if ($_FILES[$field]['size'] > 5 * 1024 * 1024) throw new RuntimeException('Image must be 5 MB or smaller.');
-
-    $info = @getimagesize($_FILES[$field]['tmp_name']);
-    $extensions = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];
-    if (!$info || !isset($extensions[$info[2]])) throw new RuntimeException('Only JPG, PNG, and WebP images are allowed.');
-
-    $relative = 'menu/' . $product_id . '.' . $extensions[$info[2]];
-    $directory = __DIR__ . '/../assets/menu';
-    if (!is_dir($directory) && !mkdir($directory, 0755, true)) throw new RuntimeException('The image folder could not be created.');
-    if (!move_uploaded_file($_FILES[$field]['tmp_name'], $directory . '/' . basename($relative))) {
-        throw new RuntimeException('The image could not be saved.');
-    }
-
-    if ($old_path && $old_path !== $relative) {
-        $old_file = __DIR__ . '/../assets/' . ltrim($old_path, '/');
-        if (is_file($old_file)) @unlink($old_file);
-    }
-    return $relative;
-}
-
-// ── POST: Add new item ────────────────────────
+// Add products
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'add';
     header('Content-Type: application/json');
 
-    // Adding new items is Inventory's job now — the Menu module only edits/manages
-    // existing drinks. Block it here too (not just in the UI) so the endpoint
-    // can't be posted to directly.
      if ($action === 'add') {
         if (!has_permission('menu.edit')) {
             http_response_code(403);
@@ -61,8 +33,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         try {
-            $pdo->beginTransaction();
-
             $pdo->prepare("
                 INSERT INTO products (category_id, name, description, price_small, price_large, stock)
                 VALUES (:cat, :name, :desc, :ps, :pl, 1)
@@ -73,50 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':ps'   => $price_small,
                 ':pl'   => $price_large,
             ]);
-
-            $id = (int)$pdo->lastInsertId();
-            $image_path = save_product_image($id, 'image');
-            if ($image_path) {
-                $pdo->prepare('UPDATE products SET image_path=:image WHERE id=:id')->execute([':image'=>$image_path, ':id'=>$id]);
-            }
-
-            // Save recipe if provided
-            $recipeData = json_decode($_POST['recipe'] ?? '', true);
-            if (is_array($recipeData)) {
-                $insertRecipe = $pdo->prepare("
-                    INSERT INTO product_ingredients (product_id, size, ingredient_id, qty_used)
-                    VALUES (:pid, :size, :ingredient_id, :qty_used)
-                ");
-                foreach (['small', 'large'] as $sz) {
-                    $lines = $recipeData[$sz] ?? [];
-                    if (is_array($lines)) {
-                        foreach ($lines as $line) {
-                            $iid = (int)($line['ingredient_id'] ?? 0);
-                            $qty = (float)($line['qty_used'] ?? 0);
-                            if ($iid > 0 && $qty > 0) {
-                                $insertRecipe->execute([
-                                    ':pid'           => $id,
-                                    ':size'          => $sz,
-                                    ':ingredient_id' => $iid,
-                                    ':qty_used'      => $qty
-                                ]);
-                            }
-                        }
-                    }
-                }
-            }
-
-            $pdo->commit();
-            echo json_encode(['ok' => true, 'id' => $id]);
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            echo json_encode(['ok' => true]);
+        } catch (PDOException $e) {
             http_response_code(500);
             echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
         }
         exit;
     }
 
-    // Writes/toggling need menu.edit; deletion needs the stronger menu.delete.
+    // Check permissions
     if (in_array($action, ['edit', 'toggle'], true) && !has_permission('menu.edit')) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'You do not have permission to edit menu items.']);
@@ -128,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // ── Edit ──────────────────────────────────
+    // Edit products
     if ($action === 'edit') {
         $id          = (int)($_POST['id']           ?? 0);
         $cat_id      = (int)($_POST['category_id']  ?? 0);
@@ -140,33 +75,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$id || !$name) { http_response_code(422); echo json_encode(['ok'=>false,'error'=>'Missing fields.']); exit; }
 
         try {
-
             $pdo->prepare(
                 'UPDATE products SET name=:n, description=:d, price_small=:ps, price_large=:pl, category_id=:c WHERE id=:id'
             )->execute([':n'=>$name,':d'=>$desc,':ps'=>$price_small,':pl'=>$price_large,':c'=>(string)$cat_id,':id'=>$id]);
             echo json_encode(['ok'=>true]);
         } catch (PDOException $e) {
-
-            $current = $pdo->prepare('SELECT image_path FROM products WHERE id=:id');
-            $current->execute([':id'=>$id]);
-            $old_path = $current->fetchColumn() ?: null;
-            $image_path = save_product_image($id, 'image', $old_path);
-            $pdo->prepare(
-                'UPDATE products SET name=:n, description=:d, price_small=:ps, price_large=:pl, category_id=:c, image_path=:image WHERE id=:id'
-            )->execute([':n'=>$name,':d'=>$desc,':ps'=>$price_small,':pl'=>$price_large,':c'=>(string)$cat_id,':image'=>$image_path,':id'=>$id]);
-            echo json_encode(['ok'=>true]);
-        } catch (Throwable $e) {
-
             http_response_code(500);
             echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
         }
         exit;
     }
 
-    // ── Toggle availability ───────────────────
+    // Toggle availability
     if ($action === 'toggle') {
         $id = (int)($_POST['id'] ?? 0);
-        // stock=1 means available, stock=0 means unavailable
+        // Stock controls availability
         try {
             $curr = $pdo->prepare('SELECT stock FROM products WHERE id=:id');
             $curr->execute([':id'=>$id]);
@@ -182,45 +105,125 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // ── Delete ────────────────────────────────
+    // Delete products
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
-        try {
+        if (!$id) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'error' => 'Invalid product ID.']);
+            exit;
+      }
 
-            $pdo->prepare('DELETE FROM products WHERE id=:id')->execute([':id'=>$id]);
-            echo json_encode(['ok'=>true]);
-        } catch (PDOException $e) {
+      try {
+          $pdo->beginTransaction();
 
-            $image = $pdo->prepare('SELECT image_path FROM products WHERE id=:id');
-            $image->execute([':id'=>$id]);
-            $image_path = $image->fetchColumn();
-            $pdo->prepare('DELETE FROM products WHERE id=:id')->execute([':id'=>$id]);
-            if ($image_path) {
-                $image_file = __DIR__ . '/../assets/' . ltrim($image_path, '/');
-                if (is_file($image_file)) @unlink($image_file);
+          $product = $pdo->prepare(
+              'SELECT p.id, p.image_path,
+                      EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id) AS has_orders
+               FROM products p
+               WHERE p.id = :id
+               FOR UPDATE'
+          );
+          $product->execute([':id' => $id]);
+          $row = $product->fetch();
+          if (!$row) {
+              throw new RuntimeException('Menu item not found.');
+          }
+
+          if ((int)$row['has_orders'] === 1) {
+              $pdo->prepare('UPDATE products SET is_deleted = 1, stock = 0 WHERE id = :id')
+                  ->execute([':id' => $id]);
+              $pdo->commit();
+              echo json_encode([
+                  'ok' => true,
+                  'archived' => true,
+                  'message' => 'Item archived because it is used in order history.',
+              ]);
+              exit;
+          }
+
+          try {
+              $pdo->prepare('DELETE FROM products WHERE id = :id')->execute([':id' => $id]);
+              $pdo->commit();
+
+              if (!empty($row['image_path'])) {
+                  $image_file = __DIR__ . '/../assets/' . ltrim($row['image_path'], '/');
+                  if (is_file($image_file)) @unlink($image_file);
+              }
+              echo json_encode(['ok' => true, 'archived' => false, 'message' => 'Item permanently deleted.']);
+          } catch (PDOException $deleteError) {
+                if (!$pdo->inTransaction()) throw $deleteError;
+
+                // Archive used products
+                if ((int)($deleteError->errorInfo[1] ?? 0) !== 1451) throw $deleteError;
+                $pdo->prepare('UPDATE products SET is_deleted = 1, stock = 0 WHERE id = :id')
+                    ->execute([':id' => $id]);
+                $pdo->commit();
+                echo json_encode(['ok' => true, 'message' => 'Item archived because it is used in order history.']);
             }
-            echo json_encode(['ok'=>true, 'message'=>'Item deleted.']);
         } catch (PDOException $e) {
-            if ((int)$e->errorInfo[1] === 1451) {
-                $pdo->prepare('UPDATE products SET is_deleted=1, stock=0 WHERE id=:id')->execute([':id'=>$id]);
-                echo json_encode(['ok'=>true, 'message'=>'Item archived because it is used in order history.']);
-                exit;
-            }
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            http_response_code(500);
+            echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             http_response_code(500);
             echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
         }
         exit;
     }
+
+    // Restore archived products
+    if ($action === 'restore') {
+        if (!has_permission('menu.edit')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'You do not have permission to restore menu items.']);
+            exit;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $stmt = $pdo->prepare('UPDATE products SET is_deleted = 0, stock = 1 WHERE id = :id AND is_deleted = 1');
+        $stmt->execute([':id' => $id]);
+        echo json_encode($stmt->rowCount() ? ['ok' => true, 'message' => 'Product restored.'] : ['ok' => false, 'error' => 'Archived product not found.']);
+        exit;
+    }
+
+    // Permanently delete an archived product without order history
+    if ($action === 'purge') {
+        if (!has_permission('menu.delete')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'You do not have permission to permanently delete menu items.']);
+            exit;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $check = $pdo->prepare('SELECT image_path FROM products WHERE id = :id AND is_deleted = 1 AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = products.id)');
+        $check->execute([':id' => $id]);
+        $row = $check->fetch();
+        if (!$row) {
+            http_response_code(409);
+            echo json_encode(['ok' => false, 'error' => 'This product is used in order history and cannot be permanently deleted.']);
+            exit;
+        }
+        $pdo->prepare('DELETE FROM products WHERE id = :id AND is_deleted = 1')->execute([':id' => $id]);
+        if (!empty($row['image_path'])) {
+            $image_file = __DIR__ . '/../assets/' . ltrim($row['image_path'], '/');
+            if (is_file($image_file)) @unlink($image_file);
+        }
+        echo json_encode(['ok' => true, 'message' => 'Archived product permanently deleted.']);
+        exit;
+    }
 }
 
-// ── Load categories ───────────────────────────
+// Load menu data
 $categories = $pdo->query('SELECT id, category_name FROM categories ORDER BY category_name')->fetchAll();
+$view = ($_GET['view'] ?? 'active') === 'archived' ? 'archived' : 'active';
+$archived_count = (int)$pdo->query('SELECT COUNT(*) FROM products WHERE is_deleted = 1')->fetchColumn();
 
 // ── Load all products ─────────────────────────
 $products = $pdo->query("
     SELECT p.*, c.category_name
     FROM products p
     LEFT JOIN categories c ON CAST(c.id AS CHAR) = p.category_id
+    WHERE p.is_deleted = " . ($view === 'archived' ? '1' : '0') . "
     ORDER BY c.category_name, p.name
 ")->fetchAll();
 

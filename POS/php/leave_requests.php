@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
+require_permission('menu.manage');
 
 $pdo   = get_db();
 $user  = current_user();
@@ -10,7 +11,6 @@ $toast = '';
 $toast_type = 'success';
 
 // Admin/HR = reviewers only. Everyone else = requesters only.
-
 $is_reviewer = in_array($role, ['admin', 'hr']);
 
 $leave_types = ['Vacation','Sick','Emergency','Unpaid','Other'];
@@ -193,49 +193,6 @@ foreach ($leaves as $l) {
     </div>
 
     <div class="leave-grid">
-
-      <?php if (!$is_reviewer && $my_employee): ?>
-        <div class="leave-card" id="leave-form-wrap">
-          <div class="lc-head">
-            <div>
-              <div class="lc-name">File Leave Request</div>
-              <div class="lc-sub"><?= htmlspecialchars($my_employee['firstname'].' '.$my_employee['lastname'].' (#'.$my_employee['employee_code'].')') ?></div>
-            </div>
-          </div>
-
-          <form method="POST">
-            <input type="hidden" name="action" value="file"/>
-
-            <div class="field-group mg-b">
-              <label class="field-label">Leave Type</label>
-              <select class="field-input" name="leave_type">
-                <?php foreach ($leave_types as $t): ?><option value="<?= $t ?>"><?= $t ?></option><?php endforeach; ?>
-              </select>
-            </div>
-
-            <div class="field-row mg-b">
-              <div class="field-group">
-                <label class="field-label">Start Date <span class="req">*</span></label>
-                <input class="field-input" type="date" name="start_date" required/>
-              </div>
-              <div class="field-group">
-                <label class="field-label">End Date <span class="req">*</span></label>
-                <input class="field-input" type="date" name="end_date" required/>
-              </div>
-            </div>
-
-            <div class="field-group mg-b">
-              <label class="field-label">Reason</label>
-              <textarea class="field-input" name="reason" rows="3" placeholder="Optional"></textarea>
-            </div>
-
-            <div class="lc-actions" style="justify-content:flex-end;">
-              <button type="submit" class="btn-save">✔ Submit Request</button>
-            </div>
-          </form>
-        </div>
-      <?php endif; ?>
-
       <?php if (empty($leaves)): ?>
         <div class="empty-state">🫙 No leave requests found.</div>
       <?php else: foreach ($leaves as $l): ?>
@@ -431,5 +388,6 @@ document.querySelectorAll('.lc-actions form').forEach(f => {
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFile(); });
 </script>
+
 </body>
 </html>

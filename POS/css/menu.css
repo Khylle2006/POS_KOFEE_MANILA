@@ -76,38 +76,15 @@
 }
 .menu-card:hover { border-color: var(--caramel-light); }
 
-.item-img {
-  height: 120px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center;
-  overflow: hidden; border-radius: var(--radius-sm); background: var(--accent-lt); font-size: 34px;
-}
-.item-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.item-img span[hidden] { display: none; }
+.item-img { font-size: 34px; margin-bottom: 8px; }
 .item-name { font-size: 12.5px; font-weight: 700; color: var(--espresso); margin-bottom: 4px; line-height: 1.3; }
 .item-price { font-size: 13px; font-weight: 800; color: var(--caramel); }
 
 /* Sold-out state: still visible (so staff know it exists) but visibly inert */
 .menu-card.sold-out { cursor: not-allowed; background: #FAF6EF; }
 .menu-card.sold-out .item-img { opacity: .4; }
+.menu-card.sold-out .item-name { color: var(--text-muted); }
 .item-soldout { font-size: 11px; font-weight: 600; color: var(--text-muted); }
-.item-soldout.warning-badge {
-  background: #FFF3CD;
-  color: #856404;
-  border: 1px solid #FFEEBA;
-  border-radius: 6px;
-  padding: 4px 6px;
-  margin-top: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  display: inline-block;
-  line-height: 1.25;
-}
-.item-soldout.warning-badge .missing-text {
-  font-size: 9.5px;
-  font-weight: 500;
-  color: #995A00;
-  display: block;
-  margin-top: 2px;
-}
 
 .empty-cat { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .empty-icon { font-size: 40px; margin-bottom: 10px; }

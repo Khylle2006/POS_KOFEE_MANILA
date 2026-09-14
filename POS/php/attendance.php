@@ -8,78 +8,23 @@ $pdo   = get_db();
 $toast = '';
 $toast_type = 'success';
 
-$ALLOWED_STATUSES = ['present', 'late', 'absent', 'on_leave', 'half_day'];
-
-// ── Helpers ────────────────────────────────────
-function is_valid_date_string($s) {
-    if (!$s) return false;
-    $d = DateTime::createFromFormat('Y-m-d', $s);
-    return $d && $d->format('Y-m-d') === $s;
-}
-
-function is_valid_time_string($s) {
-    // Accepts HH:MM or HH:MM:SS (native <input type="time"> sends HH:MM)
-    return (bool) preg_match('/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/', $s);
-}
-
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // Mark / upsert attendance for an employee on a date (used by both
-    // the "Mark Attendance" modal and the per-employee "Review" modal)
+    // Mark / upsert attendance for an employee on a date
     if ($action === 'mark') {
         $emp_id = (int)($_POST['employee_id'] ?? 0);
         $date   = $_POST['attendance_date'] ?? date('Y-m-d');
-        $tin    = ($_POST['time_in']  ?? '') !== '' ? $_POST['time_in']  : null;
-        $tout   = ($_POST['time_out'] ?? '') !== '' ? $_POST['time_out'] : null;
+        $tin    = $_POST['time_in']  ?: null;
+        $tout   = $_POST['time_out'] ?: null;
         $status = $_POST['status'] ?? 'present';
         $notes  = trim($_POST['notes'] ?? '');
-        $notes  = mb_substr($notes, 0, 255); // matches column length
 
-        $errors = [];
-
-        // Employee must exist and be active
-        if (!$emp_id) {
-            $errors[] = 'Select an employee.';
+        $allowed = ['present','late','absent','on_leave','half_day'];
+        if (!$emp_id || !in_array($status, $allowed)) {
+            $toast = '⚠️ Select an employee and a valid status.'; $toast_type = 'error';
         } else {
-            $chk = $pdo->prepare("SELECT id FROM employees WHERE id = :id AND status = 'active'");
-            $chk->execute([':id' => $emp_id]);
-            if (!$chk->fetch()) {
-                $errors[] = 'Employee not found or is not active.';
-            }
-        }
-
-        // Date must be valid
-        if (!is_valid_date_string($date)) {
-            $errors[] = 'Invalid attendance date.';
-        }
-
-        // Status must be one of the allowed values
-        if (!in_array($status, $ALLOWED_STATUSES, true)) {
-            $errors[] = 'Invalid status.';
-        }
-
-        // Time values, if provided, must be valid
-        if ($tin !== null && !is_valid_time_string($tin)) {
-            $errors[] = 'Invalid Time In.';
-            $tin = null;
-        }
-        if ($tout !== null && !is_valid_time_string($tout)) {
-            $errors[] = 'Invalid Time Out.';
-            $tout = null;
-        }
-
-        // Time Out should not be earlier than Time In (no overnight-shift support)
-        if (!$errors && $tin && $tout && $tout < $tin) {
-            $errors[] = 'Time Out cannot be earlier than Time In.';
-        }
-
-        if ($errors) {
-            $toast = '⚠️ ' . implode(' ', $errors);
-            $toast_type = 'error';
-        } else {
-            // Unique key on (employee_id, attendance_date) makes this a safe upsert
             $pdo->prepare("
                 INSERT INTO attendance (employee_id, attendance_date, time_in, time_out, status, notes)
                 VALUES (:e, :d, :ti, :to_, :s, :n)
@@ -96,16 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'clock_out') {
         $id = (int)($_POST['record_id'] ?? 0);
         if ($id) {
-            $chk = $pdo->prepare('SELECT time_out, status FROM attendance WHERE id = :id');
-            $chk->execute([':id' => $id]);
-            $rec = $chk->fetch();
-            if ($rec && !$rec['time_out'] && $rec['status'] !== 'absent') {
-                $pdo->prepare('UPDATE attendance SET time_out = CURTIME() WHERE id = :id')->execute([':id'=>$id]);
-                $toast = '✅ Clocked out.';
-            } else {
-                $toast = '⚠️ Unable to clock out this record.';
-                $toast_type = 'error';
-            }
+            $pdo->prepare('UPDATE attendance SET time_out = CURTIME() WHERE id = :id')->execute([':id'=>$id]);
+            $toast = '✅ Clocked out.';
         }
     }
 
@@ -118,7 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $date_q = $_POST['redirect_date'] ?? date('Y-m-d');
-    if (!is_valid_date_string($date_q)) $date_q = date('Y-m-d');
     $q = ($toast ? '?toast=' . urlencode($toast) . '&type=' . $toast_type . '&' : '?') . 'date=' . urlencode($date_q);
     header('Location: attendance.php' . $q);
     exit;
@@ -130,27 +66,23 @@ if (isset($_GET['toast'])) {
 }
 
 $view_date = $_GET['date'] ?? date('Y-m-d');
-if (!is_valid_date_string($view_date)) $view_date = date('Y-m-d');
 
-// ── Active employees for the "Mark Attendance" picker ─────────
+// ── Active employees for the picker ───────────
 $employees = $pdo->query("SELECT id, employee_code, firstname, lastname, department FROM employees WHERE status='active' ORDER BY firstname")->fetchAll();
 
-// ── ALL active employees + their attendance (if any) for the selected date ──
-// LEFT JOIN keeps every active employee visible even without a record.
+// ── Attendance for the selected date ──────────
 $stmt = $pdo->prepare("
-    SELECT
-        e.id AS employee_id, e.employee_code, e.firstname, e.lastname, e.department,
-        a.id AS attendance_id, a.attendance_date, a.time_in, a.time_out, a.status, a.notes,
-        a.time_in_photo, a.time_out_photo
-    FROM employees e
-    LEFT JOIN attendance a
-        ON a.employee_id = e.id
-        AND a.attendance_date = :d
-    WHERE e.status = 'active'
-    ORDER BY e.firstname, e.lastname
+    SELECT a.*, e.firstname, e.lastname, e.employee_code, e.department
+    FROM attendance a
+    JOIN employees e ON e.id = a.employee_id
+    WHERE a.attendance_date = :d
+    ORDER BY e.firstname
 ");
 $stmt->execute([':d' => $view_date]);
-$rows = $stmt->fetchAll();
+$records = $stmt->fetchAll();
+
+$marked_ids = array_column($records, 'employee_id');
+$unmarked   = array_filter($employees, fn($e) => !in_array($e['id'], $marked_ids));
 
 // ── Stats derived from ALL active employees, not just marked ones ──
 $present    = count(array_filter($rows, fn($r) => $r['status'] === 'present'));
@@ -169,61 +101,6 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
 <link rel="stylesheet" href="../css/sidebar.css"/>
 <link rel="stylesheet" href="../css/attendance.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<style>
-  /* Small additive rules for the new review dashboard pieces.
-     Existing classes/colors from attendance.css are reused wherever possible;
-     these only fill gaps for brand-new elements. */
-  .status-not-marked { background:#eceff1; color:#546e7a; }
-  .status-half_day { background:#ede7f6; color:#5e35b1; }
-  .act-view { background:#e3f2fd; color:#1565c0; }
-  .search-filter-bar { display:flex; gap:10px; margin:14px 0; flex-wrap:wrap; }
-  .search-filter-bar input[type="text"] { flex:1; min-width:220px; }
-  .search-filter-bar select { max-width:200px; }
-
-  /* Review modal */
-  .review-modal { max-width:460px; padding:0; display:flex; flex-direction:column; max-height:85vh; }
-  .review-modal .modal-header { padding:18px 20px 14px; }
-  .review-profile { display:flex; align-items:center; gap:12px; padding:0 20px 16px; }
-  .review-avatar {
-    width:40px; height:40px; border-radius:50%; flex-shrink:0;
-    background:var(--accent-lt); color:var(--espresso);
-    display:flex; align-items:center; justify-content:center;
-    font-weight:700; font-size:14px;
-  }
-  .review-profile-text { min-width:0; flex:1; }
-  .review-profile-name { font-weight:700; font-size:15px; line-height:1.3; }
-  .review-profile-meta { font-size:12px; color:var(--text-muted); }
-  .review-scroll { overflow-y:auto; padding:2px 20px 4px; flex:1; }
-  .review-group { padding:14px 0; }
-  .review-group:first-child { padding-top:0; }
-  .review-divider { height:1px; background:rgba(0,0,0,.07); margin:0 -20px; }
-  .review-hours { font-size:12.5px; color:var(--text-muted); margin-top:2px; }
-  .review-proof-grid { display:flex; gap:12px; }
-  .review-photo-card { display:flex; flex-direction:column; align-items:center; gap:6px; }
-  .review-photo-card img {
-    width:72px; height:72px; object-fit:cover; border-radius:10px; cursor:pointer;
-    border:1px solid rgba(0,0,0,.08);
-  }
-  .review-photo-card span { font-size:11px; color:var(--text-muted); }
-  .review-no-photos { font-size:12.5px; color:var(--text-muted); margin:0; }
-  .review-footer {
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    padding:14px 20px; border-top:1px solid rgba(0,0,0,.07); flex-wrap:wrap;
-  }
-  .review-footer-secondary { display:flex; gap:16px; }
-  .review-footer-primary { display:flex; gap:8px; }
-  .text-action {
-    background:none; border:none; padding:0; cursor:pointer;
-    font-size:13px; font-weight:600; color:var(--text-muted);
-  }
-  .text-action:hover { color:var(--espresso); text-decoration:underline; }
-  .text-action.danger { color:var(--red); }
-  .text-action.danger:hover { color:var(--red); }
-  @media (max-width:480px) {
-    .review-footer { flex-direction:column; align-items:stretch; }
-    .review-footer-primary, .review-footer-secondary { justify-content:center; }
-  }
-</style>
 </head>
 <body>
 
@@ -233,8 +110,9 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
   <div class="page-header">
     <div>
       <h1>Attendance</h1>
-      <p>Employee attendance review dashboard</p>
+      <p>Daily time-in / time-out records</p>
     </div>
+    <button class="btn-add" onclick="openMark()">➕ Mark Attendance</button>
   </div>
 
   <div class="page-body">
@@ -244,7 +122,6 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
       <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0">⏰</div><div><div class="mini-stat-val"><?= $late ?></div><div class="mini-stat-lbl">Late</div></div></div>
       <div class="mini-stat"><div class="mini-stat-icon" style="background:#ffebee">❌</div><div><div class="mini-stat-val"><?= $absent ?></div><div class="mini-stat-lbl">Absent</div></div></div>
       <div class="mini-stat"><div class="mini-stat-icon" style="background:#e3f2fd">🏖️</div><div><div class="mini-stat-val"><?= $leave_c ?></div><div class="mini-stat-lbl">On Leave</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#eceff1">📋</div><div><div class="mini-stat-val"><?= $not_marked ?></div><div class="mini-stat-lbl">Not Marked</div></div></div>
     </div>
 
     <div class="date-bar">
@@ -253,207 +130,113 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
         <input type="date" name="date" value="<?= htmlspecialchars($view_date) ?>" onchange="this.form.submit()"/>
       </form>
       <div class="unmarked-note">
-        <?= count($rows) ?> active employee(s) for this date
+        <?= count($unmarked) ?> employee(s) not yet marked for this date
       </div>
-    </div>
-
-    <div class="search-filter-bar">
-      <input type="text" id="emp-search" class="field-input" placeholder="🔍 Search employee..." oninput="filterTable()"/>
-      <select id="status-filter" class="field-input" onchange="filterTable()">
-        <option value="all">All Status</option>
-        <option value="present">Present</option>
-        <option value="late">Late</option>
-        <option value="absent">Absent</option>
-        <option value="on_leave">On Leave</option>
-        <option value="half_day">Half Day</option>
-        <option value="not_marked">Not Marked</option>
-      </select>
     </div>
 
     <div class="table-card">
       <div class="table-scroll-wrapper">
         <table>
           <thead>
-            <tr><th>Employee</th><th>Department</th><th>Time In</th><th>Time Out</th><th>Status</th><th>Notes</th><th>Proof</th><th>Actions</th></tr>
+            <tr><th>Employee</th><th>Department</th><th>Time In</th><th>Time Out</th><th>Status</th><th>Notes</th><th>Actions</th></tr>
           </thead>
-          <tbody id="attendance-tbody">
-          <?php if (empty($rows)): ?>
-            <tr class="empty-row"><td colspan="8">🫙 No active employees found.</td></tr>
-          <?php else: foreach ($rows as $r):
-              $has_record   = $r['attendance_id'] !== null;
-              $status_key   = $has_record ? $r['status'] : 'not_marked';
-              $status_label = $has_record ? ucwords(str_replace('_',' ',$r['status'])) : 'Not Marked';
-              $full_name    = $r['firstname'].' '.$r['lastname'];
-              $dept         = $r['department'] ?: '—';
-              $search_blob  = mb_strtolower($full_name.' '.$r['employee_code'].' '.$r['department']);
-              $time_in_24   = $r['time_in']  ? date('H:i', strtotime($r['time_in']))  : '';
-              $time_out_24  = $r['time_out'] ? date('H:i', strtotime($r['time_out'])) : '';
-              // Photos are captured by the employee self-clock-in flow (api/mark_attendance.php)
-              // and stored as paths relative to the app root, resolved the same way as employee_dashboard.php.
-              $time_in_photo_url  = $r['time_in_photo']  ? '../'.$r['time_in_photo']  : '';
-              $time_out_photo_url = $r['time_out_photo'] ? '../'.$r['time_out_photo'] : '';
-          ?>
-            <tr class="emp-row" data-status="<?= htmlspecialchars($status_key) ?>" data-search="<?= htmlspecialchars($search_blob) ?>">
-              <td style="font-weight:700"><?= htmlspecialchars($full_name) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
-              <td><?= htmlspecialchars($dept) ?></td>
+          <tbody>
+          <?php if (empty($records)): ?>
+            <tr class="empty-row"><td colspan="7">🫙 No attendance recorded for this date yet.</td></tr>
+          <?php else: foreach ($records as $r): ?>
+            <tr>
+              <td style="font-weight:700"><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
+              <td><?= htmlspecialchars($r['department']) ?></td>
               <td><?= $r['time_in']  ? date('g:i A', strtotime($r['time_in']))  : '—' ?></td>
               <td><?= $r['time_out'] ? date('g:i A', strtotime($r['time_out'])) : '—' ?></td>
-              <td><span class="status-badge status-<?= htmlspecialchars($status_key) ?>"><?= htmlspecialchars($status_label) ?></span></td>
+              <td><span class="status-badge status-<?= $r['status'] ?>"><?= ucwords(str_replace('_',' ',$r['status'])) ?></span></td>
               <td style="color:var(--text-muted);font-size:12px"><?= htmlspecialchars($r['notes'] ?: '—') ?></td>
               <td>
-                <div class="proof-thumbs" style="display:flex;gap:6px">
-                  <?php if ($time_in_photo_url): ?>
-                    <img src="<?= htmlspecialchars($time_in_photo_url) ?>" class="proof-thumb" title="Clock-in photo" style="width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openReviewPhoto('<?= htmlspecialchars($time_in_photo_url, ENT_QUOTES) ?>')"/>
-                  <?php endif; ?>
-                  <?php if ($time_out_photo_url): ?>
-                    <img src="<?= htmlspecialchars($time_out_photo_url) ?>" class="proof-thumb" title="Clock-out photo" style="width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openReviewPhoto('<?= htmlspecialchars($time_out_photo_url, ENT_QUOTES) ?>')"/>
-                  <?php endif; ?>
-                  <?php if (!$time_in_photo_url && !$time_out_photo_url): ?>—<?php endif; ?>
-                </div>
-              </td>
-              <td>
                 <div class="act-group">
-                  <button type="button" class="act-btn act-view"
-                    onclick="openReview(this)"
-                    data-employee-id="<?= $r['employee_id'] ?>"
-                    data-attendance-id="<?= $has_record ? $r['attendance_id'] : '' ?>"
-                    data-name="<?= htmlspecialchars($full_name) ?>"
-                    data-code="<?= htmlspecialchars($r['employee_code']) ?>"
-                    data-department="<?= htmlspecialchars($dept) ?>"
-                    data-time-in="<?= htmlspecialchars($time_in_24) ?>"
-                    data-time-out="<?= htmlspecialchars($time_out_24) ?>"
-                    data-status="<?= htmlspecialchars($has_record ? $r['status'] : 'present') ?>"
-                    data-notes="<?= htmlspecialchars($r['notes'] ?? '') ?>"
-                    data-has-record="<?= $has_record ? '1' : '0' ?>"
-                    data-time-in-photo="<?= htmlspecialchars($time_in_photo_url) ?>"
-                    data-time-out-photo="<?= htmlspecialchars($time_out_photo_url) ?>"
-                  >🔍 Review</button>
+                  <?php if (!$r['time_out'] && $r['status'] !== 'absent'): ?>
+                  <form method="POST" style="display:inline">
+                    <input type="hidden" name="action" value="clock_out"/>
+                    <input type="hidden" name="record_id" value="<?= $r['id'] ?>"/>
+                    <input type="hidden" name="redirect_date" value="<?= htmlspecialchars($view_date) ?>"/>
+                    <button type="submit" class="act-btn act-activate">⏱️ Clock Out</button>
+                  </form>
+                  <?php endif; ?>
+                  <form method="POST" style="display:inline" onsubmit="return confirm('Delete this attendance record?')">
+                    <input type="hidden" name="action" value="delete"/>
+                    <input type="hidden" name="record_id" value="<?= $r['id'] ?>"/>
+                    <input type="hidden" name="redirect_date" value="<?= htmlspecialchars($view_date) ?>"/>
+                    <button type="submit" class="act-btn act-block">🗑️</button>
+                  </form>
                 </div>
               </td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>
         </table>
-        <div id="no-results-row" style="display:none;padding:24px;text-align:center;color:var(--text-muted)">No employees match your search/filter.</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Mark attendance modal (existing quick-add flow, unchanged) -->
-
-<!-- Review attendance modal (new: one row per employee, mark/update/clock-out/delete) -->
-<div class="modal-bg" id="review-modal" onclick="if(event.target===this) closeReview()">
-  <div class="modal review-modal">
+<!-- Mark attendance modal -->
+<div class="modal-bg" id="mark-modal" onclick="if(event.target===this) closeMark()">
+  <div class="modal">
     <div class="modal-header">
-      <h3>Review Attendance</h3>
-      <button class="modal-close" onclick="closeReview()">✕</button>
+      <h3>➕ Mark Attendance</h3>
+      <button class="modal-close" onclick="closeMark()">✕</button>
     </div>
-
-    <!-- Who + when, always visible, not part of the scrolling form -->
-    <div class="review-profile">
-      <div class="review-avatar" id="review-avatar">—</div>
-      <div class="review-profile-text">
-        <div class="review-profile-name" id="review-emp-name">—</div>
-        <div class="review-profile-meta" id="review-emp-meta">—</div>
-      </div>
-      <span class="status-badge" id="review-current-badge">—</span>
-    </div>
-
-    <form method="POST" id="review-form" class="review-scroll">
+    <form method="POST">
       <input type="hidden" name="action" value="mark"/>
       <input type="hidden" name="redirect_date" value="<?= htmlspecialchars($view_date) ?>"/>
-      <input type="hidden" name="attendance_date" value="<?= htmlspecialchars($view_date) ?>"/>
-      <input type="hidden" name="employee_id" id="review-employee-id" value=""/>
 
-      <div class="review-group">
-        <div class="field-row mg-b">
-          <div class="field-group">
-            <label class="field-label">Time In</label>
-            <input class="field-input" type="time" name="time_in" id="review-time-in" oninput="updateTotalHours()"/>
-          </div>
-          <div class="field-group">
-            <label class="field-label">Time Out</label>
-            <input class="field-input" type="time" name="time_out" id="review-time-out" oninput="updateTotalHours()"/>
-          </div>
-        </div>
-        <div class="review-hours">Total: <strong id="review-total-hours">—</strong></div>
+      <div class="field-group mg-b">
+        <label class="field-label">Employee <span class="req">*</span></label>
+        <select class="field-input" name="employee_id" required>
+          <option value="">Select employee…</option>
+          <?php foreach ($employees as $e): ?>
+            <option value="<?= $e['id'] ?>"><?= htmlspecialchars($e['firstname'].' '.$e['lastname']) ?> (#<?= htmlspecialchars($e['employee_code']) ?>)</option>
+          <?php endforeach; ?>
+        </select>
       </div>
 
-      <div class="review-divider"></div>
-
-      <div class="review-group" id="review-proof-wrap">
-        <div class="review-proof-grid" id="review-proof-thumbs">
-          <div class="review-photo-card" id="review-photo-in-wrap" style="display:none">
-            <img id="review-photo-in" onclick="openReviewPhoto(this.src)"/>
-            <span>Clock in</span>
-          </div>
-          <div class="review-photo-card" id="review-photo-out-wrap" style="display:none">
-            <img id="review-photo-out" onclick="openReviewPhoto(this.src)"/>
-            <span>Clock out</span>
-          </div>
-        </div>
-        <p class="review-no-photos" id="review-no-photos">No photos submitted for this date.</p>
+      <div class="field-group mg-b">
+        <label class="field-label">Date</label>
+        <input class="field-input" type="date" name="attendance_date" value="<?= htmlspecialchars($view_date) ?>"/>
       </div>
 
-      <div class="review-divider"></div>
-
-      <div class="review-group">
-        <div class="field-group mg-b">
-          <label class="field-label">Status</label>
-          <select class="field-input" name="status" id="review-status">
-            <option value="present">Present</option>
-            <option value="late">Late</option>
-            <option value="absent">Absent</option>
-            <option value="on_leave">On Leave</option>
-            <option value="half_day">Half Day</option>
-          </select>
-        </div>
-
+      <div class="field-row mg-b">
         <div class="field-group">
-          <label class="field-label">Notes</label>
-          <textarea class="field-input" name="notes" id="review-notes" rows="2" placeholder="Optional"></textarea>
+          <label class="field-label">Time In</label>
+          <input class="field-input" type="time" name="time_in"/>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Time Out</label>
+          <input class="field-input" type="time" name="time_out"/>
         </div>
       </div>
-    </form>
 
-    <div class="review-footer">
-      <div class="review-footer-secondary">
-        <button type="button" class="text-action" id="review-clockout-btn" style="display:none" onclick="submitClockOut()">Clock out</button>
-        <button type="button" class="text-action danger" id="review-delete-btn" style="display:none" onclick="submitDelete()">Delete record</button>
+      <div class="field-group mg-b">
+        <label class="field-label">Status</label>
+        <select class="field-input" name="status">
+          <option value="present">Present</option>
+          <option value="late">Late</option>
+          <option value="absent">Absent</option>
+          <option value="on_leave">On Leave</option>
+          <option value="half_day">Half Day</option>
+        </select>
       </div>
       <div class="review-footer-primary">
         <button type="button" class="btn-cancel" onclick="closeReview()">Cancel</button>
         <button type="submit" form="review-form" class="btn-save" id="review-save-btn">✔ Save changes</button>
       </div>
-    </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" onclick="closeMark()">Cancel</button>
+        <button type="submit" class="btn-save">✔ Save Record</button>
+      </div>
+    </form>
   </div>
 </div>
-
-<!-- Photo proof preview modal -->
-<div class="modal-bg" id="photo-preview-modal" onclick="if(event.target===this) closeReviewPhoto()">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-header">
-      <h3>Attendance Proof</h3>
-      <button class="modal-close" onclick="closeReviewPhoto()">✕</button>
-    </div>
-    <div style="text-align:center;padding:0 20px 20px">
-      <img id="photo-preview-img" style="max-width:100%;border-radius:10px"/>
-    </div>
-  </div>
-</div>
-
-<!-- Hidden helper forms used by the Review modal for clock-out / delete -->
-<form method="POST" id="clockout-form" style="display:none">
-  <input type="hidden" name="action" value="clock_out"/>
-  <input type="hidden" name="record_id" id="clockout-record-id" value=""/>
-  <input type="hidden" name="redirect_date" value="<?= htmlspecialchars($view_date) ?>"/>
-</form>
-<form method="POST" id="delete-form" style="display:none">
-  <input type="hidden" name="action" value="delete"/>
-  <input type="hidden" name="record_id" id="delete-record-id" value=""/>
-  <input type="hidden" name="redirect_date" value="<?= htmlspecialchars($view_date) ?>"/>
-</form>
 
 <?php if ($toast): ?>
 <div class="toast toast-<?= $toast_type ?>" id="toast-msg"><?= $toast ?></div>

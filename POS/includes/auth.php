@@ -51,32 +51,11 @@ function login_user(string $username, string $password): array {
         $_SESSION['firstname'] = $user['firstname'] ?? '';
         $_SESSION['lastname'] = $user['lastname'] ?? '';
         $_SESSION['email'] = $user['email'] ?? '';
-        $_SESSION['role'] = $user['role'] ?? 'staff'; // ← legacy single-role column, kept for backward compat
+        $_SESSION['role'] = $user['role'] ?? 'staff'; // ← THIS IS CRUCIAL!
         $_SESSION['status'] = $user['status'] ?? 'active';
-
-        // Pull ALL roles from user_roles (multi-role RBAC) — this is what
-        // has_permission()/require_permission() actually check. Without this,
-        // $_SESSION['roles'] stays empty and has_permission() silently falls
-        // back to the single legacy $_SESSION['role'] above, which can miss
-        // permissions granted only through a second role. That mismatch is
-        // what causes a valid login to bounce straight to
-        // "login.php?reason=forbidden" on the landing page.
-        $roles_stmt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :id');
-        $roles_stmt->execute([':id' => $user['id']]);
-        $all_roles = $roles_stmt->fetchAll(PDO::FETCH_COLUMN);
-
-        if (empty($all_roles) && !empty($_SESSION['role'])) {
-            // No user_roles rows yet — fall back to the legacy single role.
-            $all_roles = [$_SESSION['role']];
-        }
-
-        $_SESSION['roles'] = array_values(array_unique(array_map(
-            fn($r) => strtolower(trim($r)),
-            $all_roles
-        )));
-
+        
         // Debug: Log successful login
-        error_log("User logged in: {$user['username']} (roles: " . implode(',', $_SESSION['roles']) . ")");
+        error_log("User logged in: {$user['username']} (Role: {$_SESSION['role']})");
         
         return [
             'ok' => true,
@@ -140,6 +119,57 @@ function require_login(): void {
     }
 }
 
+/** Return whether a crew member has started today's shift. */
+function user_is_clocked_in(): bool {
+    $role = strtolower(trim($_SESSION['role'] ?? ''));
+    $roles = array_map('strtolower', $_SESSION['roles'] ?? []);
+    if ($role !== 'crew' && !in_array('crew', $roles, true)) {
+        return true;
+    }
+
+    try {
+        $pdo = get_db();
+        $employee = $pdo->prepare('SELECT id FROM employees WHERE user_id = :user_id AND status = "active" LIMIT 1');
+        $employee->execute([':user_id' => (int)$_SESSION['user_id']]);
+        $employeeId = $employee->fetchColumn();
+        if (!$employeeId) return false;
+
+        $attendance = $pdo->prepare(
+            "SELECT 1 FROM attendance
+             WHERE employee_id = :employee_id
+               AND attendance_date = CURDATE()
+               AND time_in IS NOT NULL
+               AND time_out IS NULL
+               AND status IN ('present', 'late', 'half_day')
+             LIMIT 1"
+        );
+        $attendance->execute([':employee_id' => (int)$employeeId]);
+        return (bool)$attendance->fetchColumn();
+    } catch (Throwable $e) {
+        error_log('Clock-in check failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** Require crew to clock in before accessing POS order workflows. */
+function require_clocked_in_for_pos(bool $json = false): void {
+    if (user_is_clocked_in()) return;
+
+    if ($json) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'error' => 'Clock in first before accessing the POS system.',
+            'redirect' => '../php/employee_dashboard.php?reason=clock_in_required',
+        ]);
+        exit;
+    }
+
+    header('Location: ../php/employee_dashboard.php?reason=clock_in_required');
+    exit;
+}
+
 // ═══════════════════════════════════════════════
 //  ROLE CHECK (simple, for quick role gating)
 // ═══════════════════════════════════════════════
@@ -159,13 +189,7 @@ function require_role(string ...$roles): void {
 }
 
 // ═══════════════════════════════════════════════
-//  PERMISSION CHECK - DEFINED IN permissions.php
-// ═══════════════════════════════════════════════
-//
-//  has_permission($perm_key)     — Check if user has permission (no redirect)
-//  require_permission($perm_key) — Check and redirect if denied
-//
-//  These are defined in includes/permissions.php and included automatically.
+//  PERMISSION CHECK (WITHOUT REDIRECT)
 // ═══════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════
@@ -173,13 +197,18 @@ function require_role(string ...$roles): void {
 // ═══════════════════════════════════════════════
 
 function current_user(): array {
+    $roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
+        ? $_SESSION['roles']
+        : (!empty($_SESSION['role']) ? [$_SESSION['role']] : []);
+
     return [
         'id'        => $_SESSION['user_id']   ?? null,
         'username'  => $_SESSION['username']  ?? '',
         'firstname' => $_SESSION['firstname'] ?? '',
         'lastname'  => $_SESSION['lastname']  ?? '',
         'email'     => $_SESSION['email']     ?? '',
-        'role'      => $_SESSION['role']      ?? 'staff',
+        'role'      => $_SESSION['role']      ?? 'staff', // primary role — legacy code
+        'roles'     => $roles,                            // ALL roles this account holds
         'status'    => $_SESSION['status']    ?? 'active',
         'name'      => trim(($_SESSION['firstname'] ?? '') . ' ' . ($_SESSION['lastname'] ?? '')),
     ];
@@ -190,11 +219,17 @@ function is_logged_in(): bool {
 }
 
 function is_admin(): bool {
-    return ($_SESSION['role'] ?? '') === 'admin';
+    $roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
+        ? $_SESSION['roles']
+        : [$_SESSION['role'] ?? ''];
+    return in_array('admin', $roles, true);
 }
 
 function is_admin_or_manager(): bool {
-    return in_array($_SESSION['role'] ?? '', ['admin', 'manager']);
+    $roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
+        ? $_SESSION['roles']
+        : [$_SESSION['role'] ?? ''];
+    return (bool)array_intersect(['admin', 'manager'], $roles);
 }
 
 function get_dashboard_url(): string {
@@ -250,23 +285,6 @@ function refresh_session(): void {
             $_SESSION['lastname'] = $user['lastname'] ?? '';
             $_SESSION['email'] = $user['email'] ?? '';
             $_SESSION['status'] = $user['status'] ?? 'active';
-
-            // Keep $_SESSION['roles'] (plural, multi-role) in sync too —
-            // has_permission() checks this first. Without refreshing it here,
-            // any refresh_session() call would fall back to only the single
-            // legacy role above and re-trigger the forbidden-redirect bug.
-            $roles_stmt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :id');
-            $roles_stmt->execute([':id' => $_SESSION['user_id']]);
-            $all_roles = $roles_stmt->fetchAll(PDO::FETCH_COLUMN);
-
-            if (empty($all_roles) && !empty($_SESSION['role'])) {
-                $all_roles = [$_SESSION['role']];
-            }
-
-            $_SESSION['roles'] = array_values(array_unique(array_map(
-                fn($r) => strtolower(trim($r)),
-                $all_roles
-            )));
         }
     } catch (Exception $e) {
         // Silent fail

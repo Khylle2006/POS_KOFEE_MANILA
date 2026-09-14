@@ -13,6 +13,7 @@ include("../api/add_item.php");
   <title>Menu Manager — Kofee POS</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <?php ?>
 </head>
 <body>
@@ -23,17 +24,22 @@ include("../api/add_item.php");
   <div class="page-header">
     <div>
       <h1>Menu Manager</h1>
-      <p>Edit and manage your drink menu</p>
+      <p><?= $view === 'archived' ? 'Review archived products' : 'Edit and manage your drink menu' ?></p>
 
     
       
     </div>
-   <button class="btn-msave" onclick="openAdd()">
-    ➕ Add Item
-</button>
+     <?php if ($view === 'active'): ?>
+     <button class="btn-msave" onclick="openAdd()">➕ Add Item</button>
+     <?php endif; ?>
   </div>
 
   <div class="page-body">
+
+    <div class="view-tabs" style="padding:14px 32px 0;display:flex;gap:8px">
+      <a class="filter-pill <?= $view === 'active' ? 'active' : '' ?>" href="add_item.php">📦 Active</a>
+      <a class="filter-pill <?= $view === 'archived' ? 'active' : '' ?>" href="add_item.php?view=archived">🗄 Archived <?= $archived_count ? '(' . $archived_count . ')' : '' ?></a>
+    </div>
 
     <div class="filter-bar" style="align-items:center">
       <input class="filter-input" type="text" id="search-products"
@@ -110,7 +116,7 @@ include("../api/add_item.php");
               </td>
               <td>
                 <div class="act-group">
-                  <?php if (has_permission('menu.edit')): ?>
+                  <?php if ($view === 'active' && has_permission('menu.edit')): ?>
                   <button class="act-btn <?= $available ? 'act-hold' : 'act-activate' ?>"
                           id="toggle-<?= $p['id'] ?>"
                           data-state="<?= $available ? 'on' : 'off' ?>"
@@ -118,7 +124,15 @@ include("../api/add_item.php");
                     <?= $available ? 'Mark Unavailable' : 'Mark Available' ?>
                   </button>
                   <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'>✏️ Edit</button>
-                  <button class="act-btn" onclick="openRecipe(<?= $p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES) ?>)">🧪 Recipe</button>
+                  <?php endif; ?>
+                  <?php if ($view === 'active' && has_permission('menu.delete')): ?>
+                  <button class="act-btn act-block" onclick='confirmDelete(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'>🗑️</button>
+                  <?php endif; ?>
+                  <?php if ($view === 'archived' && has_permission('menu.edit')): ?>
+                  <button class="act-btn act-activate" onclick='restoreProduct(<?= (int)$p['id'] ?>)'>↩️ Restore</button>
+                  <?php endif; ?>
+                  <?php if ($view === 'archived' && has_permission('menu.delete')): ?>
+                  <button class="act-btn act-block" onclick='purgeProduct(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'>🗑️ Delete Forever</button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -157,11 +171,6 @@ include("../api/add_item.php");
         <label class="field-label">Description</label>
         <textarea class="field-textarea" id="e-desc"></textarea>
       </div>
-      <div class="field-group">
-        <label class="field-label">Product Image</label>
-        <input class="field-input" type="file" id="e-image" accept="image/jpeg,image/png,image/webp"/>
-        <small style="color:var(--text-muted)">Optional. JPG, PNG, or WebP up to 5 MB.</small>
-      </div>
       <div class="field-row">
         <div class="field-group">
           <label class="field-label">Regular Price (₱)</label>
@@ -184,7 +193,7 @@ include("../api/add_item.php");
 
 <!-- add modal -->
 <div class="modal-overlay" id="add-modal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal">
     <div class="modal-header">
       <h3>➕ Add Menu Item</h3>
       <button class="modal-close" onclick="closeAdd()">✕</button>
@@ -206,11 +215,6 @@ include("../api/add_item.php");
         <label class="field-label">Description</label>
         <textarea class="field-textarea" id="add-desc"></textarea>
       </div>
-      <div class="field-group">
-        <label class="field-label">Product Image</label>
-        <input class="field-input" type="file" id="add-image" accept="image/jpeg,image/png,image/webp"/>
-        <small style="color:var(--text-muted)">Optional. JPG, PNG, or WebP up to 5 MB.</small>
-      </div>
       <div class="field-row">
         <div class="field-group">
           <label class="field-label">Regular Price (₱)</label>
@@ -221,23 +225,6 @@ include("../api/add_item.php");
           <input class="field-input" type="number" id="add-price-large" step="0.01" min="0"/>
         </div>
       </div>
-
-      <hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
-      <div style="font-size:13px;font-weight:700;color:var(--espresso);margin-bottom:6px">
-        🧪 Recipe & Ingredients (Auto-deducted on order)
-      </div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
-        Pick the ingredients consumed per cup for Regular and Up Size.
-      </p>
-      <div class="filter-bar" style="margin-bottom:10px">
-        <button type="button" class="act-btn" id="add-recipe-tab-small" onclick="switchNewItemRecipeSize('small')">Regular</button>
-        <button type="button" class="act-btn" id="add-recipe-tab-large" onclick="switchNewItemRecipeSize('large')">Up Size</button>
-      </div>
-      <div id="add-recipe-rows"></div>
-      <button type="button" class="act-btn" style="margin-top:8px" onclick="addNewItemRecipeRow()">➕ Add Ingredient</button>
-      <p id="add-recipe-empty-msg" style="font-size:12px;color:var(--text-muted);margin-top:8px">
-        No ingredients added for this size yet.
-      </p>
     </div>
     <div class="modal-actions">
       <button class="btn-mcancel" onclick="closeAdd()">Cancel</button>
@@ -261,21 +248,6 @@ include("../api/add_item.php");
   </div>
 </div>
 
-<!-- Delete confirm modal -->
-<div class="modal-overlay" id="delete-modal">
-  <div class="modal" style="max-width:360px">
-    <div class="modal-body" style="text-align:center">
-      <div style="font-size:46px;margin-bottom:12px">🗑️</div>
-      <h3 style="font-size:17px;margin-bottom:8px">Delete Item?</h3>
-      <p id="del-msg" style="font-size:13px;color:var(--text-muted)"></p>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-mcancel" onclick="closeDelete()">Cancel</button>
-      <button class="btn-msave" style="background:var(--red)" onclick="doDelete()">Yes, Delete</button>
-    </div>
-  </div>
-</div>
-
 <!-- Availability confirm modal -->
 <div class="modal-overlay" id="avail-modal">
   <div class="modal" style="max-width:360px">
@@ -291,152 +263,68 @@ include("../api/add_item.php");
   </div>
 </div>
 
-<!-- Recipe builder modal -->
-<div class="modal-overlay" id="recipe-modal">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-header">
-      <h3>🧪 Recipe — <span id="recipe-item-name"></span></h3>
-      <button class="modal-close" onclick="closeRecipe()">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">
-        Set which inventory ingredients this drink consumes, and how much per cup.
-        Regular and Up Size can use different amounts.
-      </p>
-      <div class="filter-bar" style="margin-bottom:12px">
-        <button type="button" class="act-btn" id="recipe-tab-small" onclick="switchRecipeSize('small')">Regular</button>
-        <button type="button" class="act-btn" id="recipe-tab-large" onclick="switchRecipeSize('large')">Up Size</button>
-      </div>
-      <div id="recipe-rows"></div>
-      <button type="button" class="act-btn" style="margin-top:8px" onclick="addRecipeRow()">➕ Add Ingredient</button>
-      <p id="recipe-empty-msg" style="font-size:12.5px;color:var(--text-muted);margin-top:8px;display:none">
-        No ingredients set for this size yet — this size won't deduct any stock at checkout.
-      </p>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-mcancel" onclick="closeRecipe()">Cancel</button>
-      <button class="btn-msave" onclick="saveRecipe()">💾 Save Recipe</button>
-    </div>
-  </div>
-</div>
-
 <!-- Toast -->
 <div class="toast" id="toast" style="display:none"></div>
 
 <script>
 
-let allIngredientsList = [];
-async function ensureIngredientsLoaded() {
-  if (allIngredientsList.length > 0) return allIngredientsList;
-  try {
-    const res = await fetch('../api/get_ingredients.php');
-    allIngredientsList = await res.json();
-    if (!recipeState.ingredientList || recipeState.ingredientList.length === 0) {
-      recipeState.ingredientList = allIngredientsList;
-    }
-  } catch(e) {
-    console.error('Failed to load ingredients:', e);
-  }
-  return allIngredientsList;
-}
-
-let newItemRecipe = {
-  activeSize: 'small',
-  small: [],
-  large: []
-};
-
-async function openAdd() {
+function openAdd() {
   document.getElementById('add-category').value    = '';
   document.getElementById('add-name').value        = '';
   document.getElementById('add-desc').value        = '';
   document.getElementById('add-price-small').value = '';
   document.getElementById('add-price-large').value = '';
-  document.getElementById('add-image').value        = '';
-  newItemRecipe = { activeSize: 'small', small: [], large: [] };
-  await ensureIngredientsLoaded();
-  renderNewItemRecipeRows();
   document.getElementById('add-modal').classList.add('open');
 }
 function closeAdd() { document.getElementById('add-modal').classList.remove('open'); }
 
-function switchNewItemRecipeSize(size) {
-  saveCurrentNewItemRows();
-  newItemRecipe.activeSize = size;
-  renderNewItemRecipeRows();
-}
+// ── Add: preview step ──
+function addMenuItem() {
+  const cat = document.getElementById('add-category');
+  const name = document.getElementById('add-name');
+  const priceSmall = document.getElementById('add-price-small');
+  const priceLarge = document.getElementById('add-price-large');
 
-function saveCurrentNewItemRows() {
-  const rows = Array.from(document.querySelectorAll('#add-recipe-rows .field-row'));
-  const list = [];
-  for (const row of rows) {
-    const sel = row.querySelector('.recipe-ing-select');
-    const inp = row.querySelector('.recipe-qty-input');
-    if (sel && inp && sel.value && inp.value) {
-      list.push({ ingredient_id: parseInt(sel.value, 10), qty_used: parseFloat(inp.value) });
-    }
-  }
-  newItemRecipe[newItemRecipe.activeSize] = list;
-}
+  let valid = true;
+  let firstInvalid = null;
 
-function renderNewItemRecipeRows() {
-  const tabSmall = document.getElementById('add-recipe-tab-small');
-  const tabLarge = document.getElementById('add-recipe-tab-large');
-  if (tabSmall) tabSmall.style.background = newItemRecipe.activeSize === 'small' ? 'var(--accent-lt)' : '';
-  if (tabLarge) tabLarge.style.background = newItemRecipe.activeSize === 'large' ? 'var(--accent-lt)' : '';
-
-  const rows = newItemRecipe[newItemRecipe.activeSize] || [];
-  const container = document.getElementById('add-recipe-rows');
-  if (!container) return;
-  container.innerHTML = '';
-
-  const emptyMsg = document.getElementById('add-recipe-empty-msg');
-  if (rows.length === 0) {
-    if (emptyMsg) emptyMsg.style.display = '';
+  if (!cat.value) {
+    KofeeValidator.showError(cat, 'Please choose a category.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = cat;
   } else {
-    if (emptyMsg) emptyMsg.style.display = 'none';
-    rows.forEach((row, i) => {
-      container.appendChild(buildNewItemRowEl(row.ingredient_id, row.qty_used));
-    });
+    KofeeValidator.clearError(cat);
   }
-}
 
-function buildNewItemRowEl(selectedId, qty) {
-  const wrap = document.createElement('div');
-  wrap.className = 'field-row';
-  wrap.style.alignItems = 'center';
+  if (!name.value.trim()) {
+    KofeeValidator.showError(name, 'Drink name is required.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = name;
+  } else if (name.value.trim().length < 2) {
+    KofeeValidator.showError(name, 'Drink name must be at least 2 characters.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = name;
+  } else {
+    KofeeValidator.clearError(name);
+  }
 
-  const options = allIngredientsList.map(ing =>
-    `<option value="${ing.id}" ${ing.id == selectedId ? 'selected' : ''}>${escapeHtml(ing.name)} (${escapeHtml(ing.unit)})</option>`
-  ).join('');
+  if (!priceSmall.value || parseFloat(priceSmall.value) <= 0) {
+    KofeeValidator.showError(priceSmall, 'Regular price must be greater than 0.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = priceSmall;
+  } else {
+    KofeeValidator.clearError(priceSmall);
+  }
 
-  wrap.innerHTML = `
-    <div class="field-group" style="flex:2">
-      <select class="field-select recipe-ing-select">
-        <option value="">— choose ingredient —</option>
-        ${options}
-      </select>
-    </div>
-    <div class="field-group" style="flex:1">
-      <input class="field-input recipe-qty-input" type="number" step="0.01" min="0.01" placeholder="Qty used" value="${qty ?? ''}"/>
-    </div>
-    <button type="button" class="act-btn act-hold" style="height:38px" onclick="this.closest('.field-row').remove(); toggleNewItemEmptyMsg();">🗑️</button>
-  `;
-  return wrap;
-}
+  if (!priceLarge.value || parseFloat(priceLarge.value) <= 0) {
+    KofeeValidator.showError(priceLarge, 'Up size price must be greater than 0.');
+    valid = false;
+    if (!firstInvalid) firstInvalid = priceLarge;
+  } else {
+    KofeeValidator.clearError(priceLarge);
+  }
 
-function addNewItemRecipeRow() {
-  const emptyMsg = document.getElementById('add-recipe-empty-msg');
-  if (emptyMsg) emptyMsg.style.display = 'none';
-  const container = document.getElementById('add-recipe-rows');
-  container.appendChild(buildNewItemRowEl('', ''));
-}
-
-function toggleNewItemEmptyMsg() {
-  const container = document.getElementById('add-recipe-rows');
-  const emptyMsg = document.getElementById('add-recipe-empty-msg');
-  if (emptyMsg && container) emptyMsg.style.display = container.children.length === 0 ? '' : 'none';
-}
+  saveCurrentNewItemRows();
 
 // ── Add: preview step ──
 function addMenuItem() {
@@ -503,6 +391,23 @@ function addMenuItem() {
     return;
   }
 
+  const currentRows = Array.from(document.querySelectorAll('#add-recipe-rows .field-row'));
+  for (const row of currentRows) {
+    const sel = row.querySelector('.recipe-ing-select');
+    const inp = row.querySelector('.recipe-qty-input');
+    if (sel && sel.value && (!inp.value || parseFloat(inp.value) <= 0)) {
+      KofeeValidator.showError(inp, 'Enter quantity greater than 0.');
+      valid = false;
+      if (!firstInvalid) firstInvalid = inp;
+    }
+  }
+
+  if (!valid && firstInvalid) {
+    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    firstInvalid.focus();
+    return;
+  }
+
   const catName   = cat.options[cat.selectedIndex]?.textContent || '—';
   const desc      = document.getElementById('add-desc').value.trim();
   const regCount  = newItemRecipe.small.length;
@@ -536,13 +441,6 @@ function doAddMenuItem() {
   fd.append('description', document.getElementById('add-desc').value);
   fd.append('price_small', document.getElementById('add-price-small').value);
   fd.append('price_large', document.getElementById('add-price-large').value);
-  fd.append('recipe',      JSON.stringify({
-    small: newItemRecipe.small,
-    large: newItemRecipe.large
-  }));
-
-  const addImage = document.getElementById('add-image').files[0];
-  if (addImage) fd.append('image', addImage);
 
   const btn = document.getElementById('add-confirm-btn');
   KofeeValidator.setLoading(btn, 'Adding…');
@@ -682,7 +580,6 @@ function openEdit(p) {
   document.getElementById('e-desc').value        = p.description || '';
   document.getElementById('e-price-small').value = p.price_small;
   document.getElementById('e-price-large').value = p.price_large;
-  document.getElementById('e-image').value        = '';
   document.getElementById('edit-modal').classList.add('open');
 }
 function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); }
@@ -782,45 +679,76 @@ function updateRowInDOM(id, p) {
   if (editBtn) editBtn.setAttribute('onclick', `openEdit(${JSON.stringify(p).replace(/"/g, '&quot;')})`);
 }
 
-// ── Delete item ──────────────────────────────
-let pendingDelete = null;
-function confirmDelete(id, name) {
-  pendingDelete = id;
-  document.getElementById('del-msg').textContent = `Are you sure you want to delete "${name}"?`;
-  document.getElementById('delete-modal').classList.add('open');
+// Delete and archive actions
+async function confirmDelete(id, name) {
+  const result = await Swal.fire({
+    title: 'Delete Product?',
+    text: `Are you sure you want to delete "${name}"?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Yes, Delete',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: 'var(--red)',
+    reverseButtons: true,
+  });
+  if (result.isConfirmed) await submitProductAction('delete', id);
 }
-function closeDelete() {
-  pendingDelete = null;
-  document.getElementById('delete-modal').classList.remove('open');
+
+async function restoreProduct(id) {
+  const result = await Swal.fire({
+    title: 'Restore Product?',
+    text: 'This product will be available in the active menu again.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Restore',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: 'var(--caramel)',
+    reverseButtons: true,
+  });
+  if (result.isConfirmed) await submitProductAction('restore', id);
 }
-function doDelete() {
-  if (!pendingDelete) return;
-  const id = pendingDelete;
+
+async function purgeProduct(id, name) {
+  const result = await Swal.fire({
+    title: 'Delete Permanently?',
+    text: `Delete "${name}" forever? This cannot be undone.`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete Forever',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: 'var(--red)',
+    reverseButtons: true,
+  });
+  if (result.isConfirmed) await submitProductAction('purge', id);
+}
+
+async function submitProductAction(action, id) {
   const fd = new FormData();
-  fd.append('action', 'delete');
+  fd.append('action', action);
   fd.append('id', id);
-
-  fetch('../api/add_item.php', { method: 'POST', body: fd })
-    .then(response => response.json())
-    .then(result => {
-      if (!result.ok) throw new Error(result.error || 'Unable to delete item.');
-      closeDelete();
-      document.getElementById('prow-' + id)?.remove();
-      showToast('✅ Item deleted.');
-      applyFilters();
-    })
-    .catch(error => showToast('⚠️ ' + error.message, 'error'));
+  try {
+    const response = await fetch('../api/add_item.php', { method: 'POST', body: fd });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Action failed.');
+    await Swal.fire({
+      title: action === 'restore' ? 'Restored' : action === 'purge' ? 'Deleted' : 'Archived',
+      text: result.message,
+      icon: 'success',
+      confirmButtonColor: 'var(--caramel)',
+    });
+    location.reload();
+  } catch (error) {
+    await Swal.fire({ title: 'Action Failed', text: error.message, icon: 'error', confirmButtonColor: 'var(--red)' });
+  }
 }
 
-
-// ── Close modals on backdrop / Escape ──────────
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); closeRecipe(); }
+    if (e.target === el) { closeAdd(); closeEdit(); closeAvail(); closeAddConfirm(); }
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); closeRecipe(); }
+  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeAvail(); closeAddConfirm(); }
 });
 
 // ── Recipe builder ──────────────────────────────
