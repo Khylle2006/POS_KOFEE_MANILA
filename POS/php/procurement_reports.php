@@ -257,8 +257,6 @@ function qs(array $overrides = []): string {
     foreach ($params as $k => $v) { if ($v === '' || $v === null) unset($params[$k]); }
     return htmlspecialchars('?' . http_build_query($params));
 }
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -280,6 +278,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-procurement-reports" class="page active">
   <div class="page-header">

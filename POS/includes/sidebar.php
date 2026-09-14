@@ -1,6 +1,7 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/permissions.php';
+require_once __DIR__ . '/procurement_helpers.php';
 ob_start();
 require_once __DIR__ . '/icons.php';
 ob_end_clean(); // discard any stray/leaked text icons.php might accidentally output
@@ -27,6 +28,15 @@ if (!function_exists('icon')) {
             'sun'         => '<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/>',
             'coin'        => '<circle cx="12" cy="12" r="9"/><path d="M9.2 15.4c.5.9 1.5 1.5 2.8 1.5 1.8 0 3-1 3-2.3 0-3.2-5.6-1.7-5.6-4.9 0-1.3 1.2-2.3 3-2.3 1.2 0 2.2.5 2.7 1.4M12 6.4v1.2M12 16.4v1.2"/>',
             'chevron'     => '<path d="M9 6l6 6-6 6"/>',
+        'dashboard'   => '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+            'rfq'         => '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
+            'truck'       => '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/>',
+            'invoice'     => '<path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
+            'scale'       => '<path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-3 6a3 3 0 006 0z"/><path d="M19 7l-3 6a3 3 0 006 0z"/>',
+            'card'        => '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+            'star'        => '<path d="M12 2l3 6.5 7 .9-5 5 1.3 7-6.3-3.6L5.7 21.4 7 14.4l-5-5 7-.9z"/>',
+            'portal'      => '<path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/>',
+            'bell'        => '<path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
         ];
         $body = $paths[$name] ?? $paths['home'];
         return '<svg width="'.$size.'" height="'.$size.'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'.$body.'</svg>';
@@ -74,6 +84,14 @@ try {
 }
 
 $initials = strtoupper(substr($user['firstname'] ?: $user['username'] ?: '?', 0, 1));
+$notification_count = 0;
+$notifications = [];
+try {
+    $notification_count = unread_notification_count((int)$user['id']);
+    $notifications = recent_notifications((int)$user['id'], 12);
+} catch (Throwable $e) {
+    // Notifications are optional; never prevent the shared layout from rendering.
+}
 
 // ── Tailwind class helpers ────────────────────────────────────
 // Colors reference your existing CSS custom properties (--espresso etc.)
@@ -99,7 +117,153 @@ function navBtnClasses(bool $active): string {
 
 $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
 ?>
-<script src="https://cdn.tailwindcss.com"></script>
+<!-- ── Kofee Manila Smooth Page Transition & Loader ── -->
+<style>
+  @view-transition {
+    navigation: auto;
+  }
+  #kofee-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 9999999;
+    background: radial-gradient(circle at center, #26160d 0%, #120905 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.32s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.32s ease;
+    pointer-events: all;
+    user-select: none;
+  }
+  #kofee-loader.loader-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .kfs-loader-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .kfs-cup-wrap {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #d9a06b;
+    animation: kfsGlow 2.4s ease-in-out infinite;
+  }
+  .kfs-cup-wrap svg {
+    width: 46px;
+    height: 46px;
+  }
+  .kfs-steam-lines {
+    position: absolute;
+    top: -6px;
+    display: flex;
+    gap: 5px;
+  }
+  .kfs-steam-line {
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: linear-gradient(to top, rgba(217, 160, 107, 0.85), transparent);
+    animation: kfsSteam 1.6s ease-in-out infinite;
+  }
+  .kfs-steam-line:nth-child(2) {
+    animation-delay: 0.35s;
+    height: 15px;
+  }
+  .kfs-steam-line:nth-child(3) {
+    animation-delay: 0.7s;
+  }
+  @keyframes kfsSteam {
+    0% { transform: translateY(0) scaleX(1); opacity: 0; }
+    35% { opacity: 0.85; }
+    70% { transform: translateY(-8px) scaleX(1.4); opacity: 0.3; }
+    100% { transform: translateY(-16px) scaleX(2); opacity: 0; }
+  }
+  @keyframes kfsGlow {
+    0%, 100% { filter: drop-shadow(0 0 6px rgba(201, 123, 61, 0.25)); }
+    50% { filter: drop-shadow(0 0 16px rgba(201, 123, 61, 0.65)); }
+  }
+  .kfs-loader-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+  }
+  .kfs-loader-title {
+    font-family: 'Playfair Display', 'Poppins', Georgia, serif;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: 0.16em;
+    color: #FBF3E9;
+    text-transform: uppercase;
+  }
+  .kfs-loader-sub {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: #d9a06b;
+  }
+  .kfs-loader-bar {
+    width: 140px;
+    height: 3.5px;
+    background: rgba(251, 243, 233, 0.12);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    margin-top: 4px;
+  }
+  .kfs-loader-bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, #c47d3e, #f0c396, #c47d3e, transparent);
+    border-radius: 999px;
+    animation: kfsProgress 1.4s ease-in-out infinite;
+  }
+  @keyframes kfsProgress {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(260%); }
+  }
+</style>
+
+<div id="kofee-loader" aria-live="polite" role="status" aria-label="Loading page">
+  <div class="kfs-loader-card">
+    <div class="kfs-cup-wrap">
+      <div class="kfs-steam-lines">
+        <div class="kfs-steam-line"></div>
+        <div class="kfs-steam-line"></div>
+        <div class="kfs-steam-line"></div>
+      </div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+        <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+        <line x1="6" y1="1" x2="6" y2="4"/>
+        <line x1="10" y1="1" x2="10" y2="4"/>
+        <line x1="14" y1="1" x2="14" y2="4"/>
+      </svg>
+    </div>
+    <div class="kfs-loader-brand">
+      <span class="kfs-loader-title">Kofee Manila</span>
+      <span class="kfs-loader-sub">Brewing workspace…</span>
+    </div>
+    <div class="kfs-loader-bar">
+      <div class="kfs-loader-bar-fill"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Top bar: always visible, holds the Menu toggle ── -->
 <header class="fixed top-0 inset-x-0 h-14 z-[200] flex items-center gap-3 px-4
@@ -130,6 +294,46 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </div>
 
     <div class="flex-1"></div>
+
+    <div class="relative" id="notification-wrap">
+        <button id="notification-btn" type="button" onclick="toggleNotifications()"
+            class="relative w-9 h-9 flex items-center justify-center rounded-lg
+                   text-[rgba(251,243,233,0.78)] hover:bg-[rgba(251,243,233,0.12)]"
+            aria-label="Notifications" aria-expanded="false" aria-controls="notification-panel">
+            <?= icon('bell', 18) ?>
+            <?php if ($notification_count > 0): ?>
+            <span id="notification-count" class="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full
+                         bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)] text-[10px] font-extrabold flex items-center justify-center">
+                <?= $notification_count > 99 ? '99+' : $notification_count ?>
+            </span>
+            <?php endif; ?>
+        </button>
+        <div id="notification-panel" class="hidden absolute right-0 top-11 w-[340px] max-w-[calc(100vw-24px)]
+                    rounded-xl bg-white text-[var(--text-main,#2b2130)] shadow-2xl border border-[var(--latte,#efe0cc)] overflow-hidden z-[260]">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--latte,#efe0cc)]">
+                <strong class="text-[13px]">Notifications</strong>
+                <button type="button" onclick="markAllNotificationsRead()" class="text-[11px] font-semibold text-[var(--caramel,#c97b3d)]">Mark all read</button>
+            </div>
+            <div id="notification-list" class="max-h-[360px] overflow-y-auto">
+                <?php if (!$notifications): ?>
+                <div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">No notifications</div>
+                <?php else: foreach ($notifications as $notification): ?>
+                <a href="<?= htmlspecialchars($notification['link_url'] ?: '#') ?>"
+                   class="notification-item block px-4 py-3 border-b border-[var(--latte,#efe0cc)] hover:bg-[var(--accent-lt,#fcefe1)] <?= !$notification['is_read'] ? 'bg-[var(--accent-lt,#fcefe1)]' : '' ?>"
+                   data-notification-id="<?= (int)$notification['id'] ?>">
+                    <div class="flex items-start gap-2">
+                        <span class="notification-dot mt-1.5 w-2 h-2 rounded-full flex-shrink-0 <?= $notification['is_read'] ? 'opacity-0' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
+                        <span class="min-w-0">
+                            <strong class="block text-[12px] leading-4"><?= htmlspecialchars($notification['title']) ?></strong>
+                            <?php if ($notification['message']): ?><span class="block mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)]"><?= htmlspecialchars($notification['message']) ?></span><?php endif; ?>
+                            <time class="block mt-1 text-[10px] text-[var(--text-muted,#8b7c88)]"><?= htmlspecialchars($notification['created_at']) ?></time>
+                        </span>
+                    </div>
+                </a>
+                <?php endforeach; endif; ?>
+            </div>
+        </div>
+    </div>
 
     <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                 bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
@@ -294,6 +498,65 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 </nav>
 
 <script>
+// Refresh read-only monitoring screens without interrupting forms or POS carts.
+(function setupAutoRefresh() {
+    const livePages = new Set([
+        'dashboard.php',
+        'analytics.php',
+        'history.php',
+        'inventory.php',
+        'pending_orders.php',
+        'procurement_dashboard.php',
+        'procurement_reports.php',
+        'supplier_performace.php'
+    ]);
+    const page = window.location.pathname.split('/').pop();
+    if (!livePages.has(page)) return;
+
+    const refreshAfterMs = 30000;
+    window.setInterval(() => {
+        if (document.hidden) return;
+        if (document.querySelector('.modal-overlay.open, .modal-bg.open')) return;
+        if (document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+        window.location.reload();
+    }, refreshAfterMs);
+})();
+
+function toggleNotifications() {
+    const panel = document.getElementById('notification-panel');
+    const button = document.getElementById('notification-btn');
+    const opening = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !opening);
+    button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (opening) {
+        document.querySelectorAll('[data-notification-id]').forEach(item => {
+            item.addEventListener('click', () => markNotificationRead(item.dataset.notificationId), { once: true });
+        });
+    }
+}
+
+function markNotificationRead(id) {
+    fetch('../api/notifications.php', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'read', id})
+    });
+}
+
+function markAllNotificationsRead() {
+    fetch('../api/notifications.php', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'all_read'})
+    }).then(() => {
+        document.querySelectorAll('.notification-dot').forEach(dot => { dot.className = 'notification-dot mt-1.5 w-2 h-2 rounded-full flex-shrink-0 opacity-0'; });
+        document.getElementById('notification-count')?.remove();
+    });
+}
+
+document.addEventListener('click', event => {
+    const wrap = document.getElementById('notification-wrap');
+    if (wrap && !wrap.contains(event.target)) document.getElementById('notification-panel')?.classList.add('hidden');
+});
+
 function toggleSidebar(force) {
     const panel    = document.getElementById('main-sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');
@@ -321,4 +584,79 @@ function toggleSidebar(force) {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') toggleSidebar(false);
 });
+
+// ── Kofee Manila Loading Screen Controller ──
+(function() {
+    function showKofeeLoader(text) {
+        const loader = document.getElementById('kofee-loader');
+        if (!loader) return;
+        if (text) {
+            const sub = loader.querySelector('.kfs-loader-sub');
+            if (sub) sub.textContent = text;
+        }
+        loader.classList.remove('loader-hidden');
+    }
+
+    function hideKofeeLoader() {
+        const loader = document.getElementById('kofee-loader');
+        if (loader) {
+            loader.classList.add('loader-hidden');
+        }
+    }
+
+    window.showKofeeLoader = showKofeeLoader;
+    window.hideKofeeLoader = hideKofeeLoader;
+
+    // Smoothly fade out the loader once the current page content is ready
+    if (document.readyState === 'complete') {
+        setTimeout(hideKofeeLoader, 100);
+    } else {
+        window.addEventListener('load', () => {
+            setTimeout(hideKofeeLoader, 100);
+        });
+        // Failsafe: hide after 1.5s max in case an external font/asset stalls
+        setTimeout(hideKofeeLoader, 1500);
+    }
+
+    // Handle bfcache (browser back/forward button restores)
+    window.addEventListener('pageshow', (e) => {
+        if (e.persisted) {
+            hideKofeeLoader();
+        }
+    });
+
+    // Intercept internal link navigation
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('a');
+        if (a && a.href) {
+            if (
+                a.target === '_blank' ||
+                a.hasAttribute('download') ||
+                a.getAttribute('href').startsWith('#') ||
+                a.getAttribute('href').startsWith('javascript:') ||
+                e.ctrlKey || e.metaKey || e.shiftKey
+            ) {
+                return;
+            }
+            try {
+                const targetUrl = new URL(a.href, window.location.href);
+                if (targetUrl.origin === window.location.origin) {
+                    showKofeeLoader();
+                }
+            } catch (_) {}
+        }
+    }, true);
+
+    // Intercept sidebar navigation buttons and logout
+    document.querySelectorAll('.kfs-nav-btn, .kfs-logout-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            showKofeeLoader();
+        });
+    });
+
+    // Intercept page unloads (form posts that redirect or reload)
+    window.addEventListener('beforeunload', () => {
+        showKofeeLoader();
+    });
+})();
 </script>

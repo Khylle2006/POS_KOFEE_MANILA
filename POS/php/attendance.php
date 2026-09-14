@@ -84,12 +84,12 @@ $records = $stmt->fetchAll();
 $marked_ids = array_column($records, 'employee_id');
 $unmarked   = array_filter($employees, fn($e) => !in_array($e['id'], $marked_ids));
 
-$present = count(array_filter($records, fn($r) => $r['status'] === 'present'));
-$late    = count(array_filter($records, fn($r) => $r['status'] === 'late'));
-$absent  = count(array_filter($records, fn($r) => $r['status'] === 'absent'));
-$leave_c = count(array_filter($records, fn($r) => $r['status'] === 'on_leave'));
-
-include("../includes/sidebar.php");
+// ── Stats derived from ALL active employees, not just marked ones ──
+$present    = count(array_filter($rows, fn($r) => $r['status'] === 'present'));
+$late       = count(array_filter($rows, fn($r) => $r['status'] === 'late'));
+$absent     = count(array_filter($rows, fn($r) => $r['status'] === 'absent'));
+$leave_c    = count(array_filter($rows, fn($r) => $r['status'] === 'on_leave'));
+$not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -103,6 +103,8 @@ include("../includes/sidebar.php");
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 </head>
 <body>
+
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-attendance" class="page active">
   <div class="page-header">

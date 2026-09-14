@@ -264,8 +264,6 @@ if ($supplier) {
     $r->execute([':s' => $supplier['id']]);
     $ratings = $r->fetchAll();
 }
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -288,6 +286,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-supplier-portal" class="page active">
   <div class="page-header">

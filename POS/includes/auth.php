@@ -119,6 +119,57 @@ function require_login(): void {
     }
 }
 
+/** Return whether a crew member has started today's shift. */
+function user_is_clocked_in(): bool {
+    $role = strtolower(trim($_SESSION['role'] ?? ''));
+    $roles = array_map('strtolower', $_SESSION['roles'] ?? []);
+    if ($role !== 'crew' && !in_array('crew', $roles, true)) {
+        return true;
+    }
+
+    try {
+        $pdo = get_db();
+        $employee = $pdo->prepare('SELECT id FROM employees WHERE user_id = :user_id AND status = "active" LIMIT 1');
+        $employee->execute([':user_id' => (int)$_SESSION['user_id']]);
+        $employeeId = $employee->fetchColumn();
+        if (!$employeeId) return false;
+
+        $attendance = $pdo->prepare(
+            "SELECT 1 FROM attendance
+             WHERE employee_id = :employee_id
+               AND attendance_date = CURDATE()
+               AND time_in IS NOT NULL
+               AND time_out IS NULL
+               AND status IN ('present', 'late', 'half_day')
+             LIMIT 1"
+        );
+        $attendance->execute([':employee_id' => (int)$employeeId]);
+        return (bool)$attendance->fetchColumn();
+    } catch (Throwable $e) {
+        error_log('Clock-in check failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** Require crew to clock in before accessing POS order workflows. */
+function require_clocked_in_for_pos(bool $json = false): void {
+    if (user_is_clocked_in()) return;
+
+    if ($json) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'error' => 'Clock in first before accessing the POS system.',
+            'redirect' => '../php/employee_dashboard.php?reason=clock_in_required',
+        ]);
+        exit;
+    }
+
+    header('Location: ../php/employee_dashboard.php?reason=clock_in_required');
+    exit;
+}
+
 // ═══════════════════════════════════════════════
 //  ROLE CHECK (simple, for quick role gating)
 // ═══════════════════════════════════════════════

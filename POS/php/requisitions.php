@@ -186,8 +186,6 @@ foreach ($requisitions as &$r) {
     $r['items'] = $all_items[$r['id']] ?? [];
 }
 unset($r);
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -214,6 +212,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-requisitions" class="page active">
   <div class="page-header">

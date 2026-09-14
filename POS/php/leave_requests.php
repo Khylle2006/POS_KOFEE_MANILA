@@ -145,7 +145,6 @@ foreach ($leaves as $l) {
     elseif ($l['status']==='rejected') $rejected_c++;
 }
 
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -159,6 +158,7 @@ include("../includes/sidebar.php");
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-leave" class="page active">
   <div class="page-header">

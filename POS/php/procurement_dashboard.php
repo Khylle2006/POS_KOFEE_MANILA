@@ -140,8 +140,6 @@ $my_recent_reqs = dash_rows($pdo, "
     SELECT id, title, department, estimated_total, status, created_at
     FROM purchase_requisitions WHERE requested_by = :u ORDER BY created_at DESC LIMIT 5
 ", [':u' => $user['id']]);
-
-include("../includes/sidebar.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -191,6 +189,7 @@ include("../includes/sidebar.php");
   </style>
 </head>
 <body>
+<?php include("../includes/sidebar.php"); ?>
 
 <div id="page-procurement-dashboard" class="page active">
   <div class="page-header">
