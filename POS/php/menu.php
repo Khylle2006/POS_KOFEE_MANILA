@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
+require_clocked_in_for_pos();
 require_permission('orders.new');
 
 include("../includes/sidebar.php");

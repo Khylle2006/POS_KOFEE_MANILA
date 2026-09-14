@@ -1,6 +1,7 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/permissions.php';
+require_once __DIR__ . '/procurement_helpers.php';
 ob_start();
 require_once __DIR__ . '/icons.php';
 ob_end_clean(); // discard any stray/leaked text icons.php might accidentally output
@@ -35,6 +36,7 @@ if (!function_exists('icon')) {
             'card'        => '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
             'star'        => '<path d="M12 2l3 6.5 7 .9-5 5 1.3 7-6.3-3.6L5.7 21.4 7 14.4l-5-5 7-.9z"/>',
             'portal'      => '<path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/>',
+            'bell'        => '<path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
         ];
         $body = $paths[$name] ?? $paths['home'];
         return '<svg width="'.$size.'" height="'.$size.'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'.$body.'</svg>';
@@ -118,6 +120,14 @@ try {
 }
 
 $initials = strtoupper(substr($user['firstname'] ?: $user['username'] ?: '?', 0, 1));
+$notification_count = 0;
+$notifications = [];
+try {
+    $notification_count = unread_notification_count((int)$user['id']);
+    $notifications = recent_notifications((int)$user['id'], 12);
+} catch (Throwable $e) {
+    // Notifications are optional; never prevent the shared layout from rendering.
+}
 
 // ── Tailwind class helpers ────────────────────────────────────
 // Colors reference your existing CSS custom properties (--espresso etc.)
@@ -174,6 +184,46 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
     </div>
 
     <div class="flex-1"></div>
+
+    <div class="relative" id="notification-wrap">
+        <button id="notification-btn" type="button" onclick="toggleNotifications()"
+            class="relative w-9 h-9 flex items-center justify-center rounded-lg
+                   text-[rgba(251,243,233,0.78)] hover:bg-[rgba(251,243,233,0.12)]"
+            aria-label="Notifications" aria-expanded="false" aria-controls="notification-panel">
+            <?= icon('bell', 18) ?>
+            <?php if ($notification_count > 0): ?>
+            <span id="notification-count" class="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full
+                         bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)] text-[10px] font-extrabold flex items-center justify-center">
+                <?= $notification_count > 99 ? '99+' : $notification_count ?>
+            </span>
+            <?php endif; ?>
+        </button>
+        <div id="notification-panel" class="hidden absolute right-0 top-11 w-[340px] max-w-[calc(100vw-24px)]
+                    rounded-xl bg-white text-[var(--text-main,#2b2130)] shadow-2xl border border-[var(--latte,#efe0cc)] overflow-hidden z-[260]">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--latte,#efe0cc)]">
+                <strong class="text-[13px]">Notifications</strong>
+                <button type="button" onclick="markAllNotificationsRead()" class="text-[11px] font-semibold text-[var(--caramel,#c97b3d)]">Mark all read</button>
+            </div>
+            <div id="notification-list" class="max-h-[360px] overflow-y-auto">
+                <?php if (!$notifications): ?>
+                <div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">No notifications</div>
+                <?php else: foreach ($notifications as $notification): ?>
+                <a href="<?= htmlspecialchars($notification['link_url'] ?: '#') ?>"
+                   class="notification-item block px-4 py-3 border-b border-[var(--latte,#efe0cc)] hover:bg-[var(--accent-lt,#fcefe1)] <?= !$notification['is_read'] ? 'bg-[var(--accent-lt,#fcefe1)]' : '' ?>"
+                   data-notification-id="<?= (int)$notification['id'] ?>">
+                    <div class="flex items-start gap-2">
+                        <span class="notification-dot mt-1.5 w-2 h-2 rounded-full flex-shrink-0 <?= $notification['is_read'] ? 'opacity-0' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
+                        <span class="min-w-0">
+                            <strong class="block text-[12px] leading-4"><?= htmlspecialchars($notification['title']) ?></strong>
+                            <?php if ($notification['message']): ?><span class="block mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)]"><?= htmlspecialchars($notification['message']) ?></span><?php endif; ?>
+                            <time class="block mt-1 text-[10px] text-[var(--text-muted,#8b7c88)]"><?= htmlspecialchars($notification['created_at']) ?></time>
+                        </span>
+                    </div>
+                </a>
+                <?php endforeach; endif; ?>
+            </div>
+        </div>
+    </div>
 
     <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                 bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
@@ -427,6 +477,65 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 </nav>
 
 <script>
+// Refresh read-only monitoring screens without interrupting forms or POS carts.
+(function setupAutoRefresh() {
+    const livePages = new Set([
+        'dashboard.php',
+        'analytics.php',
+        'history.php',
+        'inventory.php',
+        'pending_orders.php',
+        'procurement_dashboard.php',
+        'procurement_reports.php',
+        'supplier_performace.php'
+    ]);
+    const page = window.location.pathname.split('/').pop();
+    if (!livePages.has(page)) return;
+
+    const refreshAfterMs = 30000;
+    window.setInterval(() => {
+        if (document.hidden) return;
+        if (document.querySelector('.modal-overlay.open, .modal-bg.open')) return;
+        if (document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+        window.location.reload();
+    }, refreshAfterMs);
+})();
+
+function toggleNotifications() {
+    const panel = document.getElementById('notification-panel');
+    const button = document.getElementById('notification-btn');
+    const opening = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !opening);
+    button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (opening) {
+        document.querySelectorAll('[data-notification-id]').forEach(item => {
+            item.addEventListener('click', () => markNotificationRead(item.dataset.notificationId), { once: true });
+        });
+    }
+}
+
+function markNotificationRead(id) {
+    fetch('../api/notifications.php', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'read', id})
+    });
+}
+
+function markAllNotificationsRead() {
+    fetch('../api/notifications.php', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'all_read'})
+    }).then(() => {
+        document.querySelectorAll('.notification-dot').forEach(dot => { dot.className = 'notification-dot mt-1.5 w-2 h-2 rounded-full flex-shrink-0 opacity-0'; });
+        document.getElementById('notification-count')?.remove();
+    });
+}
+
+document.addEventListener('click', event => {
+    const wrap = document.getElementById('notification-wrap');
+    if (wrap && !wrap.contains(event.target)) document.getElementById('notification-panel')?.classList.add('hidden');
+});
+
 function toggleSidebar(force) {
     const panel    = document.getElementById('main-sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');

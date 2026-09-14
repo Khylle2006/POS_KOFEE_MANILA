@@ -14,6 +14,7 @@ include("../includes/sidebar.php");
   <title>Menu Manager — Kofee POS</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <?php ?>
 </head>
 <body>
@@ -22,17 +23,22 @@ include("../includes/sidebar.php");
   <div class="page-header">
     <div>
       <h1>Menu Manager</h1>
-      <p>Edit and manage your drink menu</p>
+      <p><?= $view === 'archived' ? 'Review archived products' : 'Edit and manage your drink menu' ?></p>
 
     
       
     </div>
-   <button class="btn-msave" onclick="openAdd()">
-    ➕ Add Item
-</button>
+     <?php if ($view === 'active'): ?>
+     <button class="btn-msave" onclick="openAdd()">➕ Add Item</button>
+     <?php endif; ?>
   </div>
 
   <div class="page-body">
+
+    <div class="view-tabs" style="padding:14px 32px 0;display:flex;gap:8px">
+      <a class="filter-pill <?= $view === 'active' ? 'active' : '' ?>" href="add_item.php">📦 Active</a>
+      <a class="filter-pill <?= $view === 'archived' ? 'active' : '' ?>" href="add_item.php?view=archived">🗄 Archived <?= $archived_count ? '(' . $archived_count . ')' : '' ?></a>
+    </div>
 
     <div class="filter-bar" style="align-items:center">
       <input class="filter-input" type="text" id="search-products"
@@ -109,7 +115,7 @@ include("../includes/sidebar.php");
               </td>
               <td>
                 <div class="act-group">
-                  <?php if (has_permission('menu.edit')): ?>
+                  <?php if ($view === 'active' && has_permission('menu.edit')): ?>
                   <button class="act-btn <?= $available ? 'act-hold' : 'act-activate' ?>"
                           id="toggle-<?= $p['id'] ?>"
                           data-state="<?= $available ? 'on' : 'off' ?>"
@@ -118,8 +124,14 @@ include("../includes/sidebar.php");
                   </button>
                   <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'>✏️ Edit</button>
                   <?php endif; ?>
-                  <?php if (has_permission('menu.delete')): ?>
-                  <button class="act-btn act-block" onclick="confirmDelete(<?= $p['id'] ?>, <?= json_encode($p['name']) ?>)">🗑️</button>
+                  <?php if ($view === 'active' && has_permission('menu.delete')): ?>
+                  <button class="act-btn act-block" onclick='confirmDelete(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'>🗑️</button>
+                  <?php endif; ?>
+                  <?php if ($view === 'archived' && has_permission('menu.edit')): ?>
+                  <button class="act-btn act-activate" onclick='restoreProduct(<?= (int)$p['id'] ?>)'>↩️ Restore</button>
+                  <?php endif; ?>
+                  <?php if ($view === 'archived' && has_permission('menu.delete')): ?>
+                  <button class="act-btn act-block" onclick='purgeProduct(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'>🗑️ Delete Forever</button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -241,21 +253,6 @@ include("../includes/sidebar.php");
     <div class="modal-actions">
       <button type="button" class="btn-mcancel" onclick="closeAddConfirm()">Cancel</button>
       <button type="button" class="btn-msave" id="add-confirm-btn" onclick="doAddMenuItem()">✅ Yes, Add Item</button>
-    </div>
-  </div>
-</div>
-
-<!-- Delete confirm modal -->
-<div class="modal-overlay" id="delete-modal">
-  <div class="modal" style="max-width:360px">
-    <div class="modal-body" style="text-align:center">
-      <div style="font-size:46px;margin-bottom:12px">🗑️</div>
-      <h3 style="font-size:17px;margin-bottom:8px">Delete Item?</h3>
-      <p id="del-msg" style="font-size:13px;color:var(--text-muted)"></p>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-mcancel" onclick="closeDelete()">Cancel</button>
-      <button class="btn-msave" style="background:var(--red)" onclick="doDelete()">Yes, Delete</button>
     </div>
   </div>
 </div>
@@ -518,47 +515,77 @@ function updateRowInDOM(id, p) {
   if (editBtn) editBtn.setAttribute('onclick', `openEdit(${JSON.stringify(p).replace(/"/g, '&quot;')})`);
 }
 
-// ── Delete item ──────────────────────────────
-let pendingDelete = null;
-function confirmDelete(id, name) {
-  pendingDelete = id;
-  document.getElementById('del-msg').textContent = `Are you sure you want to delete "${name}"?`;
-  document.getElementById('delete-modal').classList.add('open');
+// Delete and archive actions
+async function confirmDelete(id, name) {
+  const result = await Swal.fire({
+    title: 'Delete Product?',
+    text: `Are you sure you want to delete "${name}"?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Yes, Delete',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: 'var(--red)',
+    reverseButtons: true,
+  });
+  if (result.isConfirmed) await submitProductAction('delete', id);
 }
-function closeDelete() {
-  pendingDelete = null;
-  document.getElementById('delete-modal').classList.remove('open');
+
+async function restoreProduct(id) {
+  const result = await Swal.fire({
+    title: 'Restore Product?',
+    text: 'This product will be available in the active menu again.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Restore',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: 'var(--caramel)',
+    reverseButtons: true,
+  });
+  if (result.isConfirmed) await submitProductAction('restore', id);
 }
-function doDelete() {
-  if (!pendingDelete) return;
-  const id = pendingDelete;
+
+async function purgeProduct(id, name) {
+  const result = await Swal.fire({
+    title: 'Delete Permanently?',
+    text: `Delete "${name}" forever? This cannot be undone.`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete Forever',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: 'var(--red)',
+    reverseButtons: true,
+  });
+  if (result.isConfirmed) await submitProductAction('purge', id);
+}
+
+async function submitProductAction(action, id) {
   const fd = new FormData();
-  fd.append('action', 'delete');
+  fd.append('action', action);
   fd.append('id', id);
-
-  fetch('../api/add_item.php', { method: 'POST', body: fd })
-    .then(response => response.json())
-    .then(result => {
-      if (!result.ok) throw new Error(result.error || 'Unable to delete item.');
-      closeDelete();
-      document.getElementById('prow-' + id)?.remove();
-      showToast('✅ Item deleted.');
-      applyFilters();
-    })
-    .catch(error => showToast('⚠️ ' + error.message, 'error'));
+  try {
+    const response = await fetch('../api/add_item.php', { method: 'POST', body: fd });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Action failed.');
+    await Swal.fire({
+      title: action === 'restore' ? 'Restored' : action === 'purge' ? 'Deleted' : 'Archived',
+      text: result.message,
+      icon: 'success',
+      confirmButtonColor: 'var(--caramel)',
+    });
+    location.reload();
+  } catch (error) {
+    await Swal.fire({ title: 'Action Failed', text: error.message, icon: 'error', confirmButtonColor: 'var(--red)' });
+  }
 }
 
-
-// ── Close modals on backdrop / Escape ──────────
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
+    if (e.target === el) { closeAdd(); closeEdit(); closeAvail(); closeAddConfirm(); }
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeDelete(); closeAvail(); closeAddConfirm(); }
+  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeAvail(); closeAddConfirm(); }
 });
-
 
 </script>
 
