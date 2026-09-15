@@ -1,8 +1,8 @@
-        <?php
+    <?php
     require_once '../includes/auth.php';
     require_once '../includes/permissions.php';
     require_login();
-    require_permission('orders.history');
+    require_permission('analytics.view');
     header('Content-Type: application/json');
 
     $pdo = get_db();
