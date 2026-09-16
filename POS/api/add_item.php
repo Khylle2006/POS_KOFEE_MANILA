@@ -2,6 +2,8 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/permissions.php';
+require_once '../includes/shift_guard.php';
+require_once '../includes/notify.php';
 require_login();
 require_permission('menu.manage');
 
@@ -106,111 +108,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Delete products
-    if ($action === 'delete') {
+    // ── Archive (soft delete). Hard deletion is no longer exposed. ──
+    if ($action === 'archive' || $action === 'delete') {   // 'delete' kept as an alias
+        if (!has_permission('menu.archive') && !has_permission('menu.delete')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'You do not have permission to archive menu items.']);
+            exit;
+        }
+        require_shift_for_api();
+
         $id = (int)($_POST['id'] ?? 0);
         if (!$id) {
             http_response_code(422);
             echo json_encode(['ok' => false, 'error' => 'Invalid product ID.']);
             exit;
-      }
+        }
 
-      try {
-          $pdo->beginTransaction();
+        try {
+            $check = $pdo->prepare('SELECT id, name, is_deleted FROM products WHERE id = :id');
+            $check->execute([':id' => $id]);
+            $row = $check->fetch();
 
-          $product = $pdo->prepare(
-              'SELECT p.id, p.image_path,
-                      EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id) AS has_orders
-               FROM products p
-               WHERE p.id = :id
-               FOR UPDATE'
-          );
-          $product->execute([':id' => $id]);
-          $row = $product->fetch();
-          if (!$row) {
-              throw new RuntimeException('Menu item not found.');
-          }
-
-          if ((int)$row['has_orders'] === 1) {
-              $pdo->prepare('UPDATE products SET is_deleted = 1, stock = 0 WHERE id = :id')
-                  ->execute([':id' => $id]);
-              $pdo->commit();
-              echo json_encode([
-                  'ok' => true,
-                  'archived' => true,
-                  'message' => 'Item archived because it is used in order history.',
-              ]);
-              exit;
-          }
-
-          try {
-              $pdo->prepare('DELETE FROM products WHERE id = :id')->execute([':id' => $id]);
-              $pdo->commit();
-
-               if (!empty($row['image_path'])) {
-                   $rel = ltrim($row['image_path'], '/');
-                   $image_file = (strpos($rel, 'assets/') === 0) ? (__DIR__ . '/../' . $rel) : (__DIR__ . '/../assets/' . $rel);
-                   if (is_file($image_file)) @unlink($image_file);
-               }
-              echo json_encode(['ok' => true, 'archived' => false, 'message' => 'Item permanently deleted.']);
-          } catch (PDOException $deleteError) {
-                if (!$pdo->inTransaction()) throw $deleteError;
-
-                // Archive used products
-                if ((int)($deleteError->errorInfo[1] ?? 0) !== 1451) throw $deleteError;
-                $pdo->prepare('UPDATE products SET is_deleted = 1, stock = 0 WHERE id = :id')
-                    ->execute([':id' => $id]);
-                $pdo->commit();
-                echo json_encode(['ok' => true, 'message' => 'Item archived because it is used in order history.']);
+            if (!$row) {
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'error' => 'Menu item not found.']);
+                exit;
             }
-        } catch (PDOException $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            http_response_code(500);
-            echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+            if ((int)$row['is_deleted'] === 1) {
+                echo json_encode(['ok' => true, 'message' => 'Item is already archived.']);
+                exit;
+            }
+
+            $pdo->prepare(
+                'UPDATE products
+                    SET is_deleted = 1, stock = 0, archived_at = NOW(), archived_by = :by
+                  WHERE id = :id'
+            )->execute([':by' => (int)$_SESSION['user_id'], ':id' => $id]);
+
+            notify_event(
+                action_type: 'MENU_ITEM_ARCHIVED',
+                perm_key:    'menu.manage',
+                title:       '🗄 Menu item archived — ' . $row['name'],
+                message:     'Removed from the active menu and the POS. It can be restored anytime.',
+                target_url:  'add_item.php?view=archived',
+                entity_type: 'product',
+                entity_id:   $id
+            );
+
+            echo json_encode([
+                'ok'       => true,
+                'archived' => true,
+                'message'  => '"' . $row['name'] . '" archived. It no longer appears in the POS.',
+            ]);
         } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            error_log('archive product failed: ' . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+            echo json_encode(['ok' => false, 'error' => 'Could not archive this item.']);
         }
         exit;
     }
 
     // Restore archived products
+        // ── Restore from archive ──
     if ($action === 'restore') {
-        if (!has_permission('menu.edit')) {
+        if (!has_permission('menu.archive') && !has_permission('menu.edit')) {
             http_response_code(403);
             echo json_encode(['ok' => false, 'error' => 'You do not have permission to restore menu items.']);
             exit;
         }
+        require_shift_for_api();
+
         $id = (int)($_POST['id'] ?? 0);
-        $stmt = $pdo->prepare('UPDATE products SET is_deleted = 0, stock = 1 WHERE id = :id AND is_deleted = 1');
+        $stmt = $pdo->prepare(
+            'UPDATE products
+                SET is_deleted = 0, stock = 1, archived_at = NULL, archived_by = NULL
+              WHERE id = :id AND is_deleted = 1'
+        );
         $stmt->execute([':id' => $id]);
-        echo json_encode($stmt->rowCount() ? ['ok' => true, 'message' => 'Product restored.'] : ['ok' => false, 'error' => 'Archived product not found.']);
+
+        if (!$stmt->rowCount()) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'error' => 'Archived product not found.']);
+            exit;
+        }
+
+        $name = $pdo->prepare('SELECT name FROM products WHERE id = :id');
+        $name->execute([':id' => $id]);
+
+        notify_event(
+            action_type: 'MENU_ITEM_RESTORED',
+            perm_key:    'menu.manage',
+            title:       '↩️ Menu item restored — ' . $name->fetchColumn(),
+            message:     'Back on the active menu and available in the POS.',
+            target_url:  'add_item.php',
+            entity_type: 'product',
+            entity_id:   $id
+        );
+
+        echo json_encode(['ok' => true, 'message' => 'Product restored to the active menu.']);
         exit;
     }
-
     // Permanently delete an archived product without order history
+        // ── Permanent deletion is intentionally disabled. ──
+    // The spec replaces hard deletion with archiving; keeping the rows
+    // preserves referential integrity with order_items and sales history.
     if ($action === 'purge') {
-        if (!has_permission('menu.delete')) {
-            http_response_code(403);
-            echo json_encode(['ok' => false, 'error' => 'You do not have permission to permanently delete menu items.']);
-            exit;
-        }
-        $id = (int)($_POST['id'] ?? 0);
-        $check = $pdo->prepare('SELECT image_path FROM products WHERE id = :id AND is_deleted = 1 AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = products.id)');
-        $check->execute([':id' => $id]);
-        $row = $check->fetch();
-        if (!$row) {
-            http_response_code(409);
-            echo json_encode(['ok' => false, 'error' => 'This product is used in order history and cannot be permanently deleted.']);
-            exit;
-        }
-        $pdo->prepare('DELETE FROM products WHERE id = :id AND is_deleted = 1')->execute([':id' => $id]);
-        if (!empty($row['image_path'])) {
-            $rel = ltrim($row['image_path'], '/');
-            $image_file = (strpos($rel, 'assets/') === 0) ? (__DIR__ . '/../' . $rel) : (__DIR__ . '/../assets/' . $rel);
-            if (is_file($image_file)) @unlink($image_file);
-        }
-        echo json_encode(['ok' => true, 'message' => 'Archived product permanently deleted.']);
+        http_response_code(410);
+        echo json_encode([
+            'ok'    => false,
+            'error' => 'Permanent deletion is disabled. Menu items are archived so order history stays intact.',
+        ]);
         exit;
     }
 }

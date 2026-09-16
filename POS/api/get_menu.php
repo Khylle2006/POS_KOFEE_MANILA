@@ -8,8 +8,9 @@ header('Content-Type: application/json');
 
 $pdo = get_db();
 
+// Archived items must never reach the POS, the customer menu, or the cart.
 $stmt = $pdo->query("
-    SELECT 
+    SELECT
         p.id,
         p.name,
         p.price_small,
@@ -19,6 +20,7 @@ $stmt = $pdo->query("
         c.category_name
     FROM products p
     JOIN categories c ON CAST(c.id AS CHAR) = p.category_id
+    WHERE p.is_deleted = 0
     ORDER BY c.category_name, p.name
 ");
 

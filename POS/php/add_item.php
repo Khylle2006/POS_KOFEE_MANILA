@@ -22,40 +22,10 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Menu Manager — Kofee POS</title>
   
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            espresso: {
-              DEFAULT: '#241A2E',
-              deep: '#181120',
-              mid: '#2F2238',
-            },
-            caramel: {
-              DEFAULT: '#C97B3D',
-              light: '#E6A25C',
-              dark: '#A65F29',
-            },
-            latte: '#EFE0CC',
-            cream: '#FBF3E9',
-            'accent-lt': '#FCEFE1',
-            cafe: {
-              text: '#2B2130',
-              muted: '#8B7C88',
-              border: '#EFE0CC',
-              bg: '#FBF3E9',
-              card: '#FFFFFF',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <link rel="stylesheet" href="../css/style.css"/>
-  <link rel="stylesheet" href="../css/sidebar.css"/>
+  <!-- Application Stylesheets -->
+  <link rel="stylesheet" href="../css/index.css?v=<?= filemtime(__DIR__ . '/../css/index.css') ?>">
+  <link rel="stylesheet" href="../css/style.css?v=<?= filemtime(__DIR__ . '/../css/style.css') ?>"/>
+  <link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__ . '/../css/sidebar.css') ?>"/>
   <script src="../assets/vendor/sweetalert2/sweetalert2.all.min.js"></script>
 </head>
 <body>
@@ -200,65 +170,65 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
 </div>
 
 <!-- ── Progressive Multi-Step "Add / Edit Item" Modal (Warm Cafe Theme) ── -->
-<div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="fixed inset-0 z-[250] flex items-center justify-center bg-[#181120]/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
-  <div id="progressive-modal-dialog" class="bg-white border-[1.5px] border-[#DFCBB5] rounded-3xl w-full max-w-2xl mx-4 overflow-hidden shadow-2xl transform scale-95 transition-all duration-200 flex flex-col max-h-[90vh]">
+<div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="prog-modal-overlay">
+  <div id="progressive-modal-dialog" class="prog-modal-dialog">
     
     <!-- Hidden input to store item ID in edit mode -->
     <input type="hidden" id="prog-id" value=""/>
 
     <!-- Modal Header -->
-    <div class="px-6 py-4 bg-[#F8EFE3] border-b-[1.5px] border-[#DFCBB5] flex items-center justify-between shrink-0">
-      <div class="flex items-center gap-3">
-        <div id="prog-modal-badge" class="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#A85A1E] to-[#8B4513] flex items-center justify-center text-white font-bold text-lg shadow-md shadow-[#8B4513]/25">
+    <div class="prog-modal-header">
+      <div class="prog-header-left">
+        <div id="prog-modal-badge" class="prog-badge">
           ✨
         </div>
         <div>
-          <h3 id="prog-modal-title" class="font-bold text-base text-[#1E1224] tracking-tight font-display">Add Menu Item &amp; Recipe</h3>
-          <p id="prog-modal-subtitle" class="text-[11px] text-[#52434F] font-medium">Step-by-step beverage identity, photo, and recipe composition</p>
+          <h3 id="prog-modal-title" class="prog-header-title">Add Menu Item &amp; Recipe</h3>
+          <p id="prog-modal-subtitle" class="prog-header-subtitle">Step-by-step beverage identity, photo, and recipe composition</p>
         </div>
       </div>
-      <button type="button" onclick="requestCloseProgressiveModal()" class="w-8 h-8 rounded-full bg-[#F5E6D3] hover:bg-[#EBD6BE] text-[#7A3A10] flex items-center justify-center text-sm font-bold transition" title="Close (Esc)">✕</button>
+      <button type="button" onclick="requestCloseProgressiveModal()" class="prog-close-btn" title="Close (Esc)">✕</button>
     </div>
 
     <!-- Responsive Visual Step Tracker -->
-    <div class="px-6 py-3.5 bg-[#FAF6EE] border-b-[1.5px] border-[#DFCBB5] shrink-0">
-      <div class="flex items-center justify-between relative max-w-lg mx-auto">
-        <!-- Connecting Lines -->
-        <div class="absolute left-6 right-6 top-4 h-[2px] bg-[#DFCBB5] -z-0">
-          <div id="step-progress-bar" class="h-full bg-[#8B4513] transition-all duration-300 w-0"></div>
+    <div class="prog-step-tracker">
+      <div class="prog-steps-container">
+        <!-- Connecting Line -->
+        <div class="prog-steps-line">
+          <div id="step-progress-bar" class="prog-steps-progress"></div>
         </div>
 
         <!-- Step 1 Indicator -->
-        <div class="flex flex-col items-center relative z-10 cursor-pointer" onclick="goToStep(1)">
-          <div id="step-ind-1" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#8B4513] text-white ring-4 ring-[#8B4513]/20 shadow-md transition-all">
+        <div class="prog-step-item" onclick="goToStep(1)">
+          <div id="step-ind-1" class="prog-step-circle active">
             1
           </div>
-          <span id="step-lbl-1" class="text-[11px] font-bold text-[#7A3A10] mt-1.5 transition-colors">1. Item Identity</span>
+          <span id="step-lbl-1" class="prog-step-label active">1. Item Identity</span>
         </div>
 
         <!-- Step 2 Indicator -->
-        <div class="flex flex-col items-center relative z-10 cursor-pointer" onclick="goToStep(2)">
-          <div id="step-ind-2" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-white text-[#52434F] border-2 border-[#DFCBB5] transition-all">
+        <div class="prog-step-item" onclick="goToStep(2)">
+          <div id="step-ind-2" class="prog-step-circle inactive">
             2
           </div>
-          <span id="step-lbl-2" class="text-[11px] font-semibold text-[#52434F] mt-1.5 transition-colors">2. Regular Recipe</span>
+          <span id="step-lbl-2" class="prog-step-label inactive">2. Regular Recipe</span>
         </div>
 
         <!-- Step 3 Indicator -->
-        <div class="flex flex-col items-center relative z-10 cursor-pointer" onclick="goToStep(3)">
-          <div id="step-ind-3" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-white text-[#52434F] border-2 border-[#DFCBB5] transition-all">
+        <div class="prog-step-item" onclick="goToStep(3)">
+          <div id="step-ind-3" class="prog-step-circle inactive">
             3
           </div>
-          <span id="step-lbl-3" class="text-[11px] font-semibold text-[#52434F] mt-1.5 transition-colors">3. Upsize Recipe</span>
+          <span id="step-lbl-3" class="prog-step-label inactive">3. Upsize Recipe</span>
         </div>
       </div>
     </div>
 
     <!-- Scrollable Modal Body: Step Panels -->
-    <div class="p-6 overflow-y-auto flex-1 space-y-4 bg-white">
+    <div class="prog-modal-body">
 
       <!-- Inline Validation Banner -->
-      <div id="prog-error-banner" class="hidden p-3 rounded-xl bg-[#FDECEA] border border-[#FBDCD8] text-[#C62828] text-xs flex items-center gap-2 font-semibold">
+      <div id="prog-error-banner" class="prog-error-banner hidden">
         <span>⚠️</span>
         <span id="prog-error-text">Please fill in all required fields before continuing.</span>
       </div>
@@ -266,23 +236,22 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
       <!-- ═══════════════════════════════════════════════════════════ -->
       <!-- STEP 1: ITEM IDENTITY & PHOTO                                -->
       <!-- ═══════════════════════════════════════════════════════════ -->
-      <div id="step-panel-1" class="step-panel space-y-4 transition-all duration-200">
-        <div>
-          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
-            Drink / Item Name <span class="text-rose-600">*</span>
+      <div id="step-panel-1" class="step-panel">
+        <div class="prog-form-group">
+          <label class="prog-label" for="prog-name">
+            Drink / Item Name <span class="req">*</span>
           </label>
           <input type="text" id="prog-name" placeholder="e.g. Spanish Iced Latte" oninput="validateStep1Live()"
-                 class="w-full px-3.5 py-2.5 text-xs bg-white border-[1.5px] border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] placeholder-[#7A6B77] focus:outline-none transition font-medium"/>
-          <span id="prog-name-err" class="text-[11px] text-[#C62828] font-bold mt-1 hidden block"></span>
+                 class="prog-input"/>
+          <span id="prog-name-err" class="prog-input-err hidden"></span>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
-              Category <span class="text-rose-600">*</span>
+        <div class="prog-grid-2col">
+          <div class="prog-form-group">
+            <label class="prog-label" for="prog-category">
+              Category <span class="req">*</span>
             </label>
-            <select id="prog-category" onchange="validateStep1Live()"
-                    class="w-full px-3.5 py-2.5 text-xs bg-white border-[1.5px] border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] font-medium focus:outline-none transition">
+            <select id="prog-category" onchange="validateStep1Live()" class="prog-select">
               <option value="">Select a Category…</option>
               <?php foreach ($categories as $cat): ?>
                 <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['category_name']) ?></option>
@@ -290,14 +259,14 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
             </select>
           </div>
 
-          <div>
-            <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
+          <div class="prog-form-group">
+            <label class="prog-label">
               Quick Icon / Emoji
             </label>
-            <div class="flex items-center gap-1.5 flex-wrap" id="icon-picker">
+            <div class="prog-emoji-grid" id="icon-picker">
               <?php foreach (['☕','🧊','🧋','🍵','🥤','🥐','🍰','🍹'] as $emoji): ?>
               <button type="button" onclick="selectDrinkEmoji('<?= $emoji ?>', this)"
-                      class="emoji-btn w-9 h-9 rounded-xl bg-[#FAF5EE] border border-[#DFCBB5] hover:border-[#8B4513] text-base flex items-center justify-center transition <?= $emoji === '☕' ? 'border-2 border-[#8B4513] bg-[#F8ECDC] shadow-sm' : '' ?>">
+                      class="emoji-btn <?= $emoji === '☕' ? 'selected' : '' ?>">
                 <?= $emoji ?>
               </button>
               <?php endforeach; ?>
@@ -307,44 +276,44 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
         </div>
 
         <!-- Item Image Drag-and-Drop & Browse Section -->
-        <div>
-          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
-            Item Photo <span class="text-[11px] font-normal text-[#52434F] lowercase">(optional image for POS &amp; menu)</span>
+        <div class="prog-form-group">
+          <label class="prog-label">
+            Item Photo <span class="prog-label-sub">(optional image for POS &amp; menu)</span>
           </label>
-          <input type="file" id="prog-image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" onchange="previewProductImage(this)"/>
+          <input type="file" id="prog-image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" style="display:none" onchange="previewProductImage(this)"/>
           <input type="hidden" id="prog-existing-image" value=""/>
           <input type="hidden" id="prog-remove-image" value="0"/>
 
           <div id="prog-image-dropzone" onclick="triggerImageBrowse()"
                ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)"
-               class="relative border-2 border-dashed border-[#DFCBB5] hover:border-[#8B4513] bg-[#FAF6EF] hover:bg-[#F5EDE3] rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[110px] group">
+               class="prog-dropzone">
             
             <!-- Placeholder state -->
-            <div id="prog-img-placeholder" class="flex flex-col items-center gap-1.5 py-1">
-              <div class="w-10 h-10 rounded-full bg-[#F5E6D3] text-[#7A3A10] flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+            <div id="prog-img-placeholder" style="display:flex;flex-direction:column;align-items:center;gap:4px">
+              <div class="prog-dropzone-icon">
                 📷
               </div>
-              <div class="text-xs font-bold text-[#1E1224]">
+              <div class="prog-dropzone-text">
                 Click to browse or drag &amp; drop item photo
               </div>
-              <div class="text-[11px] text-[#52434F] font-medium">
+              <div class="prog-dropzone-sub">
                 PNG, JPG, WEBP, or GIF up to 5MB
               </div>
             </div>
 
             <!-- Preview state -->
-            <div id="prog-img-preview-container" class="hidden w-full flex items-center justify-between gap-3 p-1">
-              <div class="flex items-center gap-3">
-                <div class="w-14 h-14 rounded-xl overflow-hidden border border-[#DFCBB5] bg-white flex-shrink-0 shadow-sm">
-                  <img id="prog-img-preview" src="" alt="Preview" class="w-full h-full object-cover"/>
+            <div id="prog-img-preview-container" class="prog-img-preview-box" style="display:none">
+              <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1">
+                <div class="prog-img-thumb">
+                  <img id="prog-img-preview" src="" alt="Preview"/>
                 </div>
-                <div class="text-left">
-                  <div id="prog-img-filename" class="text-xs font-bold text-[#1E1224] truncate max-w-[220px]">item-photo.jpg</div>
-                  <div id="prog-img-filesize" class="text-[11px] text-[#52434F] font-medium">Ready to save</div>
+                <div class="prog-img-details">
+                  <div id="prog-img-filename" class="prog-img-name">item-photo.jpg</div>
+                  <div id="prog-img-filesize" class="prog-img-status">Ready to save</div>
                 </div>
               </div>
               <button type="button" onclick="event.stopPropagation(); clearProductImage();"
-                      class="px-3 py-1.5 rounded-xl bg-[#FDECEA] hover:bg-[#FBDCD8] text-[#C62828] text-xs font-bold border border-[#F8CBC5] flex items-center gap-1.5 transition shrink-0 shadow-sm"
+                      class="prog-img-remove-btn"
                       title="Remove photo">
                 <span>🗑️</span><span>Remove</span>
               </button>
@@ -352,43 +321,43 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
           </div>
         </div>
 
-        <div>
-          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
+        <div class="prog-form-group">
+          <label class="prog-label" for="prog-desc">
             Description &amp; Notes
           </label>
           <textarea id="prog-desc" rows="3" placeholder="Describe the drink, roast profile, or preparation notes…"
-                    class="w-full px-3.5 py-2.5 text-xs bg-white border-[1.5px] border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] placeholder-[#7A6B77] focus:outline-none transition font-medium"></textarea>
+                    class="prog-textarea"></textarea>
         </div>
       </div>
 
       <!-- ═══════════════════════════════════════════════════════════ -->
       <!-- STEP 2: REGULAR SIZE & RECIPE                               -->
       <!-- ═══════════════════════════════════════════════════════════ -->
-      <div id="step-panel-2" class="step-panel hidden space-y-4 transition-all duration-200">
-        <div class="bg-[#F8EFE3] border-[1.5px] border-[#DFCBB5] p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div id="step-panel-2" class="step-panel" style="display:none">
+        <div class="prog-price-card">
           <div>
-            <span class="text-xs font-bold text-[#1E1224] block">Regular Size (12oz) Base Price</span>
-            <span class="text-[11px] text-[#52434F] font-medium">Customer retail ring-up price at counter</span>
+            <span class="prog-price-info-title">Regular Size (12oz) Base Price</span>
+            <span class="prog-price-info-sub">Customer retail ring-up price at counter</span>
           </div>
-          <div class="relative w-full sm:w-44">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[#7A3A10] font-bold text-xs pointer-events-none"></span>
+          <div class="prog-price-input-wrap">
+            <span class="prog-currency-symbol">₱</span>
             <input type="number" step="0.01" min="0.01" id="prog-price-small" placeholder="0.00" oninput="validateStep2Live()"
-                   class="w-full pl-7 pr-3 py-2 text-xs bg-white border border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] font-mono font-bold focus:outline-none transition"/>
+                   class="prog-price-input"/>
           </div>
         </div>
 
-        <div class="border-t-[1.5px] border-[#DFCBB5] pt-3">
-          <div class="flex items-center justify-between mb-2">
+        <div class="prog-recipe-section">
+          <div class="prog-recipe-header">
             <div>
-              <h4 class="text-xs font-bold text-[#1E1224]">Regular Recipe Composition</h4>
-              <p class="text-[10.5px] text-[#52434F] font-medium">Ingredients automatically deducted when Regular size is ordered</p>
+              <h4 class="prog-recipe-title">Regular Recipe Composition</h4>
+              <p class="prog-recipe-sub">Ingredients automatically deducted when Regular size is ordered</p>
             </div>
-            <button type="button" onclick="addRecipeRow('small')" class="px-2.5 py-1.5 rounded-lg bg-[#F8ECDC] hover:bg-[#EEDBCA] text-[#7A3A10] text-[11px] font-bold border border-[#DFCBB5] transition flex items-center gap-1 shadow-sm">
+            <button type="button" onclick="addRecipeRow('small')" class="prog-btn-secondary">
               <span>➕</span><span>Add Ingredient</span>
             </button>
           </div>
 
-          <div id="prog-recipe-small-rows" class="space-y-2">
+          <div id="prog-recipe-small-rows" style="display:flex;flex-direction:column;gap:8px">
             <!-- Dynamic Recipe Ingredient Rows inserted here -->
           </div>
         </div>
@@ -397,36 +366,36 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
       <!-- ═══════════════════════════════════════════════════════════ -->
       <!-- STEP 3: UPSIZE & RECIPE                                     -->
       <!-- ═══════════════════════════════════════════════════════════ -->
-      <div id="step-panel-3" class="step-panel hidden space-y-4 transition-all duration-200">
-        <div class="bg-[#F8EFE3] border-[1.5px] border-[#DFCBB5] p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div id="step-panel-3" class="step-panel" style="display:none">
+        <div class="prog-price-card">
           <div>
-            <span class="text-xs font-bold text-[#1E1224] block">Upsize / Large (16oz - 22oz) Base Price</span>
-            <span class="text-[11px] text-[#52434F] font-medium">Retail price when customer requests an upsized drink</span>
+            <span class="prog-price-info-title">Upsize / Large (16oz - 22oz) Base Price</span>
+            <span class="prog-price-info-sub">Retail price when customer requests an upsized drink</span>
           </div>
-          <div class="relative w-full sm:w-44">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[#7A3A10] font-bold text-xs pointer-events-none">₱</span>
+          <div class="prog-price-input-wrap">
+            <span class="prog-currency-symbol">₱</span>
             <input type="number" step="0.01" min="0.01" id="prog-price-large" placeholder="0.00" oninput="validateStep3Live()"
-                   class="w-full pl-7 pr-3 py-2 text-xs bg-white border border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] font-mono font-bold focus:outline-none transition"/>
+                   class="prog-price-input"/>
           </div>
         </div>
 
-        <div class="border-t-[1.5px] border-[#DFCBB5] pt-3">
-          <div class="flex items-center justify-between mb-2">
+        <div class="prog-recipe-section">
+          <div class="prog-recipe-header">
             <div>
-              <h4 class="text-xs font-bold text-[#1E1224]">Upsize Recipe Composition</h4>
-              <p class="text-[10.5px] text-[#52434F] font-medium">Ingredients deducted when Upsize is ordered</p>
+              <h4 class="prog-recipe-title">Upsize Recipe Composition</h4>
+              <p class="prog-recipe-sub">Ingredients deducted when Upsize is ordered</p>
             </div>
-            <div class="flex items-center gap-2">
-              <button type="button" onclick="copyRecipeFromRegular()" class="px-2.5 py-1.5 rounded-lg bg-[#FAF6EE] hover:bg-[#EEDBCA] text-[#7A3A10] text-[11px] font-bold border border-[#DFCBB5] transition flex items-center gap-1 shadow-sm">
+            <div style="display:flex;align-items:center;gap:8px">
+              <button type="button" onclick="copyRecipeFromRegular()" class="prog-btn-secondary">
                 <span>⚡</span><span>Copy from Regular</span>
               </button>
-              <button type="button" onclick="addRecipeRow('large')" class="px-2.5 py-1.5 rounded-lg bg-[#F8ECDC] hover:bg-[#EEDBCA] text-[#7A3A10] text-[11px] font-bold border border-[#DFCBB5] transition flex items-center gap-1 shadow-sm">
+              <button type="button" onclick="addRecipeRow('large')" class="prog-btn-secondary">
                 <span>➕</span><span>Add</span>
               </button>
             </div>
           </div>
 
-          <div id="prog-recipe-large-rows" class="space-y-2">
+          <div id="prog-recipe-large-rows" style="display:flex;flex-direction:column;gap:8px">
             <!-- Dynamic Recipe Ingredient Rows inserted here -->
           </div>
         </div>
@@ -435,22 +404,22 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
     </div>
 
     <!-- Modal Footer & Step Navigation Controls -->
-    <div class="px-6 py-4 bg-[#F8EFE3] border-t-[1.5px] border-[#DFCBB5] flex items-center justify-between shrink-0">
-      <button type="button" onclick="requestCloseProgressiveModal()" class="px-4 py-2 rounded-xl bg-white hover:bg-[#FAF6EE] text-[#382836] hover:text-[#7A3A10] text-xs font-bold border border-[#DFCBB5] transition">
+    <div class="prog-modal-footer">
+      <button type="button" onclick="requestCloseProgressiveModal()" class="prog-btn-cancel">
         Cancel
       </button>
 
-      <div class="flex items-center gap-2.5">
-        <button type="button" id="prog-btn-back" onclick="prevStep()" class="hidden px-4 py-2 rounded-xl bg-white hover:bg-[#FAF6EE] text-[#1E1224] text-xs font-bold border border-[#DFCBB5] transition flex items-center gap-1.5">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button type="button" id="prog-btn-back" onclick="prevStep()" class="prog-btn-back" style="display:none">
           <span>←</span><span>Back</span>
         </button>
 
-        <button type="button" id="prog-btn-next" onclick="nextStep()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-[#8B4513] to-[#241A2E] hover:opacity-95 text-white text-xs font-bold transition shadow-md shadow-[#8B4513]/25 flex items-center gap-1.5">
+        <button type="button" id="prog-btn-next" onclick="nextStep()" class="prog-btn-next">
           <span>Next</span><span>→</span>
         </button>
 
-        <button type="button" id="prog-btn-save" onclick="submitProgressiveItem()" class="hidden px-5 py-2 rounded-xl bg-gradient-to-r from-[#8B4513] to-[#241A2E] hover:opacity-95 text-white text-xs font-bold transition shadow-lg shadow-[#8B4513]/30 flex items-center gap-1.5">
-          <span id="save-spinner" class="hidden animate-spin text-xs">⏳</span>
+        <button type="button" id="prog-btn-save" onclick="submitProgressiveItem()" class="prog-btn-save" style="display:none">
+          <span id="save-spinner" style="display:none" class="animate-spin">⏳</span>
           <span id="save-label">💾 Save Item</span>
         </button>
       </div>
@@ -531,16 +500,16 @@ function openProgressiveModal(mode = 'add', itemData = null) {
     // Handle existing image preview
     if (existingImgInput) existingImgInput.value = itemData.image_path || '';
     if (itemData.image_path) {
-      if (placeholderEl) placeholderEl.classList.add('hidden');
-      if (previewContainerEl) previewContainerEl.classList.remove('hidden');
+      if (placeholderEl) placeholderEl.style.display = 'none';
+      if (previewContainerEl) previewContainerEl.style.display = 'flex';
       const raw = (itemData.image_path || '').replace(/^\/+/, '');
       const imgSrc = raw.startsWith('assets/') ? ('../' + raw) : ('../assets/' + raw);
       if (previewImg) previewImg.src = imgSrc;
       if (filenameEl) filenameEl.textContent = itemData.image_path.split('/').pop() || 'Current Item Image';
       if (filesizeEl) filesizeEl.textContent = 'Existing image loaded';
     } else {
-      if (placeholderEl) placeholderEl.classList.remove('hidden');
-      if (previewContainerEl) previewContainerEl.classList.add('hidden');
+      if (placeholderEl) placeholderEl.style.display = 'flex';
+      if (previewContainerEl) previewContainerEl.style.display = 'none';
       if (previewImg) previewImg.src = '';
     }
 
@@ -556,8 +525,8 @@ function openProgressiveModal(mode = 'add', itemData = null) {
     // Show loading state for recipe rows
     const smallContainer = document.getElementById('prog-recipe-small-rows');
     const largeContainer = document.getElementById('prog-recipe-large-rows');
-    if (smallContainer) smallContainer.innerHTML = '<div class="py-3 text-center text-xs text-[#52434F] font-semibold">⏳ Loading recipe ingredients…</div>';
-    if (largeContainer) largeContainer.innerHTML = '<div class="py-3 text-center text-xs text-[#52434F] font-semibold">⏳ Loading recipe ingredients…</div>';
+    if (smallContainer) smallContainer.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#52434F;font-weight:600">⏳ Loading recipe ingredients…</div>';
+    if (largeContainer) largeContainer.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#52434F;font-weight:600">⏳ Loading recipe ingredients…</div>';
 
     // Fetch existing recipe from api/recipe.php
     fetch(`../api/recipe.php?product_id=${itemData.id}`)
@@ -612,8 +581,8 @@ function openProgressiveModal(mode = 'add', itemData = null) {
 
     // Reset image fields
     if (existingImgInput) existingImgInput.value = '';
-    if (placeholderEl) placeholderEl.classList.remove('hidden');
-    if (previewContainerEl) previewContainerEl.classList.add('hidden');
+    if (placeholderEl) placeholderEl.style.display = 'flex';
+    if (previewContainerEl) previewContainerEl.style.display = 'none';
     if (previewImg) previewImg.src = '';
 
     // Reset Step 2 fields
@@ -634,8 +603,8 @@ function openProgressiveModal(mode = 'add', itemData = null) {
   goToStep(1);
 
   const modal = document.getElementById('progressive-add-modal');
+  modal.classList.add('open');
   modal.classList.remove('opacity-0', 'pointer-events-none');
-  modal.querySelector('#progressive-modal-dialog').classList.remove('scale-95');
   setTimeout(() => document.getElementById('prog-name').focus(), 60);
 }
 
@@ -649,8 +618,8 @@ function closeEdit() { closeProgressiveAddModal(); }
 function closeProgressiveAddModal() {
   const modal = document.getElementById('progressive-add-modal');
   if (modal) {
+    modal.classList.remove('open');
     modal.classList.add('opacity-0', 'pointer-events-none');
-    modal.querySelector('#progressive-modal-dialog').classList.add('scale-95');
   }
   isDirty = false;
   editingOriginalName = '';
@@ -690,21 +659,21 @@ function handleDragOver(e) {
   e.preventDefault();
   e.stopPropagation();
   const dropzone = document.getElementById('prog-image-dropzone');
-  if (dropzone) dropzone.classList.add('border-[#8B4513]', 'bg-[#F5EDE3]');
+  if (dropzone) dropzone.classList.add('dragover');
 }
 
 function handleDragLeave(e) {
   e.preventDefault();
   e.stopPropagation();
   const dropzone = document.getElementById('prog-image-dropzone');
-  if (dropzone) dropzone.classList.remove('border-[#8B4513]', 'bg-[#F5EDE3]');
+  if (dropzone) dropzone.classList.remove('dragover');
 }
 
 function handleDrop(e) {
   e.preventDefault();
   e.stopPropagation();
   const dropzone = document.getElementById('prog-image-dropzone');
-  if (dropzone) dropzone.classList.remove('border-[#8B4513]', 'bg-[#F5EDE3]');
+  if (dropzone) dropzone.classList.remove('dragover');
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
     const file = e.dataTransfer.files[0];
     const input = document.getElementById('prog-image-input');
@@ -748,8 +717,8 @@ function previewProductImage(input) {
     const removeImgInput = document.getElementById('prog-remove-image');
 
     if (previewImg) previewImg.src = e.target.result;
-    if (placeholderEl) placeholderEl.classList.add('hidden');
-    if (previewContainerEl) previewContainerEl.classList.remove('hidden');
+    if (placeholderEl) placeholderEl.style.display = 'none';
+    if (previewContainerEl) previewContainerEl.style.display = 'flex';
     if (filenameEl) filenameEl.textContent = file.name;
     if (filesizeEl) filesizeEl.textContent = `${(file.size / 1024).toFixed(1)} KB (New)`;
     if (removeImgInput) removeImgInput.value = '0';
@@ -771,8 +740,8 @@ function clearProductImage() {
   const previewImg = document.getElementById('prog-img-preview');
 
   if (previewImg) previewImg.src = '';
-  if (previewContainerEl) previewContainerEl.classList.add('hidden');
-  if (placeholderEl) placeholderEl.classList.remove('hidden');
+  if (previewContainerEl) previewContainerEl.style.display = 'none';
+  if (placeholderEl) placeholderEl.style.display = 'flex';
 }
 
 function selectDrinkEmoji(emoji, btn) {
@@ -780,10 +749,7 @@ function selectDrinkEmoji(emoji, btn) {
   if (iconInput) iconInput.value = emoji;
   document.querySelectorAll('#icon-picker .emoji-btn').forEach(b => {
     const isSelected = btn ? (b === btn) : (b.textContent.trim() === emoji);
-    b.classList.toggle('border-[#8B4513]', isSelected);
-    b.classList.toggle('border-2', isSelected);
-    b.classList.toggle('bg-[#F8ECDC]', isSelected);
-    b.classList.toggle('shadow-sm', isSelected);
+    b.classList.toggle('selected', isSelected);
   });
   if (btn) isDirty = true;
 }
@@ -792,12 +758,18 @@ function showProgError(msg) {
   const banner = document.getElementById('prog-error-banner');
   const text = document.getElementById('prog-error-text');
   if (text) text.textContent = msg;
-  if (banner) banner.classList.remove('hidden');
+  if (banner) {
+    banner.classList.remove('hidden');
+    banner.style.display = 'flex';
+  }
 }
 
 function hideProgError() {
   const banner = document.getElementById('prog-error-banner');
-  if (banner) banner.classList.add('hidden');
+  if (banner) {
+    banner.classList.add('hidden');
+    banner.style.display = 'none';
+  }
 }
 
 // ── Step Navigation & Indicators ─────────────────────────────────
@@ -818,35 +790,39 @@ function goToStep(step) {
   for (let s = 1; s <= 3; s++) {
     const panel = document.getElementById(`step-panel-${s}`);
     if (panel) {
-      panel.classList.toggle('hidden', s !== currentStep);
+      panel.style.display = (s === currentStep) ? 'block' : 'none';
     }
   }
 
   // Update indicators & progress bar
   const progressBar = document.getElementById('step-progress-bar');
-  if (currentStep === 1) progressBar.style.width = '0%';
-  if (currentStep === 2) progressBar.style.width = '50%';
-  if (currentStep === 3) progressBar.style.width = '100%';
+  if (progressBar) {
+    if (currentStep === 1) progressBar.style.width = '0%';
+    if (currentStep === 2) progressBar.style.width = '50%';
+    if (currentStep === 3) progressBar.style.width = '100%';
+  }
 
   for (let s = 1; s <= 3; s++) {
     const ind = document.getElementById(`step-ind-${s}`);
     const lbl = document.getElementById(`step-lbl-${s}`);
 
+    if (!ind || !lbl) continue;
+
     if (s < currentStep) {
       // Completed
-      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#1b5e20] text-white shadow-sm transition-all';
+      ind.className = 'prog-step-circle done';
       ind.textContent = '✓';
-      lbl.className = 'text-[11px] font-bold text-[#1b5e20] mt-1.5 transition-colors';
+      lbl.className = 'prog-step-label done';
     } else if (s === currentStep) {
       // Active
-      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#8B4513] text-white ring-4 ring-[#8B4513]/20 shadow-md transition-all';
+      ind.className = 'prog-step-circle active';
       ind.textContent = s;
-      lbl.className = 'text-[11px] font-bold text-[#7A3A10] mt-1.5 transition-colors';
+      lbl.className = 'prog-step-label active';
     } else {
       // Inactive
-      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-white text-[#52434F] border-2 border-[#DFCBB5] transition-all';
+      ind.className = 'prog-step-circle inactive';
       ind.textContent = s;
-      lbl.className = 'text-[11px] font-semibold text-[#52434F] mt-1.5 transition-colors';
+      lbl.className = 'prog-step-label inactive';
     }
   }
 
@@ -855,9 +831,9 @@ function goToStep(step) {
   const nextBtn = document.getElementById('prog-btn-next');
   const saveBtn = document.getElementById('prog-btn-save');
 
-  backBtn.classList.toggle('hidden', currentStep === 1);
-  nextBtn.classList.toggle('hidden', currentStep === 3);
-  saveBtn.classList.toggle('hidden', currentStep !== 3);
+  if (backBtn) backBtn.style.display = (currentStep === 1) ? 'none' : 'inline-flex';
+  if (nextBtn) nextBtn.style.display = (currentStep === 3) ? 'none' : 'inline-flex';
+  if (saveBtn) saveBtn.style.display = (currentStep === 3) ? 'inline-flex' : 'none';
 }
 
 function nextStep() {
@@ -967,7 +943,7 @@ function addRecipeRow(size, defaultIngId = '', defaultQty = '', defaultUnit = ''
   if (!container) return;
 
   const row = document.createElement('div');
-  row.className = 'recipe-row flex items-center gap-2 p-2.5 bg-[#FAF6EF] border border-[#DFCBB5] rounded-xl text-xs transition';
+  row.className = 'recipe-row';
 
   let optionsHtml = '<option value="">Select ingredient…</option>';
   (window.AVAILABLE_INGREDIENTS || []).forEach(ing => {
@@ -976,17 +952,17 @@ function addRecipeRow(size, defaultIngId = '', defaultQty = '', defaultUnit = ''
   });
 
   row.innerHTML = `
-    <select class="recipe-ing-select flex-1 px-3 py-1.5 bg-white border border-[#DFCBB5] focus:border-[#8B4513] focus:ring-1 focus:ring-[#8B4513]/20 rounded-lg text-[#1E1224] font-medium text-xs focus:outline-none" onchange="onRecipeIngChange(this)">
+    <select class="recipe-ing-select" onchange="onRecipeIngChange(this)">
       ${optionsHtml}
     </select>
-    <div class="relative w-24 shrink-0">
+    <div class="recipe-qty-wrap">
       <input type="number" step="0.01" min="0.01" placeholder="Qty" value="${defaultQty !== '' ? defaultQty : ''}"
-             class="recipe-qty-input w-full px-2.5 py-1.5 bg-white border border-[#DFCBB5] focus:border-[#8B4513] focus:ring-1 focus:ring-[#8B4513]/20 rounded-lg text-[#1E1224] font-mono font-bold text-xs focus:outline-none" oninput="isDirty=true"/>
+             class="recipe-qty-input" oninput="isDirty=true"/>
     </div>
-    <span class="recipe-unit-badge w-12 text-center text-[11px] font-mono font-bold text-[#6E350E] bg-[#F5E6D3] py-1.5 rounded-lg border border-[#DFCBB5]">
+    <span class="recipe-unit-badge">
       ${defaultUnit || 'unit'}
     </span>
-    <button type="button" onclick="removeRecipeRow(this)" class="w-8 h-8 rounded-lg bg-[#FDECEA] hover:bg-[#FBDCD8] text-[#C62828] flex items-center justify-center text-sm transition border border-[#F8CBC5]" title="Remove ingredient">
+    <button type="button" onclick="removeRecipeRow(this)" class="recipe-del-btn" title="Remove ingredient">
       🗑️
     </button>
   `;
@@ -1095,7 +1071,7 @@ function submitProgressiveItem() {
   const label   = document.getElementById('save-label');
 
   saveBtn.disabled = true;
-  spinner.classList.remove('hidden');
+  if (spinner) spinner.style.display = 'inline-block';
   label.textContent = isEdit ? 'Updating Item & Recipes…' : 'Saving Item & Recipes…';
 
   fetch('../api/save_item.php', {
@@ -1110,7 +1086,7 @@ function submitProgressiveItem() {
   })
   .then(res => {
     saveBtn.disabled = false;
-    spinner.classList.add('hidden');
+    if (spinner) spinner.style.display = 'none';
     label.textContent = isEdit ? '💾 Save Changes' : '💾 Save Item';
 
     if (res.ok) {
@@ -1131,7 +1107,7 @@ function submitProgressiveItem() {
   })
   .catch(err => {
     saveBtn.disabled = false;
-    spinner.classList.add('hidden');
+    if (spinner) spinner.style.display = 'none';
     label.textContent = isEdit ? '💾 Save Changes' : '💾 Save Item';
     showProgError(err.message || 'Network error while saving item.');
   });

@@ -2,6 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/permissions.php';
 require_once __DIR__ . '/procurement_helpers.php';
+require_once __DIR__ . '/notify.php';
 ob_start();
 require_once __DIR__ . '/icons.php';
 ob_end_clean(); // discard any stray/leaked text icons.php might accidentally output
@@ -101,9 +102,9 @@ $notification_count = 0;
 $notifications = [];
 try {
     $notification_count = unread_notification_count((int)$user['id']);
-    $notifications = recent_notifications((int)$user['id'], 12);
+    $notifications = recent_notifications_detailed((int)$user['id'], 15);
 } catch (Throwable $e) {
-    // Notifications are optional; never prevent the shared layout from rendering.
+    error_log('sidebar notifications failed: ' . $e->getMessage());
 }
 
 // ── Tailwind class helpers ────────────────────────────────────
@@ -333,24 +334,50 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                 <strong class="text-[13px]">Notifications</strong>
                 <button type="button" onclick="markAllNotificationsRead()" class="text-[11px] font-semibold text-[var(--caramel,#c97b3d)]">Mark all read</button>
             </div>
-            <div id="notification-list" class="max-h-[360px] overflow-y-auto">
+                        <div id="notification-list" class="max-h-[380px] overflow-y-auto">
                 <?php if (!$notifications): ?>
                 <div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">No notifications</div>
-                <?php else: foreach ($notifications as $notification): ?>
-                <a href="<?= htmlspecialchars($notification['link_url'] ?: '#') ?>"
-                   class="notification-item block px-4 py-3 border-b border-[var(--latte,#efe0cc)] hover:bg-[var(--accent-lt,#fcefe1)] <?= !$notification['is_read'] ? 'bg-[var(--accent-lt,#fcefe1)]' : '' ?>"
-                   data-notification-id="<?= (int)$notification['id'] ?>">
+                <?php else: foreach ($notifications as $n):
+                    $actor = $n['actor_id']
+                        ? trim(($n['firstname'] ?? '') . ' ' . ($n['lastname'] ?? '')) ?: ($n['username'] ?? 'Unknown')
+                        : 'System';
+                ?>
+                <button type="button"
+                   class="notification-item w-full text-left px-4 py-3 border-b border-[var(--latte,#efe0cc)]
+                          hover:bg-[var(--accent-lt,#fcefe1)] <?= !$n['is_read'] ? 'bg-[var(--accent-lt,#fcefe1)]' : '' ?>"
+                   data-notification-id="<?= (int)$n['id'] ?>"
+                   onclick="openNotificationDetail(<?= (int)$n['id'] ?>)">
                     <div class="flex items-start gap-2">
-                        <span class="notification-dot mt-1.5 w-2 h-2 rounded-full flex-shrink-0 <?= $notification['is_read'] ? 'opacity-0' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
-                        <span class="min-w-0">
-                            <strong class="block text-[12px] leading-4"><?= htmlspecialchars($notification['title']) ?></strong>
-                            <?php if ($notification['message']): ?><span class="block mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)]"><?= htmlspecialchars($notification['message']) ?></span><?php endif; ?>
-                            <time class="block mt-1 text-[10px] text-[var(--text-muted,#8b7c88)]"><?= htmlspecialchars($notification['created_at']) ?></time>
+                        <span class="notification-dot mt-1.5 w-2 h-2 rounded-full flex-shrink-0 <?= $n['is_read'] ? 'opacity-0' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
+                        <span class="min-w-0 flex-1">
+                            <strong class="block text-[12px] leading-4"><?= htmlspecialchars($n['title']) ?></strong>
+                            <?php if ($n['message']): ?>
+                            <span class="block mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)] line-clamp-2">
+                                <?= htmlspecialchars($n['message']) ?>
+                            </span>
+                            <?php endif; ?>
+                            <span class="flex items-center gap-1.5 mt-1 text-[10px] text-[var(--text-muted,#8b7c88)]">
+                                <span class="font-semibold"><?= htmlspecialchars($actor) ?></span>
+                                <span>·</span>
+                                <time><?= htmlspecialchars(relative_time($n['created_at'])) ?></time>
+                            </span>
                         </span>
                     </div>
-                </a>
+                </button>
                 <?php endforeach; endif; ?>
             </div>
+            <div id="notif-detail-modal"
+     class="modal-overlay hidden fixed inset-0 z-[800] bg-black/50 items-center justify-center p-4">
+  <div class="w-full max-w-[420px] rounded-2xl bg-white shadow-2xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
+      <strong class="text-[14px] text-[var(--text-main,#2b2130)]">Activity detail</strong>
+      <button onclick="closeNotificationDetail()" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+    </div>
+    <div id="notif-detail-body" class="px-5 py-5 text-[13px] text-[var(--text-main,#2b2130)]">
+      <p class="text-center py-6 text-[var(--text-muted,#8b7c88)]">Loading…</p>
+    </div>
+  </div>
+</div>
         </div>
     </div>
 
@@ -612,23 +639,101 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 })();
 
 function toggleNotifications() {
-    const panel = document.getElementById('notification-panel');
+    const panel  = document.getElementById('notification-panel');
     const button = document.getElementById('notification-btn');
     const opening = panel.classList.contains('hidden');
     panel.classList.toggle('hidden', !opening);
     button.setAttribute('aria-expanded', opening ? 'true' : 'false');
-    if (opening) {
-        document.querySelectorAll('[data-notification-id]').forEach(item => {
-            item.addEventListener('click', () => markNotificationRead(item.dataset.notificationId), { once: true });
+}
+
+async function openNotificationDetail(id) {
+    document.getElementById('notification-panel')?.classList.add('hidden');
+
+    const modal = document.getElementById('notif-detail-modal');
+    const body  = document.getElementById('notif-detail-body');
+    body.innerHTML = '<p class="text-center py-6 text-[var(--text-muted,#8b7c88)]">Loading…</p>';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    try {
+        const res = await fetch('../api/notifications.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'detail', id })
         });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Could not load this notification.');
+
+        const n = data.notification;
+        body.innerHTML = `
+          <strong class="block text-[14px] mb-3">${esc(n.title)}</strong>
+          ${n.message ? `<p class="text-[12.5px] leading-5 text-[var(--text-muted,#8b7c88)] mb-4">${esc(n.message)}</p>` : ''}
+          <dl class="space-y-2.5 text-[12.5px] border-t border-[var(--latte,#efe0cc)] pt-4">
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--text-muted,#8b7c88)]">Performed by</dt>
+              <dd class="font-semibold text-right">${esc(n.actor_label)}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--text-muted,#8b7c88)]">Action</dt>
+              <dd class="font-mono text-[11.5px] text-right">${esc(n.action_type || '—')}</dd>
+            </div>
+            ${n.entity_type ? `
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--text-muted,#8b7c88)]">Record</dt>
+              <dd class="text-right">${esc(n.entity_type)} #${esc(n.entity_id)}</dd>
+            </div>` : ''}
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--text-muted,#8b7c88)]">Timestamp</dt>
+              <dd class="text-right">${esc(n.timestamp_full)}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-[var(--text-muted,#8b7c88)]">When</dt>
+              <dd class="text-right">${esc(n.relative)}</dd>
+            </div>
+          </dl>
+          <div class="mt-5 flex gap-2">
+            <button type="button" onclick="closeNotificationDetail()"
+                    class="flex-1 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--latte,#efe0cc)]">Close</button>
+            ${n.target_url ? `<a href="${esc(n.target_url)}"
+                    class="flex-1 text-center py-2.5 rounded-lg text-[13px] font-bold text-white bg-[var(--caramel,#c47d3e)]">Open</a>` : ''}
+          </div>`;
+
+        // Reading it marks it read — reflect that in the bell immediately.
+        applyUnreadCount(data.unread);
+        document.querySelector(`[data-notification-id="${id}"] .notification-dot`)
+                ?.classList.add('opacity-0');
+    } catch (e) {
+        body.innerHTML = `<p class="text-center py-6 text-red-600">${esc(e.message)}</p>`;
     }
 }
 
-function markNotificationRead(id) {
+function closeNotificationDetail() {
+    const m = document.getElementById('notif-detail-modal');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+}
+
+function markAllNotificationsRead() {
     fetch('../api/notifications.php', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({action: 'read', id})
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'all_read' })
+    }).then(r => r.json()).then(data => {
+        document.querySelectorAll('.notification-dot').forEach(dot => dot.classList.add('opacity-0'));
+        document.querySelectorAll('.notification-item').forEach(item =>
+            item.classList.remove('bg-[var(--accent-lt,#fcefe1)]'));
+        applyUnreadCount(data.unread ?? 0);
     });
+}
+
+function applyUnreadCount(count) {
+    const badge = document.getElementById('notification-count');
+    if (!count || count < 1) { badge?.remove(); return; }
+    if (badge) badge.textContent = count > 99 ? '99+' : count;
+}
+
+function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function markAllNotificationsRead() {

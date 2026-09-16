@@ -2,6 +2,8 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/inventory_helpers.php';   // ← NEW
+require_once '../includes/shift_guard.php';         // ← NEW
 require_login();
 require_permission('procurement.view');
 
@@ -63,8 +65,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // by name (case/whitespace-insensitive). Requisition items are
                 // free-typed text with no formal link to ingredients.id, so this
                 // is a best-effort match, not a guaranteed one.
+                // Prefer the formal requisition_items.ingredient_id link added by
+                // the migration; fall back to name matching for legacy rows.
+                $ing_by_id = $pdo->prepare(
+                    'SELECT id, quantity, unit FROM ingredients WHERE id = :id AND archived_at IS NULL'
+                );
                 $ing_lookup = $pdo->prepare(
-                    'SELECT id, quantity FROM ingredients
+                    'SELECT id, quantity, unit FROM ingredients
                      WHERE LOWER(TRIM(name)) = LOWER(TRIM(:n)) AND archived_at IS NULL
                      LIMIT 1'
                 );
@@ -75,6 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i, :q, :u)'
                 );
                 $unmatched_items = []; // item names received but not found in Inventory
+                $batch_ids               = []; // batches created by this receipt
+                $received_ingredient_ids = []; // items whose stock moved — for reorder re-check
 
                 foreach ($items as $req_item_id => $data) {
                     $req_item_id = (int)$req_item_id;
@@ -96,11 +105,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Only "good" condition stock actually gets added to Inventory —
                     // damaged/rejected items were received but aren't usable.
                     if ($condition === 'good' && $received > 0) {
-                        $ing_lookup->execute([':n' => $ri['item_name']]);
-                        $ing = $ing_lookup->fetch();
+                        $ing = null;
+                        if (!empty($ri['ingredient_id'])) {
+                            $ing_by_id->execute([':id' => (int)$ri['ingredient_id']]);
+                            $ing = $ing_by_id->fetch();
+                        }
+                        if (!$ing) {
+                            $ing_lookup->execute([':n' => $ri['item_name']]);
+                            $ing = $ing_lookup->fetch();
+                        }
+
                         if ($ing) {
                             $ing_restock->execute([':q' => $received, ':id' => $ing['id']]);
                             $ing_log->execute([':i' => $ing['id'], ':q' => $received, ':u' => $user['id']]);
+
+                            // ── PROCUREMENT RECEIPT HOOK ──
+                            // Every received line becomes a tracked batch with a
+                            // delivery timestamp and a computed expiry date.
+                            $batch_ids[] = record_ingredient_batch(
+                                (int)$ing['id'],
+                                $received,
+                                [
+                                    'grn_id'      => $grn_id,
+                                    'po_id'       => $po_id,
+                                    'supplier_id' => (int)$po['supplier_id'],
+                                    'batch_ref'   => 'GRN-' . $grn_id . '-' . $req_item_id,
+                                    'unit'        => $ri['unit'] ?: ($ing['unit'] ?? 'pcs'),
+                                    'notes'       => 'Received against PO #' . $po_id,
+                                    'recorded_by' => (int)$user['id'],
+                                ]
+                            );
+
+                            // Backfill the formal link so future receipts are exact.
+                            if (empty($ri['ingredient_id'])) {
+                                $pdo->prepare('UPDATE requisition_items SET ingredient_id = :i WHERE id = :r')
+                                    ->execute([':i' => (int)$ing['id'], ':r' => $req_item_id]);
+                            }
+
+                            $received_ingredient_ids[] = (int)$ing['id'];
                         } else {
                             $unmatched_items[] = $ri['item_name'];
                         }
@@ -129,6 +171,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->commit();
+
+                // ── POST-COMMIT SIDE EFFECTS ──
+                // Receiving stock can lift an item back above its threshold, so
+                // re-evaluate. Run outside the transaction so a reorder failure
+                // can never roll back a valid goods receipt.
+                foreach (array_unique($received_ingredient_ids) as $ing_id) {
+                    check_and_trigger_reorder($ing_id, (int)$user['id']);
+                }
+
+                $batch_count = count(array_filter($batch_ids));
+                if ($batch_count > 0) {
+                    notify_event(
+                        action_type: 'INVENTORY_RESTOCK',
+                        perm_key:    'inventory.view',
+                        title:       '📦 Inventory restocked from PO #' . $po_id,
+                        message:     $batch_count . ' batch(es) recorded with delivery and expiry dates.',
+                        target_url:  'inventory.php',
+                        entity_type: 'grn',
+                        entity_id:   $grn_id
+                    );
+                }
 
                 audit_log('grn', $grn_id, 'recorded', "PO #$po_id — status: $grn_status");
 

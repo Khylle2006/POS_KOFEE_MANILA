@@ -1,92 +1,155 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/inventory_helpers.php';
+require_once '../includes/shift_guard.php';
 require_login();
 require_permission('inventory.view');
-$pdo   = get_db();
-$toast = '';
+
+$pdo        = get_db();
+$user       = current_user();
+$can_manage = has_permission('inventory.manage');
+$can_expiry = has_permission('inventory.expiry.manage');
+$toast      = '';
 $toast_type = 'success';
+
+// Keep batch statuses honest before anything renders.
+sync_expired_batches();
 
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
+    if (!has_active_shift()) {
+        header('Location: inventory.php?toast=' . urlencode('⛔ Clock in before making inventory changes.') . '&type=error');
+        exit;
+    }
+    require_permission('inventory.manage');
 
-    // Params to carry back to the redirect so the user doesn't
-    // lose their current view/filter/search after an action.
+    $action   = $_POST['action'] ?? '';
     $r_view   = $_POST['return_view']   ?? 'active';
     $r_cat    = $_POST['return_cat']    ?? '';
     $r_search = $_POST['return_search'] ?? '';
 
-    // Add ingredient
+    // ── Add ingredient ──
     if ($action === 'add') {
-        $cat_id   = (int)($_POST['cat_id']     ?? 0);
-        $name     = trim($_POST['name']         ?? '');
-        $brand    = trim($_POST['brand']        ?? '');
-        $unit     = trim($_POST['unit']         ?? 'pcs');
-        $quantity = (float)($_POST['quantity']  ?? 0);
-        $reorder  = (float)($_POST['reorder_at']?? 5);
+        $cat_id   = (int)($_POST['cat_id'] ?? 0);
+        $name     = trim($_POST['name']    ?? '');
+        $brand    = trim($_POST['brand']   ?? '');
+        $unit     = trim($_POST['unit']    ?? 'pcs');
+        $quantity = (float)($_POST['quantity']         ?? 0);
+        $reorder  = (float)($_POST['reorder_at']       ?? 5);
+        $reorder_qty = (float)($_POST['reorder_quantity'] ?? 0);
+        $supplier = (int)($_POST['default_supplier_id'] ?? 0) ?: null;
+        $auto     = isset($_POST['auto_reorder']) ? 1 : 0;
 
         if (!$cat_id || !$name) {
-            $toast = '⚠️ Name and category are required.';
-            $toast_type = 'error';
+            $toast = '⚠️ Name and category are required.'; $toast_type = 'error';
         } else {
             $pdo->prepare(
-                'INSERT INTO ingredients (cat_id, name, brand, unit, quantity, reorder_at)
-                 VALUES (:c,:n,:b,:u,:q,:r)'
-            )->execute([':c'=>$cat_id,':n'=>$name,':b'=>$brand,':u'=>$unit,':q'=>$quantity,':r'=>$reorder]);
+                'INSERT INTO ingredients
+                    (cat_id, name, brand, unit, quantity, reorder_at,
+                     reorder_quantity, default_supplier_id, auto_reorder)
+                 VALUES (:c,:n,:b,:u,:q,:r,:rq,:s,:a)'
+            )->execute([
+                ':c'=>$cat_id, ':n'=>$name, ':b'=>$brand, ':u'=>$unit, ':q'=>$quantity,
+                ':r'=>$reorder, ':rq'=>$reorder_qty ?: max($reorder * 2, 10),
+                ':s'=>$supplier, ':a'=>$auto,
+            ]);
+            $new_id = (int)$pdo->lastInsertId();
+
+            if ($quantity > 0) {
+                record_ingredient_batch($new_id, $quantity, [
+                    'batch_ref'   => 'INIT-' . $new_id,
+                    'unit'        => $unit,
+                    'supplier_id' => $supplier,
+                    'notes'       => 'Opening stock entered on item creation',
+                    'recorded_by' => (int)$user['id'],
+                ]);
+            }
             $toast = '✅ "' . htmlspecialchars($name) . '" added!';
         }
     }
 
-    // Restock (add to existing)
+    // ── Restock (adds a new batch) ──
     if ($action === 'restock') {
-        $id  = (int)($_POST['ingredient_id'] ?? 0);
-        $qty = (float)($_POST['qty']         ?? 0);
+        $id       = (int)($_POST['ingredient_id'] ?? 0);
+        $qty      = (float)($_POST['qty'] ?? 0);
+        $expiry   = trim($_POST['expiry_date'] ?? '');
+        $supplier = (int)($_POST['supplier_id'] ?? 0) ?: null;
+
         if ($id && $qty > 0) {
+            $pdo->beginTransaction();
             $pdo->prepare('UPDATE ingredients SET quantity = quantity + :q WHERE id = :id')
-                ->execute([':q'=>$qty,':id'=>$id]);
+                ->execute([':q'=>$qty, ':id'=>$id]);
             $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
-                ->execute([':i'=>$id,':q'=>$qty,':u'=>$_SESSION['user_id']]);
-            $toast = '✅ Restocked successfully!';
+                ->execute([':i'=>$id, ':q'=>$qty, ':u'=>$user['id']]);
+            $pdo->commit();
+
+            record_ingredient_batch($id, $qty, [
+                'expiry_date' => $expiry ?: null,
+                'supplier_id' => $supplier,
+                'notes'       => 'Manual restock',
+                'recorded_by' => (int)$user['id'],
+            ]);
+            $toast = '✅ Restocked — batch recorded.';
         } else {
-            $toast = '⚠️ Enter a valid quantity.';
-            $toast_type = 'error';
+            $toast = '⚠️ Enter a valid quantity.'; $toast_type = 'error';
         }
     }
 
-    // Set stock (set exact value)
+    // ── Set exact stock ──
     if ($action === 'set_stock') {
         $id  = (int)($_POST['ingredient_id'] ?? 0);
-        $qty = (float)($_POST['qty']         ?? -1);
+        $qty = (float)($_POST['qty'] ?? -1);
         if ($id && $qty >= 0) {
-            $pdo->prepare('UPDATE ingredients SET quantity = :q WHERE id = :id')
-                ->execute([':q'=>$qty,':id'=>$id]);
+            $before = $pdo->prepare('SELECT quantity FROM ingredients WHERE id = :id');
+            $before->execute([':id'=>$id]);
+            $old = (float)$before->fetchColumn();
+
+            $pdo->prepare('UPDATE ingredients SET quantity = :q WHERE id = :id')->execute([':q'=>$qty, ':id'=>$id]);
             $pdo->prepare('INSERT INTO restock_log (ingredient_id, added_qty, processed_by) VALUES (:i,:q,:u)')
-                ->execute([':i'=>$id,':q'=>$qty,':u'=>$_SESSION['user_id']]);
-            $toast = '✅ Stock set to ' . $qty . '!';
+                ->execute([':i'=>$id, ':q'=>$qty - $old, ':u'=>$user['id']]);
+
+            if ($qty > $old) {
+                record_ingredient_batch($id, $qty - $old, [
+                    'notes' => 'Stock count adjustment', 'recorded_by' => (int)$user['id'],
+                ]);
+            } elseif ($qty < $old) {
+                consume_ingredient_batches($id, $old - $qty);
+            }
+            check_and_trigger_reorder($id, (int)$user['id']);
+            $toast = '✅ Stock set to ' . $qty . '.';
         } else {
-            $toast = '⚠️ Enter a valid quantity (0 or more).';
-            $toast_type = 'error';
+            $toast = '⚠️ Enter a valid quantity (0 or more).'; $toast_type = 'error';
         }
     }
 
-    // Edit
+    // ── Edit item ──
     if ($action === 'edit') {
-        $id      = (int)($_POST['ingredient_id'] ?? 0);
-        $cat_id  = (int)($_POST['cat_id']        ?? 0);
-        $name    = trim($_POST['name']            ?? '');
-        $brand   = trim($_POST['brand']           ?? '');
-        $unit    = trim($_POST['unit']            ?? 'pcs');
-        $reorder = (float)($_POST['reorder_at']   ?? 5);
+        $id          = (int)($_POST['ingredient_id'] ?? 0);
+        $cat_id      = (int)($_POST['cat_id'] ?? 0);
+        $name        = trim($_POST['name']  ?? '');
+        $brand       = trim($_POST['brand'] ?? '');
+        $unit        = trim($_POST['unit']  ?? 'pcs');
+        $reorder     = (float)($_POST['reorder_at'] ?? 5);
+        $reorder_qty = (float)($_POST['reorder_quantity'] ?? 0);
+        $supplier    = (int)($_POST['default_supplier_id'] ?? 0) ?: null;
+        $auto        = isset($_POST['auto_reorder']) ? 1 : 0;
+
         if ($id && $name) {
             $pdo->prepare(
-                'UPDATE ingredients SET name=:n, brand=:b, unit=:u, reorder_at=:r, cat_id=:c WHERE id=:id'
-            )->execute([':n'=>$name,':b'=>$brand,':u'=>$unit,':r'=>$reorder,':c'=>$cat_id,':id'=>$id]);
+                'UPDATE ingredients
+                    SET name=:n, brand=:b, unit=:u, cat_id=:c, reorder_at=:r,
+                        reorder_quantity=:rq, default_supplier_id=:s, auto_reorder=:a
+                  WHERE id=:id'
+            )->execute([
+                ':n'=>$name, ':b'=>$brand, ':u'=>$unit, ':c'=>$cat_id, ':r'=>$reorder,
+                ':rq'=>$reorder_qty, ':s'=>$supplier, ':a'=>$auto, ':id'=>$id,
+            ]);
+            check_and_trigger_reorder($id, (int)$user['id']);
             $toast = '✅ Item updated!';
         }
     }
 
-    // Archive (soft delete)
     if ($action === 'archive') {
         $id = (int)($_POST['ingredient_id'] ?? 0);
         if ($id) {
@@ -95,7 +158,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Restore from archive
     if ($action === 'restore') {
         $id = (int)($_POST['ingredient_id'] ?? 0);
         if ($id) {
@@ -104,7 +166,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Permanently delete (only ever offered from the Archived view)
     if ($action === 'purge') {
         $id = (int)($_POST['ingredient_id'] ?? 0);
         if ($id) {
@@ -113,82 +174,125 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $self  = dirname($_SERVER['PHP_SELF']) . '/inventory.php';
-    $qs    = [];
+    // ── Manual reorder sweep ──
+    if ($action === 'run_sweep') {
+        $created = run_reorder_sweep((int)$user['id']);
+        $toast = $created
+            ? '🤖 ' . count($created) . ' auto-reorder request(s) filed.'
+            : '✅ Nothing below threshold — no reorders needed.';
+    }
+
+    $qs = [];
     if ($toast)               { $qs['toast'] = $toast; $qs['type'] = $toast_type; }
     if ($r_view !== 'active') { $qs['view']  = $r_view; }
-    if ($r_cat)                { $qs['cat']    = $r_cat; }
-    if ($r_search)              { $qs['search'] = $r_search; }
+    if ($r_cat)               { $qs['cat']    = $r_cat; }
+    if ($r_search)            { $qs['search'] = $r_search; }
 
-    header('Location: ' . $self . ($qs ? '?' . http_build_query($qs) : ''));
+    header('Location: inventory.php' . ($qs ? '?' . http_build_query($qs) : ''));
     exit;
 }
 
-// Flash from redirect
 if (isset($_GET['toast'])) {
     $toast      = htmlspecialchars($_GET['toast']);
-    $toast_type = $_GET['type'] ?? 'success';
+    $toast_type = ($_GET['type'] ?? 'success') === 'error' ? 'error' : 'success';
 }
 
-// ── Load categories ───────────────────────────
-$cats = $pdo->query('SELECT * FROM ingredient_categories ORDER BY name')->fetchAll();
+// Fire expiry warnings at most once per item per day.
+dispatch_expiry_warnings();
 
-// ── Filters ────────────────────────────────────
-$filter_cat = (int)($_GET['cat'] ?? 0);
-$search     = trim($_GET['search'] ?? '');
-$view       = ($_GET['view'] ?? 'active') === 'archived' ? 'archived' : 'active';
+// ── Data ───────────────────────────────────────
+$cats      = $pdo->query('SELECT * FROM ingredient_categories ORDER BY name')->fetchAll();
+$suppliers = $pdo->query("SELECT id, name FROM suppliers WHERE status='active' ORDER BY name")->fetchAll();
+
+$filter_cat    = (int)($_GET['cat'] ?? 0);
+$search        = trim($_GET['search'] ?? '');
+$view          = ($_GET['view'] ?? 'active') === 'archived' ? 'archived' : 'active';
+$filter_status = $_GET['status'] ?? 'all';
 
 $where  = $view === 'archived' ? 'i.archived_at IS NOT NULL' : 'i.archived_at IS NULL';
 $params = [];
-if ($filter_cat) {
-    $where .= ' AND i.cat_id = :c';
-    $params[':c'] = $filter_cat;
-}
+if ($filter_cat) { $where .= ' AND i.cat_id = :c'; $params[':c'] = $filter_cat; }
 if ($search) {
     $where .= ' AND (i.name LIKE :s OR i.brand LIKE :s2)';
-    $params[':s']  = "%$search%";
-    $params[':s2'] = "%$search%";
+    $params[':s'] = "%$search%"; $params[':s2'] = "%$search%";
 }
 
 $stmt = $pdo->prepare("
-    SELECT i.*, ic.name AS cat_name, ic.icon AS cat_icon
-    FROM ingredients i
-    JOIN ingredient_categories ic ON ic.id = i.cat_id
-    WHERE $where
-    ORDER BY ic.name, i.name
+    SELECT i.*, ic.name AS cat_name, ic.icon AS cat_icon, ic.shelf_life_days,
+           s.name AS supplier_name
+      FROM ingredients i
+      JOIN ingredient_categories ic ON ic.id = i.cat_id
+      LEFT JOIN suppliers s ON s.id = i.default_supplier_id
+     WHERE $where
+     ORDER BY ic.name, i.name
 ");
 $stmt->execute($params);
 $ingredients = $stmt->fetchAll();
 
-// Group by category
-$grouped = [];
-foreach ($ingredients as $ing) {
-    $grouped[$ing['cat_name']][] = $ing;
+$expiry_map = ingredient_expiry_map();
+
+// Decorate each row with its stock + expiry state.
+foreach ($ingredients as &$ing) {
+    $qty   = (float)$ing['quantity'];
+    $thr   = (float)$ing['reorder_at'];
+    $ing['stock_state'] = $qty <= 0 ? 'out' : ($thr > 0 && $qty <= $thr ? 'low' : 'ok');
+
+    $meta = $expiry_map[(int)$ing['id']] ?? null;
+    $ing['next_expiry']     = $meta['next_expiry'] ?? null;
+    $ing['expired_batches'] = (int)($meta['expired_batches'] ?? 0);
+    $ing['active_batches']  = (int)($meta['active_batches'] ?? 0);
+    $ing['expiry_badge']    = batch_expiry_status($ing['next_expiry']);
+    if ($ing['expired_batches'] > 0 && $ing['expiry_badge']['key'] === 'none') {
+        $ing['expiry_badge'] = batch_expiry_status(date('Y-m-d', strtotime('-1 day')));
+    }
+}
+unset($ing);
+
+// Apply the status filter in PHP (it spans stock + expiry state).
+if ($filter_status !== 'all') {
+    $ingredients = array_values(array_filter($ingredients, function ($i) use ($filter_status) {
+        return match ($filter_status) {
+            'low'       => $i['stock_state'] === 'low',
+            'out'       => $i['stock_state'] === 'out',
+            'expiring'  => $i['expiry_badge']['key'] === 'soon',
+            'expired'   => $i['expiry_badge']['key'] === 'expired' || $i['expired_batches'] > 0,
+            default     => true,
+        };
+    }));
 }
 
-// Stats (active items only, regardless of current filters, so the
-// pills always reflect the true overall health of the inventory)
-$active_all = $pdo->query("SELECT quantity, reorder_at FROM ingredients WHERE archived_at IS NULL")->fetchAll();
-$total   = count($active_all);
-$low     = count(array_filter($active_all, fn($i) => $i['quantity'] > 0 && $i['quantity'] <= $i['reorder_at']));
-$out     = count(array_filter($active_all, fn($i) => $i['quantity'] <= 0));
-$ok      = $total - $low - $out;
+// ── Metric cards (always whole-inventory, ignoring filters) ──
+$all_active = $pdo->query('SELECT id, quantity, reorder_at FROM ingredients WHERE archived_at IS NULL')->fetchAll();
+$m_total = count($all_active);
+$m_low   = count(array_filter($all_active, fn($i) => $i['quantity'] > 0 && $i['reorder_at'] > 0 && $i['quantity'] <= $i['reorder_at']));
+$m_out   = count(array_filter($all_active, fn($i) => $i['quantity'] <= 0));
 
-$archived_count = (int)$pdo->query("SELECT COUNT(*) FROM ingredients WHERE archived_at IS NOT NULL")->fetchColumn();
+$m_expiring = (int)$pdo->query(
+    "SELECT COUNT(DISTINCT ingredient_id) FROM ingredient_batches
+      WHERE status='active' AND qty_remaining > 0 AND expiry_date IS NOT NULL
+        AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL " . EXPIRY_WARNING_DAYS . " DAY)"
+)->fetchColumn();
+$m_expired = (int)$pdo->query(
+    "SELECT COUNT(DISTINCT ingredient_id) FROM ingredient_batches
+      WHERE status='expired' AND qty_remaining > 0"
+)->fetchColumn();
+$m_reorders = pending_reorder_count();
 
-// Last update
-$last_update = $pdo->query("SELECT MAX(updated_at) FROM ingredients WHERE archived_at IS NULL")->fetchColumn();
+$archived_count = (int)$pdo->query('SELECT COUNT(*) FROM ingredients WHERE archived_at IS NOT NULL')->fetchColumn();
+$last_update    = $pdo->query('SELECT MAX(updated_at) FROM ingredients WHERE archived_at IS NULL')->fetchColumn();
 
-// Helper to build a URL preserving the other current query params
-function inv_url($overrides = []) {
-    $params = array_merge([
+function inv_url(array $overrides = []): string {
+    $p = array_merge([
         'view'   => $_GET['view']   ?? null,
         'cat'    => $_GET['cat']    ?? null,
         'search' => $_GET['search'] ?? null,
+        'status' => $_GET['status'] ?? null,
     ], $overrides);
-    $params = array_filter($params, fn($v) => $v !== null && $v !== '' && $v !== 0);
-    return 'inventory.php' . ($params ? '?' . http_build_query($params) : '');
+    $p = array_filter($p, fn($v) => $v !== null && $v !== '' && $v !== 'all');
+    return 'inventory.php' . ($p ? '?' . http_build_query($p) : '');
 }
+
+$fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -196,487 +300,656 @@ function inv_url($overrides = []) {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Inventory — Kofee POS</title>
-  <link rel="stylesheet" href="../css/style.css"/>
-  <link rel="stylesheet" href="../css/sidebar.css"/>
-  <link rel="stylesheet" href="../css/inventory.css"/>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="bg-[var(--cream,#fdf3ea)] font-['Inter',sans-serif] text-[var(--text-main,#2b2130)]">
 
-<?php include('../includes/sidebar.php'); ?>
+<?php include '../includes/sidebar.php'; ?>
+<?php render_shift_gate(); ?>
 
-<div id="page-inventory" class="page active">
-  <div class="page-header">
+<main class="md:ml-[var(--sidebar-w,248px)] px-4 md:px-7 py-6 max-w-[1500px]">
+
+  <!-- Header -->
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
     <div>
-      <h1>Inventory</h1>
-      <p>Manage your ingredient stocks</p>
+      <h1 class="font-['Playfair_Display',serif] text-[26px] font-bold leading-tight">Inventory</h1>
+      <p class="text-[12.5px] text-[var(--text-muted,#8b7c88)] mt-1">
+        <?= $view === 'archived' ? 'Archived ingredients' : 'Stock levels, batches, and expiry tracking' ?>
+        <?php if ($last_update): ?>
+          · updated <?= htmlspecialchars(date('M d, Y g:i A', strtotime($last_update))) ?>
+        <?php endif; ?>
+      </p>
     </div>
-    <button class="btn-add" onclick="openAdd()">➕ Add Item</button>
+    <?php if ($can_manage): ?>
+    <div class="flex gap-2">
+      <form method="POST" onsubmit="return confirm('Run the reorder check across all items now?')">
+        <input type="hidden" name="action" value="run_sweep">
+        <button class="px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--latte,#efe0cc)]
+                       bg-white hover:bg-[var(--accent-lt,#fcefe1)]">🤖 Run reorder check</button>
+      </form>
+      <button onclick="openModal('modal-add')"
+              class="px-4 py-2.5 rounded-lg text-[13px] font-bold text-white
+                     bg-[var(--caramel,#c47d3e)] hover:opacity-90 shadow-sm">+ Add Item</button>
+    </div>
+    <?php endif; ?>
   </div>
 
-  <div class="inv-body">
-
-    <!-- View tabs: Active vs Archived -->
-    <div class="view-tabs">
-      <a href="<?= inv_url(['view'=>null]) ?>" class="view-tab <?= $view==='active' ? 'active' : '' ?>">📦 Active</a>
-      <a href="<?= inv_url(['view'=>'archived']) ?>" class="view-tab <?= $view==='archived' ? 'active' : '' ?>">
-        🗄 Archived <?php if ($archived_count): ?><span class="count-badge"><?= $archived_count ?></span><?php endif; ?>
-      </a>
-    </div>
-
-    <!-- Top row: stats + last update -->
-    <div class="inv-top">
-      <?php if ($view === 'active'): ?>
-      <div class="stat-pills">
-        <div class="stat-pill"><div class="dot" style="background:#4caf50"></div><?= $ok ?> In stock</div>
-        <div class="stat-pill"><div class="dot" style="background:#ff9800"></div><?= $low ?> Low stock</div>
-        <div class="stat-pill"><div class="dot" style="background:#f44336"></div><?= $out ?> Out of stock</div>
-      </div>
-      <div class="last-update">
-        🕐 Last updated:
-        <strong><?= $last_update ? date('M d, Y g:i A', strtotime($last_update)) : 'Never' ?></strong>
-      </div>
-      <?php else: ?>
-      <div class="stat-pills">
-        <div class="stat-pill archived-pill">🗄 <?= $archived_count ?> archived item<?= $archived_count === 1 ? '' : 's' ?></div>
-      </div>
-      <div class="last-update">Archived items are hidden from Order &amp; Menu screens.</div>
-      <?php endif; ?>
-    </div>
-
-    <!-- Filter bar -->
-    <div class="filter-bar">
-      <a href="<?= inv_url(['cat'=>null]) ?>"
-         class="filter-pill <?= !$filter_cat ? 'active' : '' ?>">All</a>
-      <?php foreach ($cats as $cat): ?>
-        <a href="<?= inv_url(['cat'=>$cat['id']]) ?>"
-           class="filter-pill <?= $filter_cat === (int)$cat['id'] ? 'active' : '' ?>">
-          <?= $cat['icon'] ?> <?= htmlspecialchars($cat['name']) ?>
-        </a>
-      <?php endforeach; ?>
-      <div class="search-wrap">
-        <span class="si">🔍</span>
-        <form method="GET" style="display:contents">
-          <?php if ($filter_cat): ?><input type="hidden" name="cat" value="<?= $filter_cat ?>"><?php endif; ?>
-          <?php if ($view === 'archived'): ?><input type="hidden" name="view" value="archived"><?php endif; ?>
-          <input type="text" name="search" placeholder="Search ingredients or brand…"
-                 value="<?= htmlspecialchars($search) ?>"
-                 onchange="this.form.submit()"/>
-        </form>
-        <?php if ($search): ?>
-          <a href="<?= inv_url(['search'=>null]) ?>" class="clear-search" title="Clear search">✕</a>
+  <!-- Metric cards -->
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+    <?php
+    $cards = [
+      ['Total Items',     $m_total,    'all',      'text-[var(--text-main,#2b2130)]', 'bg-stone-100'],
+      ['Low Stock',       $m_low,      'low',      'text-amber-700',                  'bg-amber-100'],
+      ['Out of Stock',    $m_out,      'out',      'text-red-700',                    'bg-red-100'],
+      ['Expiring Soon',   $m_expiring, 'expiring', 'text-orange-700',                 'bg-orange-100'],
+      ['Pending Reorders',$m_reorders, null,       'text-emerald-700',                'bg-emerald-100'],
+    ];
+    foreach ($cards as [$label, $value, $status, $text, $chip]):
+      $href = $status !== null ? inv_url(['status' => $status]) : 'requisitions.php';
+    ?>
+    <a href="<?= htmlspecialchars($href) ?>"
+       class="group rounded-xl bg-white border border-[var(--latte,#efe0cc)] p-4
+              hover:border-[var(--caramel,#c47d3e)] hover:shadow-md transition">
+      <span class="block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted,#8b7c88)]"><?= $label ?></span>
+      <span class="mt-2 inline-flex items-center gap-2">
+        <span class="text-[26px] font-extrabold leading-none <?= $text ?>"><?= (int)$value ?></span>
+        <?php if ($value > 0 && $status !== 'all'): ?>
+          <span class="w-2 h-2 rounded-full <?= $chip ?>"></span>
         <?php endif; ?>
-      </div>
+      </span>
+    </a>
+    <?php endforeach; ?>
+  </div>
+
+  <!-- Controls -->
+  <div class="rounded-xl bg-white border border-[var(--latte,#efe0cc)] p-3 mb-4 flex flex-wrap items-center gap-2">
+    <div class="flex gap-1.5 mr-1">
+      <a href="<?= htmlspecialchars(inv_url(['view'=>null])) ?>"
+         class="px-3 py-2 rounded-lg text-[12.5px] font-semibold <?= $view==='active'
+            ? 'bg-[var(--espresso,#3a2417)] text-white'
+            : 'border border-[var(--latte,#efe0cc)] hover:bg-[var(--accent-lt,#fcefe1)]' ?>">Active</a>
+      <a href="<?= htmlspecialchars(inv_url(['view'=>'archived'])) ?>"
+         class="px-3 py-2 rounded-lg text-[12.5px] font-semibold <?= $view==='archived'
+            ? 'bg-[var(--espresso,#3a2417)] text-white'
+            : 'border border-[var(--latte,#efe0cc)] hover:bg-[var(--accent-lt,#fcefe1)]' ?>">
+        Archived<?= $archived_count ? ' (' . $archived_count . ')' : '' ?></a>
     </div>
 
-    <!-- Main split -->
-    <div class="inv-split">
+    <form method="GET" class="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
+      <?php if ($view === 'archived'): ?><input type="hidden" name="view" value="archived"><?php endif; ?>
 
-      <!-- LEFT: list -->
-      <div class="inv-list-card">
-        <div class="inv-list-scroll">
-          <?php if (empty($grouped)): ?>
-            <div class="empty-list">
-              <?php if ($view === 'archived'): ?>
-                🗄 No archived items.
-              <?php elseif ($search || $filter_cat): ?>
-                🔍 No items match your filters.
-              <?php else: ?>
-                🫙 No ingredients yet.<br>Click ➕ Add Item to get started.
-              <?php endif; ?>
-            </div>
-          <?php else: ?>
-            <?php foreach ($grouped as $cat_name => $items): ?>
-              <div>
-                <div class="cat-label">
-                  <?= htmlspecialchars($items[0]['cat_icon']) ?>
-                  <?= htmlspecialchars(strtoupper($cat_name)) ?>
-                </div>
-                <?php foreach ($items as $ing):
-                  $status = $ing['quantity'] <= 0 ? 'out'
-                          : ($ing['quantity'] <= $ing['reorder_at'] ? 'low' : 'ok');
-                  $dot    = ['ok'=>'dot-ok','low'=>'dot-low','out'=>'dot-out'][$status];
-                ?>
-                <div class="ing-row <?= $view === 'archived' ? 'is-archived' : '' ?>" id="row-<?= $ing['id'] ?>"
-                     onclick="selectItem(<?= htmlspecialchars(json_encode($ing), ENT_QUOTES) ?>)">
-                  <div class="ing-icon-wrap"><?= $ing['cat_icon'] ?></div>
-                  <div class="ing-info">
-                    <div class="ing-name"><?= htmlspecialchars($ing['name']) ?></div>
-                    <div class="ing-meta">
-                      <?= htmlspecialchars($ing['brand'] ?? '—') ?> ·
-                      <?= number_format($ing['quantity'],1) ?> <?= htmlspecialchars($ing['unit']) ?>
-                    </div>
-                  </div>
-                  <?php if ($view === 'archived'): ?>
-                    <div class="ing-archived-tag">Archived</div>
-                  <?php else: ?>
-                    <div class="ing-dot <?= $dot ?>"></div>
-                  <?php endif; ?>
-                </div>
-                <?php endforeach; ?>
+      <div class="relative flex-1 min-w-[180px]">
+        <input type="search" name="search" id="inv-search" value="<?= htmlspecialchars($search) ?>"
+               placeholder="Search name or brand…" autocomplete="off"
+               class="w-full pl-9 pr-3 py-2 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]
+                      focus:outline-none focus:border-[var(--caramel,#c47d3e)]">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--text-muted,#8b7c88)]">🔍</span>
+      </div>
+
+      <select name="cat" onchange="this.form.submit()"
+              class="py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
+        <option value="">All categories</option>
+        <?php foreach ($cats as $c): ?>
+        <option value="<?= (int)$c['id'] ?>" <?= $filter_cat === (int)$c['id'] ? 'selected' : '' ?>>
+          <?= htmlspecialchars($c['icon'] . ' ' . $c['name']) ?>
+        </option>
+        <?php endforeach; ?>
+      </select>
+
+      <select name="status" onchange="this.form.submit()"
+              class="py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
+        <?php foreach ([
+            'all'=>'All statuses','low'=>'Low stock','out'=>'Out of stock',
+            'expiring'=>'Expiring soon','expired'=>'Expired',
+        ] as $k=>$v): ?>
+        <option value="<?= $k ?>" <?= $filter_status===$k ? 'selected' : '' ?>><?= $v ?></option>
+        <?php endforeach; ?>
+      </select>
+
+      <button class="px-3 py-2 rounded-lg text-[12.5px] font-semibold border border-[var(--latte,#efe0cc)]
+                     hover:bg-[var(--accent-lt,#fcefe1)]">Apply</button>
+      <?php if ($search || $filter_cat || $filter_status !== 'all'): ?>
+      <a href="<?= htmlspecialchars(inv_url(['search'=>null,'cat'=>null,'status'=>null])) ?>"
+         class="px-3 py-2 rounded-lg text-[12.5px] font-semibold text-[var(--text-muted,#8b7c88)]
+                hover:text-red-600">Clear</a>
+      <?php endif; ?>
+    </form>
+  </div>
+
+  <!-- Table -->
+  <div class="rounded-xl bg-white border border-[var(--latte,#efe0cc)] overflow-hidden">
+    <div class="max-h-[62vh] overflow-auto">
+      <table class="w-full border-collapse text-[13px]">
+        <thead class="sticky top-0 z-10 bg-[var(--accent-lt,#fcefe1)]">
+          <tr class="text-left text-[11px] uppercase tracking-wide text-[var(--text-muted,#8b7c88)]">
+            <th class="px-4 py-3 font-bold">Item</th>
+            <th class="px-4 py-3 font-bold">Category</th>
+            <th class="px-4 py-3 font-bold text-right">Stock</th>
+            <th class="px-4 py-3 font-bold">Stock status</th>
+            <th class="px-4 py-3 font-bold">Expiry</th>
+            <th class="px-4 py-3 font-bold">Supplier</th>
+            <th class="px-4 py-3 font-bold text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="inv-tbody">
+        <?php if (!$ingredients): ?>
+          <tr><td colspan="7" class="px-4 py-14 text-center text-[13px] text-[var(--text-muted,#8b7c88)]">
+            No items match these filters.
+          </td></tr>
+        <?php else: foreach ($ingredients as $i):
+            $badge = $i['expiry_badge'];
+            $stock_map = [
+              'ok'  => ['Healthy',      'bg-emerald-50 text-emerald-700 border-emerald-200'],
+              'low' => ['Low stock',    'bg-amber-50 text-amber-700 border-amber-200'],
+              'out' => ['Out of stock', 'bg-red-50 text-red-700 border-red-200'],
+            ];
+            [$stock_label, $stock_cls] = $stock_map[$i['stock_state']];
+            $payload = htmlspecialchars(json_encode([
+                'id' => (int)$i['id'], 'name' => $i['name'], 'brand' => $i['brand'],
+                'unit' => $i['unit'], 'cat_id' => (int)$i['cat_id'],
+                'reorder_at' => (float)$i['reorder_at'],
+                'reorder_quantity' => (float)$i['reorder_quantity'],
+                'default_supplier_id' => (int)$i['default_supplier_id'],
+                'auto_reorder' => (int)$i['auto_reorder'],
+                'quantity' => (float)$i['quantity'],
+            ]), ENT_QUOTES, 'UTF-8');
+        ?>
+          <tr class="border-t border-[var(--latte,#efe0cc)] hover:bg-[var(--accent-lt,#fcefe1)] transition
+                     <?= $view === 'archived' ? 'opacity-70' : '' ?>"
+              data-name="<?= htmlspecialchars(strtolower($i['name'] . ' ' . $i['brand'])) ?>">
+
+            <td class="px-4 py-3">
+              <div class="font-bold"><?= htmlspecialchars($i['name']) ?></div>
+              <div class="text-[11px] text-[var(--text-muted,#8b7c88)]">
+                <?= $i['brand'] ? htmlspecialchars($i['brand']) . ' · ' : '' ?>
+                threshold <?= $fmt($i['reorder_at']) ?> <?= htmlspecialchars($i['unit']) ?>
+                <?php if ((int)$i['auto_reorder'] === 1): ?>
+                  <span class="ml-1 text-emerald-600 font-semibold">· auto</span>
+                <?php endif; ?>
               </div>
-            <?php endforeach; ?>
-          <?php endif; ?>
-        </div>
-      </div>
+            </td>
 
-      <!-- RIGHT: detail -->
-      <div class="inv-detail" id="detail-panel">
-        <div class="detail-empty">
-          <div class="de-icon">📦</div>
-          <p>Select an ingredient</p>
-          <small>Click any item on the left to view stock and restock</small>
-        </div>
-      </div>
+            <td class="px-4 py-3 text-[12px] text-[var(--text-muted,#8b7c88)]">
+              <?= htmlspecialchars($i['cat_icon'] . ' ' . $i['cat_name']) ?>
+            </td>
 
+            <td class="px-4 py-3 text-right font-bold tabular-nums">
+              <?= $fmt($i['quantity']) ?> <span class="text-[11px] font-medium text-[var(--text-muted,#8b7c88)]"><?= htmlspecialchars($i['unit']) ?></span>
+            </td>
+
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center px-2 py-1 rounded-md border text-[11px] font-semibold <?= $stock_cls ?>">
+                <?= $stock_label ?>
+              </span>
+            </td>
+
+            <td class="px-4 py-3">
+              <button type="button" onclick="openBatches(<?= (int)$i['id'] ?>)"
+                      class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]
+                             font-semibold <?= $badge['classes'] ?> hover:brightness-95"
+                      title="View and edit batches">
+                <span class="w-1.5 h-1.5 rounded-full <?= $badge['dot'] ?>"></span>
+                <?= htmlspecialchars($badge['label']) ?>
+              </button>
+              <?php if ($i['active_batches'] > 1): ?>
+                <span class="ml-1 text-[10px] text-[var(--text-muted,#8b7c88)]"><?= $i['active_batches'] ?> batches</span>
+              <?php endif; ?>
+            </td>
+
+            <td class="px-4 py-3 text-[12px] text-[var(--text-muted,#8b7c88)]">
+              <?= $i['supplier_name'] ? htmlspecialchars($i['supplier_name']) : '—' ?>
+            </td>
+
+            <td class="px-4 py-3">
+              <div class="flex justify-end gap-1.5">
+                <?php if ($can_manage && $view === 'active'): ?>
+                  <button onclick='openRestock(<?= $payload ?>)'
+                          class="px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold
+                                 border border-[var(--latte,#efe0cc)] hover:bg-white">Restock</button>
+                  <button onclick='openEdit(<?= $payload ?>)'
+                          class="px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold
+                                 border border-[var(--latte,#efe0cc)] hover:bg-white">Edit</button>
+                  <button onclick='confirmAction("archive", <?= (int)$i['id'] ?>, <?= htmlspecialchars(json_encode($i['name']), ENT_QUOTES, 'UTF-8') ?>)'
+                          class="px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold
+                                 border border-[var(--latte,#efe0cc)] text-[var(--text-muted,#8b7c88)]
+                                 hover:text-amber-700 hover:border-amber-300">Archive</button>
+                <?php elseif ($can_manage && $view === 'archived'): ?>
+                  <button onclick='confirmAction("restore", <?= (int)$i['id'] ?>, <?= htmlspecialchars(json_encode($i['name']), ENT_QUOTES, 'UTF-8') ?>)'
+                          class="px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold
+                                 border border-emerald-200 text-emerald-700 hover:bg-emerald-50">Restore</button>
+                  <button onclick='confirmAction("purge", <?= (int)$i['id'] ?>, <?= htmlspecialchars(json_encode($i['name']), ENT_QUOTES, 'UTF-8') ?>)'
+                          class="px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold
+                                 border border-red-200 text-red-700 hover:bg-red-50">Delete</button>
+                <?php else: ?>
+                  <span class="text-[11px] text-[var(--text-muted,#8b7c88)]">View only</span>
+                <?php endif; ?>
+              </div>
+            </td>
+          </tr>
+        <?php endforeach; endif; ?>
+        </tbody>
+      </table>
     </div>
+  </div>
+</main>
+
+<!-- ══════════ MODALS ══════════ -->
+
+<?php if ($can_manage): ?>
+<!-- Add -->
+<div id="modal-add" class="modal-overlay hidden fixed inset-0 z-[500] bg-black/50 items-center justify-center p-4">
+  <div class="w-full max-w-[440px] rounded-2xl bg-white shadow-2xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
+      <strong class="text-[15px]">Add Ingredient</strong>
+      <button onclick="closeModal('modal-add')" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+    </div>
+    <form method="POST" class="px-5 py-4 space-y-3">
+      <input type="hidden" name="action" value="add">
+      <input type="hidden" name="return_view"   value="<?= htmlspecialchars($view) ?>">
+      <input type="hidden" name="return_cat"    value="<?= (int)$filter_cat ?: '' ?>">
+      <input type="hidden" name="return_search" value="<?= htmlspecialchars($search) ?>">
+
+      <div class="grid grid-cols-2 gap-3">
+        <label class="col-span-2 block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Name *</span>
+          <input name="name" required class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Brand</span>
+          <input name="brand" class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Unit</span>
+          <input name="unit" value="pcs" class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="col-span-2 block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Category *</span>
+          <select name="cat_id" required class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
+            <?php foreach ($cats as $c): ?>
+            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['icon'].' '.$c['name']) ?> — <?= (int)$c['shelf_life_days'] ?>d shelf life</option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Opening qty</span>
+          <input name="quantity" type="number" step="0.01" min="0" value="0"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Reorder threshold</span>
+          <input name="reorder_at" type="number" step="0.01" min="0" value="5"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Reorder quantity</span>
+          <input name="reorder_quantity" type="number" step="0.01" min="0" value="0" placeholder="auto"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Default supplier</span>
+          <select name="default_supplier_id" class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
+            <option value="">— none —</option>
+            <?php foreach ($suppliers as $s): ?>
+            <option value="<?= (int)$s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="col-span-2 flex items-center gap-2 text-[12.5px]">
+          <input type="checkbox" name="auto_reorder" checked class="w-4 h-4 accent-[var(--caramel,#c47d3e)]">
+          Automatically file a purchase requisition when stock hits the threshold
+        </label>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="button" onclick="closeModal('modal-add')"
+                class="flex-1 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--latte,#efe0cc)]">Cancel</button>
+        <button class="flex-1 py-2.5 rounded-lg text-[13px] font-bold text-white bg-[var(--caramel,#c47d3e)]">Add Item</button>
+      </div>
+    </form>
   </div>
 </div>
 
-<!-- Add / Edit modal -->
-<div class="modal-overlay" id="item-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 id="modal-title">➕ Add Ingredient</h3>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+<!-- Edit -->
+<div id="modal-edit" class="modal-overlay hidden fixed inset-0 z-[500] bg-black/50 items-center justify-center p-4">
+  <div class="w-full max-w-[440px] rounded-2xl bg-white shadow-2xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
+      <strong class="text-[15px]">Edit Item</strong>
+      <button onclick="closeModal('modal-edit')" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
     </div>
-    <form method="POST" id="item-form">
-      <input type="hidden" name="action"        id="f-action" value="add"/>
-      <input type="hidden" name="ingredient_id" id="f-ing-id" value=""/>
-      <input type="hidden" name="return_view"   id="f-ret-view"/>
-      <input type="hidden" name="return_cat"    id="f-ret-cat"/>
-      <input type="hidden" name="return_search" id="f-ret-search"/>
+    <form method="POST" class="px-5 py-4 space-y-3">
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="ingredient_id" id="e-id">
+      <input type="hidden" name="return_view"   value="<?= htmlspecialchars($view) ?>">
+      <input type="hidden" name="return_search" value="<?= htmlspecialchars($search) ?>">
 
-      <div class="mfield">
-        <label>Category <span style="color:#c62828">*</span></label>
-        <select name="cat_id" id="f-cat" required>
-          <option value="">Select…</option>
-          <?php foreach ($cats as $cat): ?>
-            <option value="<?= $cat['id'] ?>"><?= $cat['icon'] ?> <?= htmlspecialchars($cat['name']) ?></option>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="col-span-2 block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Name *</span>
+          <input name="name" id="e-name" required class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Brand</span>
+          <input name="brand" id="e-brand" class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Unit</span>
+          <input name="unit" id="e-unit" class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="col-span-2 block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Category</span>
+          <select name="cat_id" id="e-cat" class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
+            <?php foreach ($cats as $c): ?>
+            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['icon'].' '.$c['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Reorder threshold</span>
+          <input name="reorder_at" id="e-reorder" type="number" step="0.01" min="0"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Reorder quantity</span>
+          <input name="reorder_quantity" id="e-reorder-qty" type="number" step="0.01" min="0"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="col-span-2 block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Default supplier</span>
+          <select name="default_supplier_id" id="e-supplier"
+                  class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
+            <option value="">— none —</option>
+            <?php foreach ($suppliers as $s): ?>
+            <option value="<?= (int)$s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="col-span-2 flex items-center gap-2 text-[12.5px]">
+          <input type="checkbox" name="auto_reorder" id="e-auto" class="w-4 h-4 accent-[var(--caramel,#c47d3e)]">
+          Auto-reorder enabled
+        </label>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="button" onclick="closeModal('modal-edit')"
+                class="flex-1 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--latte,#efe0cc)]">Cancel</button>
+        <button class="flex-1 py-2.5 rounded-lg text-[13px] font-bold text-white bg-[var(--caramel,#c47d3e)]">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Restock -->
+<div id="modal-restock" class="modal-overlay hidden fixed inset-0 z-[500] bg-black/50 items-center justify-center p-4">
+  <div class="w-full max-w-[380px] rounded-2xl bg-white shadow-2xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
+      <strong class="text-[15px]">Restock <span id="r-title" class="font-normal"></span></strong>
+      <button onclick="closeModal('modal-restock')" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+    </div>
+    <form method="POST" class="px-5 py-4 space-y-3">
+      <input type="hidden" name="action" value="restock">
+      <input type="hidden" name="ingredient_id" id="r-id">
+      <input type="hidden" name="return_view" value="<?= htmlspecialchars($view) ?>">
+
+      <label class="block">
+        <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Quantity received *</span>
+        <input name="qty" id="r-qty" type="number" step="0.01" min="0.01" required
+               class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+      </label>
+      <label class="block">
+        <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Expiry date</span>
+        <input name="expiry_date" type="date"
+               class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        <span class="block mt-1 text-[10.5px] text-[var(--text-muted,#8b7c88)]">
+          Leave blank to compute it from the category shelf life.
+        </span>
+      </label>
+      <label class="block">
+        <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Supplier</span>
+        <select name="supplier_id" id="r-supplier"
+                class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
+          <option value="">— none —</option>
+          <?php foreach ($suppliers as $s): ?>
+          <option value="<?= (int)$s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
           <?php endforeach; ?>
         </select>
-      </div>
+      </label>
 
-      <div class="mfield">
-        <label>Name <span style="color:#c62828">*</span></label>
-        <input type="text" name="name" id="f-name" placeholder="e.g. Fresh milk" required/>
-      </div>
-
-      <div class="mfield-row">
-        <div class="mfield">
-          <label>Brand</label>
-          <input type="text" name="brand" id="f-brand" placeholder="e.g. Nestle"/>
-        </div>
-        <div class="mfield">
-          <label>Unit</label>
-          <input type="text" name="unit" id="f-unit" placeholder="L / kg / pcs"/>
-        </div>
-      </div>
-
-      <div class="mfield-row" id="qty-row">
-        <div class="mfield">
-          <label>Current Qty</label>
-          <input type="number" name="quantity" id="f-qty" placeholder="0" step="0.1" min="0"/>
-        </div>
-        <div class="mfield">
-          <label>Reorder At</label>
-          <input type="number" name="reorder_at" id="f-reorder" placeholder="5" step="0.1" min="0"/>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn-mcancel" onclick="closeModal()">Cancel</button>
-        <button type="submit" class="btn-msave"   id="modal-save-btn">➕ Request Stock</button>
+      <div class="flex gap-2 pt-2">
+        <button type="button" onclick="closeModal('modal-restock')"
+                class="flex-1 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--latte,#efe0cc)]">Cancel</button>
+        <button class="flex-1 py-2.5 rounded-lg text-[13px] font-bold text-white bg-[var(--caramel,#c47d3e)]">Record</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- Archive confirm modal -->
-<div class="modal-overlay" id="delete-modal">
-  <div class="modal" style="max-width:340px;text-align:center">
-    <div style="font-size:44px;margin-bottom:12px">🗄</div>
-    <h3 style="margin-bottom:8px">Archive Item?</h3>
-    <p id="del-msg" style="font-size:13px;color:var(--text-muted);margin-bottom:20px"></p>
-    <form method="POST">
-      <input type="hidden" name="action"        value="archive"/>
-      <input type="hidden" name="ingredient_id" id="del-id"/>
-      <input type="hidden" name="return_view"   id="del-ret-view"/>
-      <input type="hidden" name="return_cat"    id="del-ret-cat"/>
-      <input type="hidden" name="return_search" id="del-ret-search"/>
-      <div class="modal-footer">
-        <button type="button" class="btn-mcancel" onclick="closeDelete()">Cancel</button>
-        <button type="submit" class="btn-msave"   style="background:#b3691a">🗄 Archive</button>
-      </div>
+<!-- Generic confirm -->
+<div id="modal-confirm" class="modal-overlay hidden fixed inset-0 z-[600] bg-black/50 items-center justify-center p-4">
+  <div class="w-full max-w-[360px] rounded-2xl bg-white shadow-2xl overflow-hidden">
+    <div class="px-5 py-5">
+      <strong id="c-title" class="block text-[15px] mb-2"></strong>
+      <p id="c-text" class="text-[13px] leading-5 text-[var(--text-muted,#8b7c88)]"></p>
+    </div>
+    <form method="POST" class="px-5 pb-5 flex gap-2">
+      <input type="hidden" name="action" id="c-action">
+      <input type="hidden" name="ingredient_id" id="c-id">
+      <input type="hidden" name="return_view" value="<?= htmlspecialchars($view) ?>">
+      <button type="button" onclick="closeModal('modal-confirm')"
+              class="flex-1 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--latte,#efe0cc)]">Cancel</button>
+      <button id="c-submit" class="flex-1 py-2.5 rounded-lg text-[13px] font-bold text-white bg-[var(--caramel,#c47d3e)]">Confirm</button>
     </form>
   </div>
 </div>
+<?php endif; ?>
 
-<!-- Permanently delete confirm modal (archived view only) -->
-<div class="modal-overlay" id="purge-modal">
-  <div class="modal" style="max-width:340px;text-align:center">
-    <div style="font-size:44px;margin-bottom:12px">🗑️</div>
-    <h3 style="margin-bottom:8px">Delete Permanently?</h3>
-    <p id="purge-msg" style="font-size:13px;color:var(--text-muted);margin-bottom:20px"></p>
-    <form method="POST">
-      <input type="hidden" name="action"        value="purge"/>
-      <input type="hidden" name="ingredient_id" id="purge-id"/>
-      <input type="hidden" name="return_view"   value="archived"/>
-      <div class="modal-footer">
-        <button type="button" class="btn-mcancel" onclick="closePurge()">Cancel</button>
-        <button type="submit" class="btn-msave"   style="background:#c62828">Yes, Delete Forever</button>
-      </div>
-    </form>
+<!-- Batches / expiry -->
+<div id="modal-batches" class="modal-overlay hidden fixed inset-0 z-[550] bg-black/50 items-center justify-center p-4">
+  <div class="w-full max-w-[640px] rounded-2xl bg-white shadow-2xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
+      <strong class="text-[15px]">Batches — <span id="b-title" class="font-normal"></span></strong>
+      <button onclick="closeModal('modal-batches')" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+    </div>
+    <div id="b-body" class="px-5 py-4 max-h-[60vh] overflow-y-auto text-[13px]">
+      <p class="text-center py-8 text-[var(--text-muted,#8b7c88)]">Loading…</p>
+    </div>
   </div>
 </div>
 
+<!-- Toast -->
 <?php if ($toast): ?>
-<div class="toast toast-<?= $toast_type ?>" id="toast-el"><?= $toast ?></div>
-<script>setTimeout(()=>{ const t=document.getElementById('toast-el'); if(t) t.style.opacity='0'; },3000);</script>
+<div id="toast" class="fixed bottom-6 right-6 z-[700] px-4 py-3 rounded-xl shadow-2xl text-[13px] font-semibold
+     <?= $toast_type === 'error' ? 'bg-red-600 text-white' : 'bg-[var(--espresso,#3a2417)] text-white' ?>">
+  <?= $toast ?>
+</div>
+<script>setTimeout(() => document.getElementById('toast')?.remove(), 4500);</script>
 <?php endif; ?>
 
 <script>
-const CURRENT_VIEW   = <?= json_encode($view) ?>;
-const CURRENT_CAT    = <?= json_encode($filter_cat ?: '') ?>;
-const CURRENT_SEARCH = <?= json_encode($search) ?>;
+const CAN_EDIT_EXPIRY = <?= $can_expiry ? 'true' : 'false' ?>;
+const CAN_MANAGE      = <?= $can_manage ? 'true' : 'false' ?>;
 
-// ── Select item ───────────────────────────────
-function selectItem(ing) {
-  document.querySelectorAll('.ing-row').forEach(r => r.classList.remove('active'));
-  const row = document.getElementById('row-' + ing.id);
-  if (row) row.classList.add('active');
+function openModal(id)  { const m = document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); }
+function closeModal(id) { const m = document.getElementById(id); m.classList.add('hidden');    m.classList.remove('flex'); }
 
-  if (CURRENT_VIEW === 'archived') {
-    renderArchivedDetail(ing);
-    return;
-  }
-
-  const qty     = parseFloat(ing.quantity);
-  const reorder = parseFloat(ing.reorder_at);
-  const isOut   = qty <= 0;
-  const isLow   = !isOut && qty <= reorder;
-  const scls    = isOut ? 'badge-out' : isLow ? 'badge-low' : 'badge-ok';
-  const stxt    = isOut ? '🔴 Out of stock' : isLow ? '⚠️ Low stock' : '✅ In stock';
-  const scolor  = isOut ? 'var(--red)' : isLow ? 'var(--amber)' : 'var(--accent)';
-
-  document.getElementById('detail-panel').innerHTML = `
-    <div class="detail-head">
-      <div class="detail-icon">${esc(ing.cat_icon)}</div>
-      <div class="detail-title">
-        <h2>${esc(ing.name)}</h2>
-        <p>${esc(ing.brand||'—')} · ${esc(ing.cat_name)} · ${esc(ing.unit)}</p>
-      </div>
-      <span class="status-badge ${scls}">${stxt}</span>
-    </div>
-
-    <div class="stock-display">
-      <div class="stock-label">Current Stock</div>
-      <div>
-        <span class="stock-num" style="color:${scolor}">${qty.toFixed(1)}</span>
-        <span class="stock-unit">${esc(ing.unit)}</span>
-      </div>
-      <div class="reorder-hint">Reorder point: ${reorder.toFixed(1)} ${esc(ing.unit)}</div>
-    </div>
-
-    <div class="restock-section">
-      <h3>✏️ Update Exact Stock</h3>
-      <form method="POST" id="set-stock-form" onsubmit="return handleSetStockSubmit(event, this)">
-        <input type="hidden" name="action"        value="set_stock"/>
-        <input type="hidden" name="ingredient_id" value="${ing.id}"/>
-        ${returnFields()}
-        <div class="restock-row">
-          <input type="number" name="qty" id="set-stock-qty"
-                 placeholder="Set stock to… (${esc(ing.unit)})"
-                 value="${qty.toFixed(1)}"
-                 step="0.1" min="0" required/>
-          <button type="submit" class="btn-confirm" style="background:#1565c0">✔ Set</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="detail-actions">
-      <button class="btn-edit-ing" onclick='openEdit(${JSON.stringify(ing)})'>✏️ Edit Details</button>
-      <button class="btn-del-ing"  onclick="openDelete(${ing.id},'${esc(ing.name)}')">🗄 Archive</button>
-    </div>
-  `;
-}
-
-function renderArchivedDetail(ing) {
-  document.getElementById('detail-panel').innerHTML = `
-    <div class="detail-head">
-      <div class="detail-icon" style="filter:grayscale(1);opacity:.6">${esc(ing.cat_icon)}</div>
-      <div class="detail-title">
-        <h2>${esc(ing.name)}</h2>
-        <p>${esc(ing.brand||'—')} · ${esc(ing.cat_name)} · ${esc(ing.unit)}</p>
-      </div>
-      <span class="status-badge badge-archived">🗄 Archived</span>
-    </div>
-
-    <div class="stock-display">
-      <div class="stock-label">Stock at time of archiving</div>
-      <div>
-        <span class="stock-num" style="color:var(--text-muted)">${parseFloat(ing.quantity).toFixed(1)}</span>
-        <span class="stock-unit">${esc(ing.unit)}</span>
-      </div>
-    </div>
-
-    <p class="archived-note">This item is hidden from Order &amp; Menu screens. Restore it to make it available again, or delete it permanently.</p>
-
-    <div class="detail-actions">
-      <form method="POST" style="flex:1">
-        <input type="hidden" name="action" value="restore"/>
-        <input type="hidden" name="ingredient_id" value="${ing.id}"/>
-        ${returnFields()}
-        <button type="submit" class="btn-edit-ing" style="width:100%">↩️ Restore</button>
-      </form>
-      <button class="btn-del-ing" onclick="openPurge(${ing.id},'${esc(ing.name)}')">🗑️ Delete Forever</button>
-    </div>
-  `;
-}
-
-function returnFields() {
-  return `<input type="hidden" name="return_view" value="${esc(CURRENT_VIEW)}"/>
-          <input type="hidden" name="return_cat" value="${esc(CURRENT_CAT)}"/>
-          <input type="hidden" name="return_search" value="${esc(CURRENT_SEARCH)}"/>`;
-}
-
-function esc(str) {
-  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-// ── Add modal ─────────────────────────────────
-function openAdd() {
-  document.getElementById('modal-title').textContent    = '➕ Add Ingredient';
-  document.getElementById('modal-save-btn').textContent = '➕ Add Item';
-  document.getElementById('f-action').value  = 'add';
-  document.getElementById('f-ing-id').value  = '';
-  document.getElementById('f-cat').value     = '';
-  document.getElementById('f-name').value    = '';
-  document.getElementById('f-brand').value   = '';
-  document.getElementById('f-unit').value    = '';
-  document.getElementById('f-qty').value     = '';
-  document.getElementById('f-reorder').value = '';
-  document.getElementById('qty-row').style.display = '';
-  // Always land back on Active after adding, so the new item is visible
-  // even if "Add Item" was clicked while viewing the Archived tab.
-  document.getElementById('f-ret-view').value   = 'active';
-  document.getElementById('f-ret-cat').value    = CURRENT_CAT;
-  document.getElementById('f-ret-search').value = CURRENT_SEARCH;
-  document.getElementById('item-modal').classList.add('open');
-}
-
-// ── Edit modal ────────────────────────────────
-function openEdit(ing) {
-  document.getElementById('modal-title').textContent    = '✏️ Edit Ingredient';
-  document.getElementById('modal-save-btn').textContent = '💾 Save Changes';
-  document.getElementById('f-action').value  = 'edit';
-  document.getElementById('f-ing-id').value  = ing.id;
-  document.getElementById('f-cat').value     = ing.cat_id;
-  document.getElementById('f-name').value    = ing.name;
-  document.getElementById('f-brand').value   = ing.brand || '';
-  document.getElementById('f-unit').value    = ing.unit;
-  document.getElementById('f-reorder').value = ing.reorder_at;
-  document.getElementById('qty-row').style.display = 'none'; // use restock for qty
-  setReturnFields('f-ret-view', 'f-ret-cat', 'f-ret-search');
-  document.getElementById('item-modal').classList.add('open');
-}
-
-function setReturnFields(vId, cId, sId) {
-  document.getElementById(vId).value = CURRENT_VIEW;
-  document.getElementById(cId).value = CURRENT_CAT;
-  document.getElementById(sId).value = CURRENT_SEARCH;
-}
-
-function closeModal() {
-  document.getElementById('item-modal').classList.remove('open');
-  document.getElementById('qty-row').style.display = '';
-  if (window.KofeeValidator) {
-    document.querySelectorAll('#item-form input, #item-form select').forEach(el => {
-      KofeeValidator.clearError(el);
-    });
-  }
-}
-
-// ── Archive modal ──────────────────────────────
-function openDelete(id, name) {
-  document.getElementById('del-id').value  = id;
-  document.getElementById('del-msg').textContent = '"' + name + '" will be moved to Archived and hidden from Order & Menu. You can restore it anytime.';
-  setReturnFields('del-ret-view', 'del-ret-cat', 'del-ret-search');
-  document.getElementById('delete-modal').classList.add('open');
-}
-function closeDelete() { document.getElementById('delete-modal').classList.remove('open'); }
-
-// ── Purge (permanent delete) modal ─────────────
-function openPurge(id, name) {
-  document.getElementById('purge-id').value = id;
-  document.getElementById('purge-msg').textContent = 'This will permanently remove "' + name + '". This cannot be undone.';
-  document.getElementById('purge-modal').classList.add('open');
-}
-function closePurge() { document.getElementById('purge-modal').classList.remove('open'); }
-
-// ── Form handlers with KofeeValidator ──
-function handleSetStockSubmit(e, form) {
-  const qtyInput = form.querySelector('[name="qty"]');
-  const val = parseFloat(qtyInput.value);
-  if (isNaN(val) || val < 0) {
-    e.preventDefault();
-    if (window.KofeeValidator) {
-      KofeeValidator.showError(qtyInput, 'Quantity must be 0 or greater.');
-    }
-    return false;
-  }
-  const btn = form.querySelector('button[type="submit"]');
-  if (btn && window.KofeeValidator) {
-    KofeeValidator.setLoading(btn, 'Updating…');
-  }
-  return true;
-}
-
-// Backdrop / Escape
 document.querySelectorAll('.modal-overlay').forEach(el => {
-  el.addEventListener('click', e => { if (e.target===el){ closeModal(); closeDelete(); closePurge(); } });
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
 });
 document.addEventListener('keydown', e => {
-  if (e.key==='Escape'){ closeModal(); closeDelete(); closePurge(); }
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('shift-gate')) return;   // gate is non-dismissible
+  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(m => closeModal(m.id));
 });
 
-// Attach validation to item-form
-const itemForm = document.getElementById('item-form');
-if (itemForm && window.KofeeValidator) {
-  KofeeValidator.attach(itemForm, {
-    customValidate: function(form) {
-      const cat = form.querySelector('[name="cat_id"]');
-      const name = form.querySelector('[name="name"]');
-      const qty = form.querySelector('[name="quantity"]');
-      const reorder = form.querySelector('[name="reorder_at"]');
-
-      if (!cat.value) return { field: cat, message: 'Please select a category.' };
-      if (!name.value.trim() || name.value.trim().length < 2) {
-        return { field: name, message: 'Item name must be at least 2 characters.' };
-      }
-      if (qty && qty.value !== '' && parseFloat(qty.value) < 0) {
-        return { field: qty, message: 'Quantity cannot be negative.' };
-      }
-      if (reorder && reorder.value !== '' && parseFloat(reorder.value) < 0) {
-        return { field: reorder, message: 'Reorder point cannot be negative.' };
-      }
-      return true;
-    },
-    loadingText: 'Saving…'
+// ── Live client-side search (on top of the server filter) ──
+document.getElementById('inv-search')?.addEventListener('input', function () {
+  const q = this.value.trim().toLowerCase();
+  document.querySelectorAll('#inv-tbody tr[data-name]').forEach(row => {
+    row.style.display = !q || row.dataset.name.includes(q) ? '' : 'none';
   });
+});
+
+// ── Row action modals ──
+function openEdit(p) {
+  document.getElementById('e-id').value          = p.id;
+  document.getElementById('e-name').value        = p.name  || '';
+  document.getElementById('e-brand').value       = p.brand || '';
+  document.getElementById('e-unit').value        = p.unit  || '';
+  document.getElementById('e-cat').value         = p.cat_id;
+  document.getElementById('e-reorder').value     = p.reorder_at;
+  document.getElementById('e-reorder-qty').value = p.reorder_quantity;
+  document.getElementById('e-supplier').value    = p.default_supplier_id || '';
+  document.getElementById('e-auto').checked      = p.auto_reorder === 1;
+  openModal('modal-edit');
 }
 
-// Attach loading states to archive/purge forms
-document.querySelectorAll('#delete-modal form, #purge-modal form').forEach(f => {
-  f.addEventListener('submit', function() {
-    const btn = f.querySelector('button[type="submit"]');
-    if (btn && window.KofeeValidator) {
-      KofeeValidator.setLoading(btn, '…');
+function openRestock(p) {
+  document.getElementById('r-id').value       = p.id;
+  document.getElementById('r-title').textContent = '· ' + p.name;
+  document.getElementById('r-qty').value      = '';
+  document.getElementById('r-supplier').value = p.default_supplier_id || '';
+  openModal('modal-restock');
+}
+
+function confirmAction(action, id, name) {
+  const copy = {
+    archive: ['Archive item?', `"${name}" will be hidden from the active list. Stock history is kept.`, 'Archive'],
+    restore: ['Restore item?', `"${name}" will return to the active inventory list.`, 'Restore'],
+    purge:   ['Delete permanently?', `"${name}" and all its batches will be erased. This cannot be undone.`, 'Delete'],
+  }[action];
+
+  document.getElementById('c-title').textContent  = copy[0];
+  document.getElementById('c-text').textContent   = copy[1];
+  document.getElementById('c-action').value       = action;
+  document.getElementById('c-id').value           = id;
+
+  const btn = document.getElementById('c-submit');
+  btn.textContent = copy[2];
+  btn.className = 'flex-1 py-2.5 rounded-lg text-[13px] font-bold text-white ' +
+    (action === 'purge' ? 'bg-red-600' : 'bg-[var(--caramel,#c47d3e)]');
+
+  openModal('modal-confirm');
+}
+
+// ── Batch / expiry management ──
+async function openBatches(ingredientId) {
+  const body = document.getElementById('b-body');
+  body.innerHTML = '<p class="text-center py-8 text-[var(--text-muted,#8b7c88)]">Loading…</p>';
+  openModal('modal-batches');
+
+  try {
+    const res  = await fetch('../api/inventory_batches.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'list', ingredient_id: ingredientId })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Could not load batches.');
+
+    document.getElementById('b-title').textContent = data.item ? data.item.name : '';
+
+    if (!data.batches.length) {
+      body.innerHTML = '<p class="text-center py-10 text-[var(--text-muted,#8b7c88)]">' +
+                       'No batches recorded yet. They are created when stock is received.</p>';
+      return;
     }
-  });
-});
+
+    body.innerHTML = data.batches.map(b => `
+      <div class="border border-[var(--latte,#efe0cc)] rounded-xl p-3 mb-2.5" data-batch="${b.id}">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="font-bold text-[13px]">
+              ${b.batch_ref ? escapeHtml(b.batch_ref) : 'Batch #' + b.id}
+              <span class="ml-1 font-normal text-[11px] text-[var(--text-muted,#8b7c88)]">
+                ${b.qty_remaining} / ${b.qty_received} ${escapeHtml(b.unit)} left
+              </span>
+            </div>
+            <div class="text-[11px] text-[var(--text-muted,#8b7c88)] mt-0.5">
+              Delivered ${escapeHtml(b.delivery_human)}
+              ${b.supplier_name ? ' · ' + escapeHtml(b.supplier_name) : ''}
+              ${b.expiry_source === 'manual' ? ' · expiry set manually' : ''}
+            </div>
+          </div>
+          <span class="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-md border
+                       text-[11px] font-semibold ${b.badge.classes}" data-badge>
+            <span class="w-1.5 h-1.5 rounded-full ${b.badge.dot}"></span>${escapeHtml(b.badge.label)}
+          </span>
+        </div>
+
+        ${data.can_edit ? `
+        <div class="mt-3 flex flex-wrap items-end gap-2">
+          <label class="block">
+            <span class="text-[10.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Expiry date</span>
+            <input type="date" value="${b.expiry_date || ''}" data-expiry-input
+                   class="mt-1 py-1.5 px-2.5 rounded-lg text-[12.5px] border border-[var(--latte,#efe0cc)]">
+          </label>
+          <button type="button" onclick="saveExpiry(${b.id}, this)"
+                  class="py-1.5 px-3 rounded-lg text-[12px] font-bold text-white bg-[var(--caramel,#c47d3e)]">Save</button>
+          ${CAN_MANAGE && b.status !== 'discarded' && b.qty_remaining > 0 ? `
+          <button type="button" onclick="discardBatch(${b.id}, this)"
+                  class="py-1.5 px-3 rounded-lg text-[12px] font-semibold border border-red-200 text-red-700
+                         hover:bg-red-50 ml-auto">Write off</button>` : ''}
+          <span data-msg class="w-full text-[11px]"></span>
+        </div>` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    body.innerHTML = `<p class="text-center py-8 text-red-600">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function saveExpiry(batchId, btn) {
+  const card  = btn.closest('[data-batch]');
+  const input = card.querySelector('[data-expiry-input]');
+  const msg   = card.querySelector('[data-msg]');
+  btn.disabled = true;
+  msg.textContent = '';
+
+  try {
+    const res  = await fetch('../api/inventory_batches.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_expiry', batch_id: batchId, expiry_date: input.value })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Update failed.');
+
+    const badge = card.querySelector('[data-badge]');
+    badge.className = 'shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold ' + data.badge.classes;
+    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${data.badge.dot}"></span>${escapeHtml(data.badge.label)}`;
+
+    msg.className = 'w-full text-[11px] text-emerald-600';
+    msg.textContent = 'Saved.';
+  } catch (e) {
+    msg.className = 'w-full text-[11px] text-red-600';
+    msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function discardBatch(batchId, btn) {
+  if (!confirm('Write off the remaining quantity in this batch? Stock will be deducted.')) return;
+  btn.disabled = true;
+  try {
+    const res  = await fetch('../api/inventory_batches.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'discard', batch_id: batchId, reason: 'Written off from Inventory' })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Could not write off batch.');
+    location.reload();
+  } catch (e) {
+    alert(e.message);
+    btn.disabled = false;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 </script>
-<script src="../js/validator.js"></script>
 </body>
 </html>
