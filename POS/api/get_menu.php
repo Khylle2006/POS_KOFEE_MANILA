@@ -15,6 +15,7 @@ $stmt = $pdo->query("
         p.price_small,
         p.price_large,
         p.stock,
+        p.image_path,
         c.category_name
     FROM products p
     JOIN categories c ON CAST(c.id AS CHAR) = p.category_id

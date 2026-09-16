@@ -27,11 +27,15 @@ if (!has_permission('menu.manage') && !has_permission('can_add_item') && !has_pe
     exit;
 }
 
+$data = [];
 $raw = file_get_contents('php://input');
-$data = json_decode($raw, true);
-
-if (!is_array($data)) {
+$jsonData = json_decode($raw, true);
+if (is_array($jsonData)) {
+    $data = $jsonData;
+} elseif (!empty($_POST)) {
     $data = $_POST;
+} else {
+    $data = [];
 }
 
 $pdo = get_db();
@@ -54,8 +58,16 @@ if ($category_id <= 0) {
 }
 
 // Check for duplicate item name
-$dupCheck = $pdo->prepare('SELECT id FROM products WHERE LOWER(name) = LOWER(:name) AND is_deleted = 0');
-$dupCheck->execute([':name' => $name]);
+$productId = (int)($data['id'] ?? 0);
+$isUpdate  = $productId > 0;
+
+if ($isUpdate) {
+    $dupCheck = $pdo->prepare('SELECT id FROM products WHERE LOWER(name) = LOWER(:name) AND is_deleted = 0 AND id != :pid');
+    $dupCheck->execute([':name' => $name, ':pid' => $productId]);
+} else {
+    $dupCheck = $pdo->prepare('SELECT id FROM products WHERE LOWER(name) = LOWER(:name) AND is_deleted = 0');
+    $dupCheck->execute([':name' => $name]);
+}
 if ($dupCheck->fetchColumn()) {
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => "A menu item named '{$name}' already exists."]);
@@ -73,32 +85,150 @@ if ($price_small <= 0) {
 }
 
 if ($price_large <= 0) {
-    // If upsize price is omitted or 0, default to regular price or small markup
+    // If upsize price is omitted or 0, default to regular price + ₱20
     $price_large = $price_small + 20.00;
 }
 
-$recipe_small = is_array($data['recipe_small'] ?? null) ? $data['recipe_small'] : [];
-$recipe_large = is_array($data['recipe_large'] ?? null) ? $data['recipe_large'] : [];
+$recipe_small = $data['recipe_small'] ?? [];
+if (is_string($recipe_small)) {
+    $recipe_small = json_decode($recipe_small, true) ?: [];
+}
+if (!is_array($recipe_small)) $recipe_small = [];
+
+$recipe_large = $data['recipe_large'] ?? [];
+if (is_string($recipe_large)) {
+    $recipe_large = json_decode($recipe_large, true) ?: [];
+}
+if (!is_array($recipe_large)) $recipe_large = [];
+
+// ── Handle Optional Product Image Upload ────────────────────────
+$uploadedImagePath = null;
+$removeImage = ($data['remove_image'] ?? '0') === '1' || ($data['remove_image'] ?? false) === true;
+
+if (!empty($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+    $file = $_FILES['image'];
+    $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mimeType = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+
+    if (!in_array($mimeType, $allowedMimes, true)) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'Invalid image format. Allowed formats: JPG, PNG, WEBP, GIF.']);
+        exit;
+    }
+
+    if ($file['size'] > 5 * 1024 * 1024) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'Image file exceeds maximum allowable size of 5MB.']);
+        exit;
+    }
+
+    $ext = match ($mimeType) {
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+        'image/gif'  => 'gif',
+        default      => 'jpg'
+    };
+
+    $targetDir = __DIR__ . '/../assets/menu/';
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0755, true);
+    }
+
+    $fileName = 'item_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $targetPath = $targetDir . $fileName;
+
+    if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Failed to save uploaded image file to server storage.']);
+        exit;
+    }
+
+    $uploadedImagePath = 'assets/menu/' . $fileName;
+}
+
+function resolveMenuDiskPath($path) {
+    if (empty($path)) return null;
+    $rel = ltrim($path, '/');
+    if (strpos($rel, 'assets/') === 0) {
+        return __DIR__ . '/../' . $rel;
+    } elseif (strpos($rel, 'menu/') === 0) {
+        return __DIR__ . '/../assets/' . $rel;
+    }
+    return __DIR__ . '/../assets/menu/' . $rel;
+}
 
 // ── Execute Database Transaction ────────────────────────────────
+$finalImagePath = null;
 try {
     $pdo->beginTransaction();
 
-    // 1. Insert product record
-    $prodStmt = $pdo->prepare("
-        INSERT INTO products (category_id, name, description, price_small, price_large, price, stock, is_deleted)
-        VALUES (:cat, :name, :desc, :ps, :pl, :price, 1, 0)
-    ");
-    $prodStmt->execute([
-        ':cat'   => $category_id,
-        ':name'  => $name,
-        ':desc'  => $description,
-        ':ps'    => $price_small,
-        ':pl'    => $price_large,
-        ':price' => (int)round($price_small),
-    ]);
+    if ($isUpdate) {
+        $chk = $pdo->prepare('SELECT id, image_path FROM products WHERE id = :pid');
+        $chk->execute([':pid' => $productId]);
+        $existingProd = $chk->fetch(PDO::FETCH_ASSOC);
+        if (!$existingProd) {
+            throw new Exception("Product ID {$productId} not found.");
+        }
 
-    $productId = (int)$pdo->lastInsertId();
+        $oldImagePath = $existingProd['image_path'] ?? null;
+
+        if ($uploadedImagePath !== null) {
+            $finalImagePath = $uploadedImagePath;
+            if (!empty($oldImagePath)) {
+                $oldFile = resolveMenuDiskPath($oldImagePath);
+                if ($oldFile && is_file($oldFile)) @unlink($oldFile);
+            }
+        } elseif ($removeImage) {
+            $finalImagePath = null;
+            if (!empty($oldImagePath)) {
+                $oldFile = resolveMenuDiskPath($oldImagePath);
+                if ($oldFile && is_file($oldFile)) @unlink($oldFile);
+            }
+        } else {
+            $finalImagePath = $oldImagePath;
+        }
+
+        $prodStmt = $pdo->prepare("
+            UPDATE products
+            SET category_id = :cat, name = :name, description = :desc, price_small = :ps, price_large = :pl, price = :price, image_path = :img
+            WHERE id = :id
+        ");
+        $prodStmt->execute([
+            ':cat'   => $category_id,
+            ':name'  => $name,
+            ':desc'  => $description,
+            ':ps'    => $price_small,
+            ':pl'    => $price_large,
+            ':price' => (int)round($price_small),
+            ':img'   => $finalImagePath,
+            ':id'    => $productId,
+        ]);
+
+        // Clean out existing recipe lines to replace with updated ones
+        $pdo->prepare('DELETE FROM product_ingredients WHERE product_id = :pid')->execute([':pid' => $productId]);
+    } else {
+        $finalImagePath = $uploadedImagePath;
+
+        // 1. Insert product record
+        $prodStmt = $pdo->prepare("
+            INSERT INTO products (category_id, name, description, price_small, price_large, price, image_path, stock, is_deleted)
+            VALUES (:cat, :name, :desc, :ps, :pl, :price, :img, 1, 0)
+        ");
+        $prodStmt->execute([
+            ':cat'   => $category_id,
+            ':name'  => $name,
+            ':desc'  => $description,
+            ':ps'    => $price_small,
+            ':pl'    => $price_large,
+            ':price' => (int)round($price_small),
+            ':img'   => $finalImagePath,
+        ]);
+
+        $productId = (int)$pdo->lastInsertId();
+    }
 
     // 2. Insert Regular Size Recipe Lines into product_ingredients
     $piStmt = $pdo->prepare("
@@ -145,11 +275,13 @@ try {
 
     echo json_encode([
         'ok'             => true,
-        'message'        => "Menu item '{$name}' created successfully!",
+        'message'        => $isUpdate ? "Menu item '{$name}' updated successfully!" : "Menu item '{$name}' created successfully!",
         'product_id'     => $productId,
         'name'           => $name,
         'price_small'    => $price_small,
         'price_large'    => $price_large,
+        'image_path'     => $finalImagePath,
+        'is_update'      => $isUpdate,
         'recipe_counts'  => [
             'small' => $insertedSmall,
             'large' => $insertedLarge,
@@ -159,6 +291,11 @@ try {
 } catch (Exception $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
+    }
+    // Clean up newly uploaded image if database commit failed
+    if ($uploadedImagePath) {
+        $targetFile = __DIR__ . '/../assets/' . ltrim($uploadedImagePath, '/');
+        if (is_file($targetFile)) @unlink($targetFile);
     }
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Database transaction failed: ' . $e->getMessage()]);

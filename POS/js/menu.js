@@ -43,6 +43,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             id:         item.id,
             name:       item.name,
             icon:       guessIcon(item.name, key),
+            imagePath:  item.image_path || '',
             priceSmall: parseFloat(item.price_small),
             priceLarge: parseFloat(item.price_large),
             stock:      parseInt(item.stock, 10) || 0
@@ -116,9 +117,14 @@ function renderGrid() {
     grid.innerHTML = items.map(item => {
         const price   = currentSize === 'small' ? item.priceSmall : item.priceLarge;
         const soldOut = item.stock <= 0;
+        const rawPath = (item.imagePath || '').replace(/^\/+/, '');
+        const imgSrc = rawPath.startsWith('assets/') ? `../${rawPath}` : `../assets/${rawPath}`;
+        const imgHtml = item.imagePath
+            ? `<img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(item.name)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.onerror=null;this.parentElement.innerHTML='<span>${item.icon}</span>'"/>`
+            : `<span>${item.icon}</span>`;
         return `
         <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`}>
-            <div class="item-img"><span>${item.icon}</span></div>
+            <div class="item-img">${imgHtml}</div>
             <div class="item-name">${escapeHtml(item.name)}</div>
             ${soldOut
                 ? `<div class="item-soldout">Sold out</div>`

@@ -30,17 +30,25 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
         extend: {
           colors: {
             espresso: {
-              DEFAULT: '#150E1B',
-              surface: '#1E1426',
-              card: '#271A31',
-              border: '#382546',
+              DEFAULT: '#241A2E',
+              deep: '#181120',
+              mid: '#2F2238',
             },
             caramel: {
               DEFAULT: '#C97B3D',
-              light: '#EAA869',
+              light: '#E6A25C',
               dark: '#A65F29',
             },
-            cream: '#FAF5EE',
+            latte: '#EFE0CC',
+            cream: '#FBF3E9',
+            'accent-lt': '#FCEFE1',
+            cafe: {
+              text: '#2B2130',
+              muted: '#8B7C88',
+              border: '#EFE0CC',
+              bg: '#FBF3E9',
+              card: '#FFFFFF',
+            }
           }
         }
       }
@@ -124,6 +132,7 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
                 'price_small' => $p['price_small'],
                 'price_large' => $p['price_large'],
                 'category_id' => $p['category_id'],
+                'image_path'  => $p['image_path'] ?? '',
               ]), ENT_QUOTES);
             ?>
             <tr class="menu-row" id="prow-<?= $p['id'] ?>"
@@ -131,12 +140,22 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
                 data-status="<?= $available ? 'available' : 'unavailable' ?>"
                 data-name="<?= htmlspecialchars(strtolower($p['name'])) ?>">
               <td>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <div style="width:36px;height:36px;border-radius:10px;background:var(--accent-lt);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0"><?= $icon ?></div>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <?php if (!empty($p['image_path'])): 
+                    $cleanedPath = ltrim($p['image_path'], '/');
+                    $rowImgSrc = str_starts_with($cleanedPath, 'assets/') ? ('../' . $cleanedPath) : ('../assets/' . $cleanedPath);
+                  ?>
+                    <div style="width:42px;height:42px;border-radius:10px;overflow:hidden;border:1.5px solid #D8C7B5;background:#FAF5EE;flex-shrink:0;display:flex;align-items:center;justify-content:center">
+                      <img src="<?= htmlspecialchars($rowImgSrc) ?>" alt="<?= htmlspecialchars($p['name']) ?>" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+                      <span style="display:none;font-size:18px"><?= $icon ?></span>
+                    </div>
+                  <?php else: ?>
+                    <div style="width:42px;height:42px;border-radius:10px;background:#F8ECDC;border:1.5px solid #D8C7B5;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><?= $icon ?></div>
+                  <?php endif; ?>
                   <div>
-                    <div class="prod-name" style="font-weight:600;color:var(--espresso)"><?= htmlspecialchars($p['name']) ?></div>
+                    <div class="prod-name" style="font-weight:700;color:#1E1224;font-size:13.5px"><?= htmlspecialchars($p['name']) ?></div>
                     <?php if (!empty($p['description'])): ?>
-                      <div style="font-size:11.5px;color:var(--text-muted)"><?= htmlspecialchars($p['description']) ?></div>
+                      <div style="font-size:11.5px;color:#52434F;margin-top:2px"><?= htmlspecialchars($p['description']) ?></div>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -180,132 +199,90 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
   </div>
 </div>
 
-<!-- Edit modal -->
-<div class="modal-overlay" id="edit-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>✏️ Edit Menu Item</h3>
-      <button class="modal-close" onclick="closeEdit()">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="e-id"/>
-      <div class="field-group">
-        <label class="field-label">Category</label>
-        <select class="field-select" id="e-category">
-          <?php foreach ($categories as $cat): ?>
-            <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['category_name']) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Drink Name</label>
-        <input class="field-input" type="text" id="e-name"/>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Description</label>
-        <textarea class="field-textarea" id="e-desc"></textarea>
-      </div>
-      <div class="field-row">
-        <div class="field-group">
-          <label class="field-label">Regular Price (₱)</label>
-          <input class="field-input" type="number" id="e-price-small" step="0.01" min="0"/>
-        </div>
-        <div class="field-group">
-          <label class="field-label">Up Size Price (₱)</label>
-          <input class="field-input" type="number" id="e-price-large" step="0.01" min="0"/>
-        </div>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-mcancel" onclick="closeEdit()">Cancel</button>
-      <button class="btn-msave" onclick="saveEdit()">
-    💾 Save Changes
-</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Progressive Multi-Step "Add Item" Modal (Tailwind CSS) ── -->
-<div id="progressive-add-modal" class="fixed inset-0 z-[250] flex items-center justify-center bg-black/75 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
-  <div id="progressive-modal-dialog" class="bg-[#1C1224] border border-[#3A244A] rounded-3xl w-full max-w-2xl mx-4 overflow-hidden shadow-2xl transform scale-95 transition-all duration-200 flex flex-col max-h-[90vh]">
+<!-- ── Progressive Multi-Step "Add / Edit Item" Modal (Warm Cafe Theme) ── -->
+<div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="fixed inset-0 z-[250] flex items-center justify-center bg-[#181120]/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
+  <div id="progressive-modal-dialog" class="bg-white border-[1.5px] border-[#DFCBB5] rounded-3xl w-full max-w-2xl mx-4 overflow-hidden shadow-2xl transform scale-95 transition-all duration-200 flex flex-col max-h-[90vh]">
     
+    <!-- Hidden input to store item ID in edit mode -->
+    <input type="hidden" id="prog-id" value=""/>
+
     <!-- Modal Header -->
-    <div class="px-6 py-4 bg-[#23152E] border-b border-[#352044] flex items-center justify-between shrink-0">
+    <div class="px-6 py-4 bg-[#F8EFE3] border-b-[1.5px] border-[#DFCBB5] flex items-center justify-between shrink-0">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#EAA869] to-[#C97B3D] flex items-center justify-center text-white font-bold text-lg shadow-md shadow-[#C97B3D]/25">
+        <div id="prog-modal-badge" class="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#A85A1E] to-[#8B4513] flex items-center justify-center text-white font-bold text-lg shadow-md shadow-[#8B4513]/25">
           ✨
         </div>
         <div>
-          <h3 class="font-bold text-base text-white tracking-tight">Add Menu Item &amp; Recipe</h3>
-          <p class="text-[11px] text-slate-400">Step-by-step beverage identity and recipe composition</p>
+          <h3 id="prog-modal-title" class="font-bold text-base text-[#1E1224] tracking-tight font-display">Add Menu Item &amp; Recipe</h3>
+          <p id="prog-modal-subtitle" class="text-[11px] text-[#52434F] font-medium">Step-by-step beverage identity, photo, and recipe composition</p>
         </div>
       </div>
-      <button onclick="requestCloseProgressiveModal()" class="w-8 h-8 rounded-xl bg-[#2A1A37] hover:bg-[#382449] text-slate-400 hover:text-white flex items-center justify-center text-sm transition" title="Close (Esc)">✕</button>
+      <button type="button" onclick="requestCloseProgressiveModal()" class="w-8 h-8 rounded-full bg-[#F5E6D3] hover:bg-[#EBD6BE] text-[#7A3A10] flex items-center justify-center text-sm font-bold transition" title="Close (Esc)">✕</button>
     </div>
 
     <!-- Responsive Visual Step Tracker -->
-    <div class="px-6 py-3.5 bg-[#170E1E] border-b border-[#2E1C3A] shrink-0">
+    <div class="px-6 py-3.5 bg-[#FAF6EE] border-b-[1.5px] border-[#DFCBB5] shrink-0">
       <div class="flex items-center justify-between relative max-w-lg mx-auto">
         <!-- Connecting Lines -->
-        <div class="absolute left-6 right-6 top-4 h-[2px] bg-[#331F41] -z-0">
-          <div id="step-progress-bar" class="h-full bg-[#C97B3D] transition-all duration-300 w-0"></div>
+        <div class="absolute left-6 right-6 top-4 h-[2px] bg-[#DFCBB5] -z-0">
+          <div id="step-progress-bar" class="h-full bg-[#8B4513] transition-all duration-300 w-0"></div>
         </div>
 
         <!-- Step 1 Indicator -->
         <div class="flex flex-col items-center relative z-10 cursor-pointer" onclick="goToStep(1)">
-          <div id="step-ind-1" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#C97B3D] text-white ring-4 ring-[#C97B3D]/25 shadow-lg transition-all">
+          <div id="step-ind-1" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#8B4513] text-white ring-4 ring-[#8B4513]/20 shadow-md transition-all">
             1
           </div>
-          <span id="step-lbl-1" class="text-[11px] font-bold text-amber-200 mt-1.5 transition-colors">1. Item Identity</span>
+          <span id="step-lbl-1" class="text-[11px] font-bold text-[#7A3A10] mt-1.5 transition-colors">1. Item Identity</span>
         </div>
 
         <!-- Step 2 Indicator -->
         <div class="flex flex-col items-center relative z-10 cursor-pointer" onclick="goToStep(2)">
-          <div id="step-ind-2" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#251731] text-slate-400 border border-[#3E2850] transition-all">
+          <div id="step-ind-2" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-white text-[#52434F] border-2 border-[#DFCBB5] transition-all">
             2
           </div>
-          <span id="step-lbl-2" class="text-[11px] font-semibold text-slate-400 mt-1.5 transition-colors">2. Regular Recipe</span>
+          <span id="step-lbl-2" class="text-[11px] font-semibold text-[#52434F] mt-1.5 transition-colors">2. Regular Recipe</span>
         </div>
 
         <!-- Step 3 Indicator -->
         <div class="flex flex-col items-center relative z-10 cursor-pointer" onclick="goToStep(3)">
-          <div id="step-ind-3" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#251731] text-slate-400 border border-[#3E2850] transition-all">
+          <div id="step-ind-3" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-white text-[#52434F] border-2 border-[#DFCBB5] transition-all">
             3
           </div>
-          <span id="step-lbl-3" class="text-[11px] font-semibold text-slate-400 mt-1.5 transition-colors">3. Upsize Recipe</span>
+          <span id="step-lbl-3" class="text-[11px] font-semibold text-[#52434F] mt-1.5 transition-colors">3. Upsize Recipe</span>
         </div>
       </div>
     </div>
 
     <!-- Scrollable Modal Body: Step Panels -->
-    <div class="p-6 overflow-y-auto flex-1 space-y-4">
+    <div class="p-6 overflow-y-auto flex-1 space-y-4 bg-white">
 
       <!-- Inline Validation Banner -->
-      <div id="prog-error-banner" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+      <div id="prog-error-banner" class="hidden p-3 rounded-xl bg-[#FDECEA] border border-[#FBDCD8] text-[#C62828] text-xs flex items-center gap-2 font-semibold">
         <span>⚠️</span>
         <span id="prog-error-text">Please fill in all required fields before continuing.</span>
       </div>
 
       <!-- ═══════════════════════════════════════════════════════════ -->
-      <!-- STEP 1: ITEM IDENTITY                                       -->
+      <!-- STEP 1: ITEM IDENTITY & PHOTO                                -->
       <!-- ═══════════════════════════════════════════════════════════ -->
       <div id="step-panel-1" class="step-panel space-y-4 transition-all duration-200">
         <div>
-          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-            Drink / Item Name <span class="text-rose-400">*</span>
+          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
+            Drink / Item Name <span class="text-rose-600">*</span>
           </label>
           <input type="text" id="prog-name" placeholder="e.g. Spanish Iced Latte" oninput="validateStep1Live()"
-                 class="w-full px-3.5 py-2.5 text-xs bg-[#24172E] border border-[#3A244A] focus:border-[#C97B3D] rounded-xl text-white placeholder-slate-500 focus:outline-none transition"/>
-          <span id="prog-name-err" class="text-[11px] text-rose-400 mt-1 hidden block"></span>
+                 class="w-full px-3.5 py-2.5 text-xs bg-white border-[1.5px] border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] placeholder-[#7A6B77] focus:outline-none transition font-medium"/>
+          <span id="prog-name-err" class="text-[11px] text-[#C62828] font-bold mt-1 hidden block"></span>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Category <span class="text-rose-400">*</span>
+            <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
+              Category <span class="text-rose-600">*</span>
             </label>
             <select id="prog-category" onchange="validateStep1Live()"
-                    class="w-full px-3.5 py-2.5 text-xs bg-[#24172E] border border-[#3A244A] focus:border-[#C97B3D] rounded-xl text-white focus:outline-none transition">
+                    class="w-full px-3.5 py-2.5 text-xs bg-white border-[1.5px] border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] font-medium focus:outline-none transition">
               <option value="">Select a Category…</option>
               <?php foreach ($categories as $cat): ?>
                 <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['category_name']) ?></option>
@@ -314,13 +291,13 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
           </div>
 
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
               Quick Icon / Emoji
             </label>
             <div class="flex items-center gap-1.5 flex-wrap" id="icon-picker">
               <?php foreach (['☕','🧊','🧋','🍵','🥤','🥐','🍰','🍹'] as $emoji): ?>
               <button type="button" onclick="selectDrinkEmoji('<?= $emoji ?>', this)"
-                      class="emoji-btn w-9 h-9 rounded-xl bg-[#24172E] border border-[#3A244A] hover:border-[#C97B3D] text-base flex items-center justify-center transition <?= $emoji === '☕' ? 'border-[#C97B3D] bg-[#331F40]' : '' ?>">
+                      class="emoji-btn w-9 h-9 rounded-xl bg-[#FAF5EE] border border-[#DFCBB5] hover:border-[#8B4513] text-base flex items-center justify-center transition <?= $emoji === '☕' ? 'border-2 border-[#8B4513] bg-[#F8ECDC] shadow-sm' : '' ?>">
                 <?= $emoji ?>
               </button>
               <?php endforeach; ?>
@@ -329,12 +306,58 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
           </div>
         </div>
 
+        <!-- Item Image Drag-and-Drop & Browse Section -->
         <div>
-          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
+            Item Photo <span class="text-[11px] font-normal text-[#52434F] lowercase">(optional image for POS &amp; menu)</span>
+          </label>
+          <input type="file" id="prog-image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" onchange="previewProductImage(this)"/>
+          <input type="hidden" id="prog-existing-image" value=""/>
+          <input type="hidden" id="prog-remove-image" value="0"/>
+
+          <div id="prog-image-dropzone" onclick="triggerImageBrowse()"
+               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)"
+               class="relative border-2 border-dashed border-[#DFCBB5] hover:border-[#8B4513] bg-[#FAF6EF] hover:bg-[#F5EDE3] rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[110px] group">
+            
+            <!-- Placeholder state -->
+            <div id="prog-img-placeholder" class="flex flex-col items-center gap-1.5 py-1">
+              <div class="w-10 h-10 rounded-full bg-[#F5E6D3] text-[#7A3A10] flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                📷
+              </div>
+              <div class="text-xs font-bold text-[#1E1224]">
+                Click to browse or drag &amp; drop item photo
+              </div>
+              <div class="text-[11px] text-[#52434F] font-medium">
+                PNG, JPG, WEBP, or GIF up to 5MB
+              </div>
+            </div>
+
+            <!-- Preview state -->
+            <div id="prog-img-preview-container" class="hidden w-full flex items-center justify-between gap-3 p-1">
+              <div class="flex items-center gap-3">
+                <div class="w-14 h-14 rounded-xl overflow-hidden border border-[#DFCBB5] bg-white flex-shrink-0 shadow-sm">
+                  <img id="prog-img-preview" src="" alt="Preview" class="w-full h-full object-cover"/>
+                </div>
+                <div class="text-left">
+                  <div id="prog-img-filename" class="text-xs font-bold text-[#1E1224] truncate max-w-[220px]">item-photo.jpg</div>
+                  <div id="prog-img-filesize" class="text-[11px] text-[#52434F] font-medium">Ready to save</div>
+                </div>
+              </div>
+              <button type="button" onclick="event.stopPropagation(); clearProductImage();"
+                      class="px-3 py-1.5 rounded-xl bg-[#FDECEA] hover:bg-[#FBDCD8] text-[#C62828] text-xs font-bold border border-[#F8CBC5] flex items-center gap-1.5 transition shrink-0 shadow-sm"
+                      title="Remove photo">
+                <span>🗑️</span><span>Remove</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#1E1224] mb-1.5">
             Description &amp; Notes
           </label>
           <textarea id="prog-desc" rows="3" placeholder="Describe the drink, roast profile, or preparation notes…"
-                    class="w-full px-3.5 py-2.5 text-xs bg-[#24172E] border border-[#3A244A] focus:border-[#C97B3D] rounded-xl text-white placeholder-slate-500 focus:outline-none transition"></textarea>
+                    class="w-full px-3.5 py-2.5 text-xs bg-white border-[1.5px] border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] placeholder-[#7A6B77] focus:outline-none transition font-medium"></textarea>
         </div>
       </div>
 
@@ -342,25 +365,25 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
       <!-- STEP 2: REGULAR SIZE & RECIPE                               -->
       <!-- ═══════════════════════════════════════════════════════════ -->
       <div id="step-panel-2" class="step-panel hidden space-y-4 transition-all duration-200">
-        <div class="bg-[#24172E] border border-[#3A244A] p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="bg-[#F8EFE3] border-[1.5px] border-[#DFCBB5] p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <span class="text-xs font-bold text-white block">Regular Size (12oz) Base Price</span>
-            <span class="text-[11px] text-slate-400">Customer retail ring-up price at counter</span>
+            <span class="text-xs font-bold text-[#1E1224] block">Regular Size (12oz) Base Price</span>
+            <span class="text-[11px] text-[#52434F] font-medium">Customer retail ring-up price at counter</span>
           </div>
           <div class="relative w-full sm:w-44">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-amber-300 font-bold text-xs pointer-events-none">₱</span>
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[#7A3A10] font-bold text-xs pointer-events-none"></span>
             <input type="number" step="0.01" min="0.01" id="prog-price-small" placeholder="0.00" oninput="validateStep2Live()"
-                   class="w-full pl-7 pr-3 py-2 text-xs bg-[#1A1022] border border-[#482D5C] focus:border-[#C97B3D] rounded-xl text-amber-200 font-mono font-bold focus:outline-none transition"/>
+                   class="w-full pl-7 pr-3 py-2 text-xs bg-white border border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] font-mono font-bold focus:outline-none transition"/>
           </div>
         </div>
 
-        <div class="border-t border-[#2E1C3A] pt-3">
+        <div class="border-t-[1.5px] border-[#DFCBB5] pt-3">
           <div class="flex items-center justify-between mb-2">
             <div>
-              <h4 class="text-xs font-bold text-white">Regular Recipe Composition</h4>
-              <p class="text-[10.5px] text-slate-400">Ingredients automatically deducted when Regular size is ordered</p>
+              <h4 class="text-xs font-bold text-[#1E1224]">Regular Recipe Composition</h4>
+              <p class="text-[10.5px] text-[#52434F] font-medium">Ingredients automatically deducted when Regular size is ordered</p>
             </div>
-            <button type="button" onclick="addRecipeRow('small')" class="px-2.5 py-1.5 rounded-lg bg-[#2E1A3D] hover:bg-[#3D2352] text-[#EAA869] text-[11px] font-bold border border-[#4E2B6A] transition flex items-center gap-1">
+            <button type="button" onclick="addRecipeRow('small')" class="px-2.5 py-1.5 rounded-lg bg-[#F8ECDC] hover:bg-[#EEDBCA] text-[#7A3A10] text-[11px] font-bold border border-[#DFCBB5] transition flex items-center gap-1 shadow-sm">
               <span>➕</span><span>Add Ingredient</span>
             </button>
           </div>
@@ -375,29 +398,29 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
       <!-- STEP 3: UPSIZE & RECIPE                                     -->
       <!-- ═══════════════════════════════════════════════════════════ -->
       <div id="step-panel-3" class="step-panel hidden space-y-4 transition-all duration-200">
-        <div class="bg-[#24172E] border border-[#3A244A] p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="bg-[#F8EFE3] border-[1.5px] border-[#DFCBB5] p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <span class="text-xs font-bold text-white block">Upsize / Large (16oz - 22oz) Base Price</span>
-            <span class="text-[11px] text-slate-400">Retail price when customer requests an upsized drink</span>
+            <span class="text-xs font-bold text-[#1E1224] block">Upsize / Large (16oz - 22oz) Base Price</span>
+            <span class="text-[11px] text-[#52434F] font-medium">Retail price when customer requests an upsized drink</span>
           </div>
           <div class="relative w-full sm:w-44">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-amber-300 font-bold text-xs pointer-events-none">₱</span>
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[#7A3A10] font-bold text-xs pointer-events-none">₱</span>
             <input type="number" step="0.01" min="0.01" id="prog-price-large" placeholder="0.00" oninput="validateStep3Live()"
-                   class="w-full pl-7 pr-3 py-2 text-xs bg-[#1A1022] border border-[#482D5C] focus:border-[#C97B3D] rounded-xl text-amber-200 font-mono font-bold focus:outline-none transition"/>
+                   class="w-full pl-7 pr-3 py-2 text-xs bg-white border border-[#DFCBB5] focus:border-[#8B4513] focus:ring-2 focus:ring-[#8B4513]/20 rounded-xl text-[#1E1224] font-mono font-bold focus:outline-none transition"/>
           </div>
         </div>
 
-        <div class="border-t border-[#2E1C3A] pt-3">
+        <div class="border-t-[1.5px] border-[#DFCBB5] pt-3">
           <div class="flex items-center justify-between mb-2">
             <div>
-              <h4 class="text-xs font-bold text-white">Upsize Recipe Composition</h4>
-              <p class="text-[10.5px] text-slate-400">Ingredients deducted when Upsize is ordered</p>
+              <h4 class="text-xs font-bold text-[#1E1224]">Upsize Recipe Composition</h4>
+              <p class="text-[10.5px] text-[#52434F] font-medium">Ingredients deducted when Upsize is ordered</p>
             </div>
             <div class="flex items-center gap-2">
-              <button type="button" onclick="copyRecipeFromRegular()" class="px-2.5 py-1.5 rounded-lg bg-[#C97B3D]/15 hover:bg-[#C97B3D]/25 text-[#EAA869] text-[11px] font-bold border border-[#C97B3D]/30 transition flex items-center gap-1 shadow-sm">
+              <button type="button" onclick="copyRecipeFromRegular()" class="px-2.5 py-1.5 rounded-lg bg-[#FAF6EE] hover:bg-[#EEDBCA] text-[#7A3A10] text-[11px] font-bold border border-[#DFCBB5] transition flex items-center gap-1 shadow-sm">
                 <span>⚡</span><span>Copy from Regular</span>
               </button>
-              <button type="button" onclick="addRecipeRow('large')" class="px-2.5 py-1.5 rounded-lg bg-[#2E1A3D] hover:bg-[#3D2352] text-slate-300 hover:text-white text-[11px] font-bold border border-[#4E2B6A] transition flex items-center gap-1">
+              <button type="button" onclick="addRecipeRow('large')" class="px-2.5 py-1.5 rounded-lg bg-[#F8ECDC] hover:bg-[#EEDBCA] text-[#7A3A10] text-[11px] font-bold border border-[#DFCBB5] transition flex items-center gap-1 shadow-sm">
                 <span>➕</span><span>Add</span>
               </button>
             </div>
@@ -412,21 +435,21 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
     </div>
 
     <!-- Modal Footer & Step Navigation Controls -->
-    <div class="px-6 py-4 bg-[#23152E] border-t border-[#352044] flex items-center justify-between shrink-0">
-      <button type="button" onclick="requestCloseProgressiveModal()" class="px-4 py-2 rounded-xl bg-[#2A1A37] hover:bg-[#372347] text-slate-400 hover:text-white text-xs font-semibold transition">
+    <div class="px-6 py-4 bg-[#F8EFE3] border-t-[1.5px] border-[#DFCBB5] flex items-center justify-between shrink-0">
+      <button type="button" onclick="requestCloseProgressiveModal()" class="px-4 py-2 rounded-xl bg-white hover:bg-[#FAF6EE] text-[#382836] hover:text-[#7A3A10] text-xs font-bold border border-[#DFCBB5] transition">
         Cancel
       </button>
 
       <div class="flex items-center gap-2.5">
-        <button type="button" id="prog-btn-back" onclick="prevStep()" class="hidden px-4 py-2 rounded-xl bg-[#2A1A37] hover:bg-[#372347] text-slate-200 text-xs font-bold transition flex items-center gap-1.5">
+        <button type="button" id="prog-btn-back" onclick="prevStep()" class="hidden px-4 py-2 rounded-xl bg-white hover:bg-[#FAF6EE] text-[#1E1224] text-xs font-bold border border-[#DFCBB5] transition flex items-center gap-1.5">
           <span>←</span><span>Back</span>
         </button>
 
-        <button type="button" id="prog-btn-next" onclick="nextStep()" class="px-5 py-2 rounded-xl bg-[#C97B3D] hover:bg-[#D98B4D] text-white text-xs font-bold transition shadow-md shadow-[#C97B3D]/25 flex items-center gap-1.5">
+        <button type="button" id="prog-btn-next" onclick="nextStep()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-[#8B4513] to-[#241A2E] hover:opacity-95 text-white text-xs font-bold transition shadow-md shadow-[#8B4513]/25 flex items-center gap-1.5">
           <span>Next</span><span>→</span>
         </button>
 
-        <button type="button" id="prog-btn-save" onclick="submitProgressiveItem()" class="hidden px-5 py-2 rounded-xl bg-gradient-to-r from-[#C97B3D] to-[#A65F29] hover:from-[#D98B4D] hover:to-[#B76E36] text-white text-xs font-bold transition shadow-lg shadow-[#C97B3D]/30 flex items-center gap-1.5">
+        <button type="button" id="prog-btn-save" onclick="submitProgressiveItem()" class="hidden px-5 py-2 rounded-xl bg-gradient-to-r from-[#8B4513] to-[#241A2E] hover:opacity-95 text-white text-xs font-bold transition shadow-lg shadow-[#8B4513]/30 flex items-center gap-1.5">
           <span id="save-spinner" class="hidden animate-spin text-xs">⏳</span>
           <span id="save-label">💾 Save Item</span>
         </button>
@@ -465,54 +488,178 @@ window.EXISTING_PRODUCT_NAMES = <?= json_encode($existingProductNames) ?>;
 
 let currentStep = 1;
 let isDirty = false;
+let editingOriginalName = '';
 
-function openProgressiveAddModal() {
+function openProgressiveModal(mode = 'add', itemData = null) {
   currentStep = 1;
   isDirty = false;
-
-  // Reset Step 1 fields
-  document.getElementById('prog-name').value = '';
-  document.getElementById('prog-category').value = '';
-  document.getElementById('prog-desc').value = '';
-  document.getElementById('prog-icon').value = '☕';
-  document.getElementById('prog-name-err').classList.add('hidden');
-  document.querySelectorAll('#icon-picker .emoji-btn').forEach((b, i) => {
-    b.classList.toggle('border-[#C97B3D]', i === 0);
-    b.classList.toggle('bg-[#331F40]', i === 0);
-  });
-
-  // Reset Step 2 fields
-  document.getElementById('prog-price-small').value = '';
-  document.getElementById('prog-recipe-small-rows').innerHTML = '';
-  addRecipeRow('small'); // add 1 blank row by default
-
-  // Reset Step 3 fields
-  document.getElementById('prog-price-large').value = '';
-  document.getElementById('prog-recipe-large-rows').innerHTML = '';
-  addRecipeRow('large'); // add 1 blank row by default
-
   hideProgError();
+
+  const idInput = document.getElementById('prog-id');
+  const modalTitle = document.getElementById('prog-modal-title');
+  const modalSubtitle = document.getElementById('prog-modal-subtitle');
+  const modalBadge = document.getElementById('prog-modal-badge');
+  const saveLabel = document.getElementById('save-label');
+  const nameErr = document.getElementById('prog-name-err');
+  if (nameErr) nameErr.classList.add('hidden');
+
+  const imgInput = document.getElementById('prog-image-input');
+  const existingImgInput = document.getElementById('prog-existing-image');
+  const removeImgInput = document.getElementById('prog-remove-image');
+  const placeholderEl = document.getElementById('prog-img-placeholder');
+  const previewContainerEl = document.getElementById('prog-img-preview-container');
+  const previewImg = document.getElementById('prog-img-preview');
+  const filenameEl = document.getElementById('prog-img-filename');
+  const filesizeEl = document.getElementById('prog-img-filesize');
+
+  if (imgInput) imgInput.value = '';
+  if (removeImgInput) removeImgInput.value = '0';
+
+  if (mode === 'edit' && itemData) {
+    idInput.value = itemData.id;
+    editingOriginalName = (itemData.name || '').trim();
+    if (modalTitle) modalTitle.textContent = 'Edit Menu Item & Recipe';
+    if (modalSubtitle) modalSubtitle.textContent = 'Update beverage details, photo, and recipe composition';
+    if (modalBadge) modalBadge.textContent = '✏️';
+    if (saveLabel) saveLabel.textContent = '💾 Save Changes';
+
+    // Populate Step 1 fields
+    document.getElementById('prog-name').value = itemData.name || '';
+    document.getElementById('prog-category').value = itemData.category_id || '';
+    document.getElementById('prog-desc').value = itemData.description || '';
+
+    // Handle existing image preview
+    if (existingImgInput) existingImgInput.value = itemData.image_path || '';
+    if (itemData.image_path) {
+      if (placeholderEl) placeholderEl.classList.add('hidden');
+      if (previewContainerEl) previewContainerEl.classList.remove('hidden');
+      const raw = (itemData.image_path || '').replace(/^\/+/, '');
+      const imgSrc = raw.startsWith('assets/') ? ('../' + raw) : ('../assets/' + raw);
+      if (previewImg) previewImg.src = imgSrc;
+      if (filenameEl) filenameEl.textContent = itemData.image_path.split('/').pop() || 'Current Item Image';
+      if (filesizeEl) filesizeEl.textContent = 'Existing image loaded';
+    } else {
+      if (placeholderEl) placeholderEl.classList.remove('hidden');
+      if (previewContainerEl) previewContainerEl.classList.add('hidden');
+      if (previewImg) previewImg.src = '';
+    }
+
+    // Choose appropriate emoji based on category or default
+    const catIcons = { '1': '🧊', '2': '☕', '3': '🧋', '4': '🍹' };
+    const matchedEmoji = catIcons[String(itemData.category_id)] || '☕';
+    selectDrinkEmoji(matchedEmoji);
+
+    // Populate Step 2 & 3 prices
+    document.getElementById('prog-price-small').value = itemData.price_small ? parseFloat(itemData.price_small).toFixed(2) : '';
+    document.getElementById('prog-price-large').value = itemData.price_large ? parseFloat(itemData.price_large).toFixed(2) : '';
+
+    // Show loading state for recipe rows
+    const smallContainer = document.getElementById('prog-recipe-small-rows');
+    const largeContainer = document.getElementById('prog-recipe-large-rows');
+    if (smallContainer) smallContainer.innerHTML = '<div class="py-3 text-center text-xs text-[#52434F] font-semibold">⏳ Loading recipe ingredients…</div>';
+    if (largeContainer) largeContainer.innerHTML = '<div class="py-3 text-center text-xs text-[#52434F] font-semibold">⏳ Loading recipe ingredients…</div>';
+
+    // Fetch existing recipe from api/recipe.php
+    fetch(`../api/recipe.php?product_id=${itemData.id}`)
+      .then(r => r.json())
+      .then(res => {
+        if (smallContainer) smallContainer.innerHTML = '';
+        if (largeContainer) largeContainer.innerHTML = '';
+
+        if (res.ok && res.recipe) {
+          const smallList = res.recipe.small || [];
+          const largeList = res.recipe.large || [];
+
+          if (smallList.length > 0) {
+            smallList.forEach(r => addRecipeRow('small', r.ingredient_id, r.qty_used, r.unit));
+          } else {
+            addRecipeRow('small');
+          }
+
+          if (largeList.length > 0) {
+            largeList.forEach(r => addRecipeRow('large', r.ingredient_id, r.qty_used, r.unit));
+          } else {
+            addRecipeRow('large');
+          }
+        } else {
+          addRecipeRow('small');
+          addRecipeRow('large');
+        }
+        isDirty = false;
+      })
+      .catch(() => {
+        if (smallContainer) smallContainer.innerHTML = '';
+        if (largeContainer) largeContainer.innerHTML = '';
+        addRecipeRow('small');
+        addRecipeRow('large');
+        isDirty = false;
+      });
+
+  } else {
+    // Add mode
+    idInput.value = '';
+    editingOriginalName = '';
+    if (modalTitle) modalTitle.textContent = 'Add Menu Item & Recipe';
+    if (modalSubtitle) modalSubtitle.textContent = 'Step-by-step beverage identity, photo, and recipe composition';
+    if (modalBadge) modalBadge.textContent = '✨';
+    if (saveLabel) saveLabel.textContent = '💾 Save Item';
+
+    // Reset Step 1 fields
+    document.getElementById('prog-name').value = '';
+    document.getElementById('prog-category').value = '';
+    document.getElementById('prog-desc').value = '';
+    selectDrinkEmoji('☕');
+
+    // Reset image fields
+    if (existingImgInput) existingImgInput.value = '';
+    if (placeholderEl) placeholderEl.classList.remove('hidden');
+    if (previewContainerEl) previewContainerEl.classList.add('hidden');
+    if (previewImg) previewImg.src = '';
+
+    // Reset Step 2 fields
+    document.getElementById('prog-price-small').value = '';
+    const smallContainer = document.getElementById('prog-recipe-small-rows');
+    if (smallContainer) smallContainer.innerHTML = '';
+    addRecipeRow('small');
+
+    // Reset Step 3 fields
+    document.getElementById('prog-price-large').value = '';
+    const largeContainer = document.getElementById('prog-recipe-large-rows');
+    if (largeContainer) largeContainer.innerHTML = '';
+    addRecipeRow('large');
+
+    isDirty = false;
+  }
+
   goToStep(1);
 
   const modal = document.getElementById('progressive-add-modal');
   modal.classList.remove('opacity-0', 'pointer-events-none');
   modal.querySelector('#progressive-modal-dialog').classList.remove('scale-95');
-  document.getElementById('prog-name').focus();
+  setTimeout(() => document.getElementById('prog-name').focus(), 60);
 }
 
-// Fallback for any legacy onclick="openAdd()"
-function openAdd() {
-  openProgressiveAddModal();
-}
-function closeAdd() {
-  closeProgressiveAddModal();
-}
+// Aliases for unified invocation
+function openAdd() { openProgressiveModal('add'); }
+function openProgressiveAddModal() { openProgressiveModal('add'); }
+function openEdit(p) { openProgressiveModal('edit', p); }
+function closeAdd() { closeProgressiveAddModal(); }
+function closeEdit() { closeProgressiveAddModal(); }
 
 function closeProgressiveAddModal() {
   const modal = document.getElementById('progressive-add-modal');
-  modal.classList.add('opacity-0', 'pointer-events-none');
-  modal.querySelector('#progressive-modal-dialog').classList.add('scale-95');
+  if (modal) {
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    modal.querySelector('#progressive-modal-dialog').classList.add('scale-95');
+  }
   isDirty = false;
+  editingOriginalName = '';
+}
+
+function onProgressiveBackdropClick(e) {
+  if (e.target.id === 'progressive-add-modal') {
+    requestCloseProgressiveModal();
+  }
 }
 
 function requestCloseProgressiveModal() {
@@ -529,27 +676,128 @@ function isFormDirty() {
   const name = document.getElementById('prog-name')?.value.trim();
   const priceSmall = document.getElementById('prog-price-small')?.value.trim();
   const priceLarge = document.getElementById('prog-price-large')?.value.trim();
-  return isDirty || Boolean(name || priceSmall || priceLarge);
+  const hasImage = document.getElementById('prog-image-input')?.files?.length > 0;
+  return isDirty || Boolean(name || priceSmall || priceLarge || hasImage);
+}
+
+// ── Item Photo Handlers ──────────────────────────────────────────
+function triggerImageBrowse() {
+  const input = document.getElementById('prog-image-input');
+  if (input) input.click();
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const dropzone = document.getElementById('prog-image-dropzone');
+  if (dropzone) dropzone.classList.add('border-[#8B4513]', 'bg-[#F5EDE3]');
+}
+
+function handleDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const dropzone = document.getElementById('prog-image-dropzone');
+  if (dropzone) dropzone.classList.remove('border-[#8B4513]', 'bg-[#F5EDE3]');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const dropzone = document.getElementById('prog-image-dropzone');
+  if (dropzone) dropzone.classList.remove('border-[#8B4513]', 'bg-[#F5EDE3]');
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    const file = e.dataTransfer.files[0];
+    const input = document.getElementById('prog-image-input');
+    if (input) {
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+      } catch (err) {
+        // Fallback for older browsers
+      }
+      previewProductImage(input);
+    }
+  }
+}
+
+function previewProductImage(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (!validTypes.includes(file.type)) {
+    showProgError('Please upload a valid image file (JPEG, PNG, WEBP, or GIF).');
+    input.value = '';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showProgError('The image file is too large. Maximum size is 5MB.');
+    input.value = '';
+    return;
+  }
+
+  isDirty = true;
+  hideProgError();
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const previewImg = document.getElementById('prog-img-preview');
+    const placeholderEl = document.getElementById('prog-img-placeholder');
+    const previewContainerEl = document.getElementById('prog-img-preview-container');
+    const filenameEl = document.getElementById('prog-img-filename');
+    const filesizeEl = document.getElementById('prog-img-filesize');
+    const removeImgInput = document.getElementById('prog-remove-image');
+
+    if (previewImg) previewImg.src = e.target.result;
+    if (placeholderEl) placeholderEl.classList.add('hidden');
+    if (previewContainerEl) previewContainerEl.classList.remove('hidden');
+    if (filenameEl) filenameEl.textContent = file.name;
+    if (filesizeEl) filesizeEl.textContent = `${(file.size / 1024).toFixed(1)} KB (New)`;
+    if (removeImgInput) removeImgInput.value = '0';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearProductImage() {
+  isDirty = true;
+  const input = document.getElementById('prog-image-input');
+  if (input) input.value = '';
+  const removeImgInput = document.getElementById('prog-remove-image');
+  if (removeImgInput) removeImgInput.value = '1';
+  const existingImgInput = document.getElementById('prog-existing-image');
+  if (existingImgInput) existingImgInput.value = '';
+
+  const placeholderEl = document.getElementById('prog-img-placeholder');
+  const previewContainerEl = document.getElementById('prog-img-preview-container');
+  const previewImg = document.getElementById('prog-img-preview');
+
+  if (previewImg) previewImg.src = '';
+  if (previewContainerEl) previewContainerEl.classList.add('hidden');
+  if (placeholderEl) placeholderEl.classList.remove('hidden');
 }
 
 function selectDrinkEmoji(emoji, btn) {
-  document.getElementById('prog-icon').value = emoji;
+  const iconInput = document.getElementById('prog-icon');
+  if (iconInput) iconInput.value = emoji;
   document.querySelectorAll('#icon-picker .emoji-btn').forEach(b => {
-    b.classList.remove('border-[#C97B3D]', 'bg-[#331F40]');
+    const isSelected = btn ? (b === btn) : (b.textContent.trim() === emoji);
+    b.classList.toggle('border-[#8B4513]', isSelected);
+    b.classList.toggle('border-2', isSelected);
+    b.classList.toggle('bg-[#F8ECDC]', isSelected);
+    b.classList.toggle('shadow-sm', isSelected);
   });
-  btn.classList.add('border-[#C97B3D]', 'bg-[#331F40]');
-  isDirty = true;
+  if (btn) isDirty = true;
 }
 
 function showProgError(msg) {
   const banner = document.getElementById('prog-error-banner');
   const text = document.getElementById('prog-error-text');
-  text.textContent = msg;
-  banner.classList.remove('hidden');
+  if (text) text.textContent = msg;
+  if (banner) banner.classList.remove('hidden');
 }
 
 function hideProgError() {
-  document.getElementById('prog-error-banner').classList.add('hidden');
+  const banner = document.getElementById('prog-error-banner');
+  if (banner) banner.classList.add('hidden');
 }
 
 // ── Step Navigation & Indicators ─────────────────────────────────
@@ -586,19 +834,19 @@ function goToStep(step) {
 
     if (s < currentStep) {
       // Completed
-      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-emerald-600 text-white shadow-md transition-all';
+      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#1b5e20] text-white shadow-sm transition-all';
       ind.textContent = '✓';
-      lbl.className = 'text-[11px] font-bold text-emerald-400 mt-1.5 transition-colors';
+      lbl.className = 'text-[11px] font-bold text-[#1b5e20] mt-1.5 transition-colors';
     } else if (s === currentStep) {
       // Active
-      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#C97B3D] text-white ring-4 ring-[#C97B3D]/25 shadow-lg transition-all';
+      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#8B4513] text-white ring-4 ring-[#8B4513]/20 shadow-md transition-all';
       ind.textContent = s;
-      lbl.className = 'text-[11px] font-bold text-amber-200 mt-1.5 transition-colors';
+      lbl.className = 'text-[11px] font-bold text-[#7A3A10] mt-1.5 transition-colors';
     } else {
       // Inactive
-      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-[#251731] text-slate-400 border border-[#3E2850] transition-all';
+      ind.className = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold bg-white text-[#52434F] border-2 border-[#DFCBB5] transition-all';
       ind.textContent = s;
-      lbl.className = 'text-[11px] font-semibold text-slate-400 mt-1.5 transition-colors';
+      lbl.className = 'text-[11px] font-semibold text-[#52434F] mt-1.5 transition-colors';
     }
   }
 
@@ -637,7 +885,11 @@ function validateStep(step) {
       return false;
     }
 
-    if (window.EXISTING_PRODUCT_NAMES && window.EXISTING_PRODUCT_NAMES.includes(name.toLowerCase())) {
+    const isDuplicate = window.EXISTING_PRODUCT_NAMES &&
+      window.EXISTING_PRODUCT_NAMES.includes(name.toLowerCase()) &&
+      name.toLowerCase() !== editingOriginalName.toLowerCase();
+
+    if (isDuplicate) {
       nameErr.textContent = `A menu item named "${name}" already exists.`;
       nameErr.classList.remove('hidden');
       showProgError(`Duplicate item name: "${name}" already exists on the menu.`);
@@ -682,7 +934,11 @@ function validateStep1Live() {
   const name = document.getElementById('prog-name').value.trim();
   const nameErr = document.getElementById('prog-name-err');
   if (name.length >= 2) {
-    if (window.EXISTING_PRODUCT_NAMES && window.EXISTING_PRODUCT_NAMES.includes(name.toLowerCase())) {
+    const isDuplicate = window.EXISTING_PRODUCT_NAMES &&
+      window.EXISTING_PRODUCT_NAMES.includes(name.toLowerCase()) &&
+      name.toLowerCase() !== editingOriginalName.toLowerCase();
+
+    if (isDuplicate) {
       nameErr.textContent = `A menu item named "${name}" already exists.`;
       nameErr.classList.remove('hidden');
     } else {
@@ -711,7 +967,7 @@ function addRecipeRow(size, defaultIngId = '', defaultQty = '', defaultUnit = ''
   if (!container) return;
 
   const row = document.createElement('div');
-  row.className = 'recipe-row flex items-center gap-2 p-2.5 bg-[#1F1327] border border-[#3A244A] rounded-xl text-xs transition';
+  row.className = 'recipe-row flex items-center gap-2 p-2.5 bg-[#FAF6EF] border border-[#DFCBB5] rounded-xl text-xs transition';
 
   let optionsHtml = '<option value="">Select ingredient…</option>';
   (window.AVAILABLE_INGREDIENTS || []).forEach(ing => {
@@ -720,17 +976,17 @@ function addRecipeRow(size, defaultIngId = '', defaultQty = '', defaultUnit = ''
   });
 
   row.innerHTML = `
-    <select class="recipe-ing-select flex-1 px-3 py-1.5 bg-[#160D1D] border border-[#3F2850] focus:border-[#C97B3D] rounded-lg text-slate-100 text-xs focus:outline-none" onchange="onRecipeIngChange(this)">
+    <select class="recipe-ing-select flex-1 px-3 py-1.5 bg-white border border-[#DFCBB5] focus:border-[#8B4513] focus:ring-1 focus:ring-[#8B4513]/20 rounded-lg text-[#1E1224] font-medium text-xs focus:outline-none" onchange="onRecipeIngChange(this)">
       ${optionsHtml}
     </select>
     <div class="relative w-24 shrink-0">
-      <input type="number" step="0.01" min="0.01" placeholder="Qty" value="${defaultQty}"
-             class="recipe-qty-input w-full px-2.5 py-1.5 bg-[#160D1D] border border-[#3F2850] focus:border-[#C97B3D] rounded-lg text-white font-mono text-xs focus:outline-none" oninput="isDirty=true"/>
+      <input type="number" step="0.01" min="0.01" placeholder="Qty" value="${defaultQty !== '' ? defaultQty : ''}"
+             class="recipe-qty-input w-full px-2.5 py-1.5 bg-white border border-[#DFCBB5] focus:border-[#8B4513] focus:ring-1 focus:ring-[#8B4513]/20 rounded-lg text-[#1E1224] font-mono font-bold text-xs focus:outline-none" oninput="isDirty=true"/>
     </div>
-    <span class="recipe-unit-badge w-12 text-center text-[11px] font-mono font-bold text-[#EAA869] bg-[#2E1C3A] py-1.5 rounded-lg border border-[#442858]">
+    <span class="recipe-unit-badge w-12 text-center text-[11px] font-mono font-bold text-[#6E350E] bg-[#F5E6D3] py-1.5 rounded-lg border border-[#DFCBB5]">
       ${defaultUnit || 'unit'}
     </span>
-    <button type="button" onclick="removeRecipeRow(this)" class="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 flex items-center justify-center text-sm transition" title="Remove ingredient">
+    <button type="button" onclick="removeRecipeRow(this)" class="w-8 h-8 rounded-lg bg-[#FDECEA] hover:bg-[#FBDCD8] text-[#C62828] flex items-center justify-center text-sm transition border border-[#F8CBC5]" title="Remove ingredient">
       🗑️
     </button>
   `;
@@ -804,21 +1060,35 @@ function copyRecipeFromRegular() {
   showToast('⚡ Recipe copied from Regular (scaled ~1.25x)!', 'success');
 }
 
-// ── Submit Progressive Item Payload to Backend ───────────────────
+// ── Submit Progressive Item Payload to Backend (with Image Upload) ─
 function submitProgressiveItem() {
   if (!validateStep(1) || !validateStep(2) || !validateStep(3)) {
     return;
   }
 
-  const payload = {
-    name: document.getElementById('prog-name').value.trim(),
-    category_id: parseInt(document.getElementById('prog-category').value, 10),
-    description: document.getElementById('prog-desc').value.trim(),
-    price_small: parseFloat(document.getElementById('prog-price-small').value),
-    price_large: parseFloat(document.getElementById('prog-price-large').value),
-    recipe_small: collectRecipeRows('small'),
-    recipe_large: collectRecipeRows('large')
-  };
+  const idVal = document.getElementById('prog-id').value;
+  const isEdit = Boolean(idVal && parseInt(idVal, 10) > 0);
+
+  const fd = new FormData();
+  if (isEdit) {
+    fd.append('id', idVal);
+  }
+  fd.append('name', document.getElementById('prog-name').value.trim());
+  fd.append('category_id', document.getElementById('prog-category').value);
+  fd.append('description', document.getElementById('prog-desc').value.trim());
+  fd.append('price_small', document.getElementById('prog-price-small').value);
+  fd.append('price_large', document.getElementById('prog-price-large').value);
+  fd.append('recipe_small', JSON.stringify(collectRecipeRows('small')));
+  fd.append('recipe_large', JSON.stringify(collectRecipeRows('large')));
+
+  const imgInput = document.getElementById('prog-image-input');
+  if (imgInput && imgInput.files && imgInput.files[0]) {
+    fd.append('image', imgInput.files[0]);
+  }
+  const removeImage = document.getElementById('prog-remove-image')?.value === '1';
+  if (removeImage) {
+    fd.append('remove_image', '1');
+  }
 
   const saveBtn = document.getElementById('prog-btn-save');
   const spinner = document.getElementById('save-spinner');
@@ -826,12 +1096,11 @@ function submitProgressiveItem() {
 
   saveBtn.disabled = true;
   spinner.classList.remove('hidden');
-  label.textContent = 'Saving Item & Recipes…';
+  label.textContent = isEdit ? 'Updating Item & Recipes…' : 'Saving Item & Recipes…';
 
   fetch('../api/save_item.php', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: fd
   })
   .then(r => {
     if (!r.ok) {
@@ -842,15 +1111,15 @@ function submitProgressiveItem() {
   .then(res => {
     saveBtn.disabled = false;
     spinner.classList.add('hidden');
-    label.textContent = '💾 Save Item';
+    label.textContent = isEdit ? '💾 Save Changes' : '💾 Save Item';
 
     if (res.ok) {
       closeProgressiveAddModal();
       Swal.fire({
-        title: 'Item Created!',
-        text: `"${payload.name}" and its size recipes have been saved.`,
+        title: isEdit ? 'Item Updated!' : 'Item Created!',
+        text: `"${document.getElementById('prog-name').value.trim()}" and its size recipes have been saved.`,
         icon: 'success',
-        confirmButtonColor: '#C97B3D',
+        confirmButtonColor: '#8B4513',
         timer: 1800,
         showConfirmButton: false
       }).then(() => {
@@ -863,7 +1132,7 @@ function submitProgressiveItem() {
   .catch(err => {
     saveBtn.disabled = false;
     spinner.classList.add('hidden');
-    label.textContent = '💾 Save Item';
+    label.textContent = isEdit ? '💾 Save Changes' : '💾 Save Item';
     showProgError(err.message || 'Network error while saving item.');
   });
 }
@@ -975,107 +1244,31 @@ function doToggleAvail() {
     .finally(closeAvail);
 }
 
-// ── Edit modal ────────────────────────────────
-function openEdit(p) {
-  document.getElementById('e-id').value          = p.id;
-  document.getElementById('e-category').value    = p.category_id;
-  document.getElementById('e-name').value        = p.name;
-  document.getElementById('e-desc').value        = p.description || '';
-  document.getElementById('e-price-small').value = p.price_small;
-  document.getElementById('e-price-large').value = p.price_large;
-  document.getElementById('edit-modal').classList.add('open');
-}
-function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); }
-
-function saveEdit() {
-  const cat = document.getElementById('e-category');
-  const name = document.getElementById('e-name');
-  const priceSmall = document.getElementById('e-price-small');
-  const priceLarge = document.getElementById('e-price-large');
-
-  let valid = true;
-  let firstInvalid = null;
-
-  if (!name.value.trim()) {
-    KofeeValidator.showError(name, 'Drink name is required.');
-    valid = false;
-    if (!firstInvalid) firstInvalid = name;
-  } else {
-    KofeeValidator.clearError(name);
-  }
-
-  if (!priceSmall.value || parseFloat(priceSmall.value) <= 0) {
-    KofeeValidator.showError(priceSmall, 'Regular price must be greater than 0.');
-    valid = false;
-    if (!firstInvalid) firstInvalid = priceSmall;
-  } else {
-    KofeeValidator.clearError(priceSmall);
-  }
-
-  if (!priceLarge.value || parseFloat(priceLarge.value) <= 0) {
-    KofeeValidator.showError(priceLarge, 'Up size price must be greater than 0.');
-    valid = false;
-    if (!firstInvalid) firstInvalid = priceLarge;
-  } else {
-    KofeeValidator.clearError(priceLarge);
-  }
-
-  if (!valid && firstInvalid) {
-    firstInvalid.focus();
-    return;
-  }
-
-  const id = document.getElementById('e-id').value;
-  const btn = document.querySelector('#edit-modal .btn-msave');
-  KofeeValidator.setLoading(btn, 'Saving…');
-
-  const fd = new FormData();
-  fd.append('action',      'edit');
-  fd.append('id',          id);
-  fd.append('category_id', cat.value);
-  fd.append('name',        name.value.trim());
-  fd.append('description', document.getElementById('e-desc').value);
-  fd.append('price_small', priceSmall.value);
-  fd.append('price_large', priceLarge.value);
-  const editImage = document.getElementById('e-image').files[0];
-  if (editImage) fd.append('image', editImage);
-
-  fetch(SELF, { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(res => {
-      KofeeValidator.resetLoading(btn, '💾 Save Changes');
-      if (res.ok) {
-        closeEdit();
-        showToast('✅ Item updated!');
-        updateRowInDOM(id, {
-          name: name.value.trim(),
-          description: document.getElementById('e-desc').value,
-          price_small: priceSmall.value,
-          price_large: priceLarge.value,
-          category_id: cat.value,
-        });
-      } else {
-        showToast('⚠️ ' + res.error, 'error');
-      }
-    })
-    .catch(() => {
-      KofeeValidator.resetLoading(btn, '💾 Save Changes');
-      showToast('⚠️ Network error.', 'error');
-    });
-}
-
+// ── Helper to update row in DOM (used when updating in-place) ──
 function updateRowInDOM(id, p) {
   const row = document.getElementById('prow-' + id);
   if (!row) return;
-  const catSelect = document.getElementById('e-category');
-  const catName   = catSelect.options[catSelect.selectedIndex].textContent;
+  const catSelect = document.getElementById('prog-category');
+  let catName = '—';
+  if (catSelect) {
+    for (let i = 0; i < catSelect.options.length; i++) {
+      if (String(catSelect.options[i].value) === String(p.category_id)) {
+        catName = catSelect.options[i].textContent;
+        break;
+      }
+    }
+  }
 
-  row.querySelector('.prod-name').textContent = p.name;
-  row.querySelector('.prod-price').textContent =
-    `₱${parseFloat(p.price_small).toFixed(2)} · ₱${parseFloat(p.price_large).toFixed(2)}`;
-  row.querySelector('.muted-cell').textContent = catName;
+  const nameEl = row.querySelector('.prod-name');
+  if (nameEl) nameEl.textContent = p.name;
+  const priceEl = row.querySelector('.prod-price');
+  if (priceEl) {
+    priceEl.textContent = `₱${parseFloat(p.price_small).toFixed(2)} · ₱${parseFloat(p.price_large).toFixed(2)}`;
+  }
+  const mutedEl = row.querySelector('.muted-cell');
+  if (mutedEl) mutedEl.textContent = catName;
   row.dataset.cat  = p.category_id;
-  row.dataset.name = p.name.toLowerCase();
+  row.dataset.name = (p.name || '').toLowerCase();
 
   // Keep the Edit button's stored data current for the next click
   const editBtn = row.querySelector('.act-group button:nth-child(2)');
@@ -1147,11 +1340,20 @@ async function submitProductAction(action, id) {
 
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) { closeAdd(); closeEdit(); closeAvail(); closeAddConfirm(); }
+    if (e.target === el) {
+      if (typeof closeAvail === 'function') closeAvail();
+    }
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeEdit(); closeAvail(); closeAddConfirm(); }
+  if (e.key === 'Escape') {
+    const progModal = document.getElementById('progressive-add-modal');
+    if (progModal && !progModal.classList.contains('pointer-events-none')) {
+      requestCloseProgressiveModal();
+      return;
+    }
+    if (typeof closeAvail === 'function') closeAvail();
+  }
 });
 
 </script>

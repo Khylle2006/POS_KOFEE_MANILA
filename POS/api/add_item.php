@@ -146,10 +146,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $pdo->prepare('DELETE FROM products WHERE id = :id')->execute([':id' => $id]);
               $pdo->commit();
 
-              if (!empty($row['image_path'])) {
-                  $image_file = __DIR__ . '/../assets/' . ltrim($row['image_path'], '/');
-                  if (is_file($image_file)) @unlink($image_file);
-              }
+               if (!empty($row['image_path'])) {
+                   $rel = ltrim($row['image_path'], '/');
+                   $image_file = (strpos($rel, 'assets/') === 0) ? (__DIR__ . '/../' . $rel) : (__DIR__ . '/../assets/' . $rel);
+                   if (is_file($image_file)) @unlink($image_file);
+               }
               echo json_encode(['ok' => true, 'archived' => false, 'message' => 'Item permanently deleted.']);
           } catch (PDOException $deleteError) {
                 if (!$pdo->inTransaction()) throw $deleteError;
@@ -205,7 +206,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $pdo->prepare('DELETE FROM products WHERE id = :id AND is_deleted = 1')->execute([':id' => $id]);
         if (!empty($row['image_path'])) {
-            $image_file = __DIR__ . '/../assets/' . ltrim($row['image_path'], '/');
+            $rel = ltrim($row['image_path'], '/');
+            $image_file = (strpos($rel, 'assets/') === 0) ? (__DIR__ . '/../' . $rel) : (__DIR__ . '/../assets/' . $rel);
             if (is_file($image_file)) @unlink($image_file);
         }
         echo json_encode(['ok' => true, 'message' => 'Archived product permanently deleted.']);

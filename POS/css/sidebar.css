@@ -165,11 +165,11 @@ header#kofee-topbar {
 /* Group Headers inside Sidebar */
 .kfs-group-label,
 .nav-group-label {
-  font-size: 10px !important;
-  font-weight: 700 !important;
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
   letter-spacing: 0.12em !important;
   text-transform: uppercase !important;
-  color: rgba(251, 243, 233, 0.38) !important;
+  color: rgba(251, 243, 233, 0.65) !important;
   padding: 14px 10px 6px !important;
   display: block !important;
 }
@@ -185,8 +185,8 @@ header#kofee-topbar {
   padding: 10px 12px !important;
   border-radius: 10px !important;
   font-size: 13px !important;
-  font-weight: 500 !important;
-  color: rgba(251, 243, 233, 0.75) !important;
+  font-weight: 600 !important;
+  color: rgba(251, 243, 233, 0.90) !important;
   background: transparent !important;
   border: none !important;
   cursor: pointer !important;
