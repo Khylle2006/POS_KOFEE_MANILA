@@ -13,7 +13,7 @@ include("../api/add_item.php");
   <title>Menu Manager — Kofee POS</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="../assets/vendor/sweetalert2/sweetalert2.all.min.js"></script>
   <?php ?>
 </head>
 <body>

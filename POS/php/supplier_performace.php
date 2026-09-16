@@ -266,7 +266,7 @@ $suppliers = $suppliers_stmt->fetchAll();
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="../assets/vendor/sweetalert2/sweetalert2.all.min.js"></script>
 <script>
 document.querySelectorAll('.star-picker').forEach(picker => {
   const hidden = picker.parentElement.querySelector('input[type=hidden]');

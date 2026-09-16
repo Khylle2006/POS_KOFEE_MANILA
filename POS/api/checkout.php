@@ -35,8 +35,8 @@ try {
     $user_id = (int)$_SESSION['user_id'];
 
     $stmt = $pdo->prepare("
-        INSERT INTO orders (user_id, total_amount, payment_method, status, created_at)
-        VALUES (:uid, :total, :payment, 'pending', NOW())
+        INSERT INTO orders (user_id, total_amount, payment_method, status, stock_deducted, ingredients_deducted_at, created_at)
+        VALUES (:uid, :total, :payment, 'pending', 1, NOW(), NOW())
     ");
     $stmt->execute([
         ':uid'     => $user_id,
@@ -71,6 +71,24 @@ try {
             ':size'       => $size,
         ]);
     }
+
+    // Log the ingredient usage for this order
+    $logStmt = $pdo->prepare(<<<'SQL'
+        INSERT INTO ingredient_usage_log (order_id, ingredient_id, used_qty, processed_by)
+        SELECT :order_id, pi.ingredient_id, SUM(pi.qty_used * oi.quantity), :processed_by
+        FROM order_items oi
+        JOIN product_ingredients pi
+          ON pi.product_id = oi.product_id
+         AND pi.size = oi.size
+        WHERE oi.order_id = :order_id_param
+        GROUP BY pi.ingredient_id
+        ON DUPLICATE KEY UPDATE used_qty = VALUES(used_qty)
+    SQL);
+    $logStmt->execute([
+        ':order_id'       => $order_id,
+        ':processed_by'   => $user_id,
+        ':order_id_param' => $order_id,
+    ]);
 
     $pdo->commit();
 

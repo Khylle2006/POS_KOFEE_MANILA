@@ -133,30 +133,80 @@ function escapeHtml(str) {
     return d.innerHTML;
 }
 
-// ── Order ─────────────────────────────────────
-function addToOrder(itemId) {
+// ── Order & Auto Storage Deduction ───────────
+let cartBusy = false;
+let orderSubmitted = false;
+
+window.addEventListener('beforeunload', () => {
+    if (orderItems.length > 0 && !orderSubmitted) {
+        const body = JSON.stringify({
+            action: 'refund_batch',
+            items: orderItems
+        });
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon('../api/cart_stock.php', new Blob([body], { type: 'application/json' }));
+        }
+    }
+});
+
+async function addToOrder(itemId) {
+    if (cartBusy) return;
     const item = Object.values(menuData).flat().find(i => i.id == itemId);
     if (!item) { console.error("Item not found:", itemId); return; }
     if (item.stock <= 0) return;
 
-    const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
-    const key      = itemId + '_' + currentSize;
-    const existing = orderItems.find(o => o.key === key);
-
-    if (existing) {
-        existing.qty++;
-    } else {
-        orderItems.push({
-            key,
-            id:    itemId,
-            name:  item.name,
-            icon:  item.icon,
-            size:  currentSize,
-            price: parseFloat(price),
-            qty:   1
+    cartBusy = true;
+    try {
+        const res = await fetch('../api/cart_stock.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'deduct',
+                product_id: itemId,
+                size: currentSize,
+                qty: 1
+            })
         });
+        const data = await res.json();
+        if (!data.success) {
+            Swal.fire({
+                title: "Out of Stock!",
+                text: data.error || "Cannot add item due to insufficient ingredients in storage.",
+                icon: "warning",
+                confirmButtonColor: '#C97B3D'
+            });
+            return;
+        }
+
+        const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
+        const key      = itemId + '_' + currentSize;
+        const existing = orderItems.find(o => o.key === key);
+
+        if (existing) {
+            existing.qty++;
+        } else {
+            orderItems.push({
+                key,
+                id:    itemId,
+                name:  item.name,
+                icon:  item.icon,
+                size:  currentSize,
+                price: parseFloat(price),
+                qty:   1
+            });
+        }
+        renderOrder();
+    } catch (err) {
+        console.error("Storage deduction error:", err);
+        Swal.fire({
+            title: "Error!",
+            text: "Failed to communicate with inventory storage.",
+            icon: "error",
+            confirmButtonColor: '#C97B3D'
+        });
+    } finally {
+        cartBusy = false;
     }
-    renderOrder();
 }
 
 function renderOrder() {
@@ -193,15 +243,86 @@ function renderOrder() {
     updateTotals();
 }
 
-function changeQty(index, delta) {
-    orderItems[index].qty += delta;
-    if (orderItems[index].qty <= 0) orderItems.splice(index, 1);
-    renderOrder();
+async function changeQty(index, delta) {
+    if (cartBusy) return;
+    const item = orderItems[index];
+    if (!item) return;
+
+    cartBusy = true;
+    try {
+        if (delta > 0) {
+            const res = await fetch('../api/cart_stock.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'deduct',
+                    product_id: item.id,
+                    size: item.size,
+                    qty: 1
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                Swal.fire({
+                    title: "Out of Stock!",
+                    text: data.error || "Cannot add more due to shortage in storage.",
+                    icon: "warning",
+                    confirmButtonColor: '#C97B3D'
+                });
+                return;
+            }
+            item.qty += 1;
+        } else if (delta < 0) {
+            const res = await fetch('../api/cart_stock.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'refund',
+                    product_id: item.id,
+                    size: item.size,
+                    qty: 1
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                item.qty -= 1;
+                if (item.qty <= 0) {
+                    orderItems.splice(index, 1);
+                }
+            }
+        }
+        renderOrder();
+    } catch (err) {
+        console.error("Cart stock change error:", err);
+    } finally {
+        cartBusy = false;
+    }
 }
 
-function removeItem(index) {
-    orderItems.splice(index, 1);
-    renderOrder();
+async function removeItem(index) {
+    if (cartBusy) return;
+    const item = orderItems[index];
+    if (!item) return;
+
+    cartBusy = true;
+    try {
+        await fetch('../api/cart_stock.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'refund',
+                product_id: item.id,
+                size: item.size,
+                qty: item.qty
+            })
+        });
+        orderItems.splice(index, 1);
+        renderOrder();
+    } catch (err) {
+        console.error("Remove item error:", err);
+    } finally {
+        cartBusy = false;
+    }
 }
 
 function calcVAT(gross) {
@@ -223,9 +344,24 @@ function updateTotals() {
     if (el('total'))    el('total').textContent    = '₱' + total.toFixed(2);
 }
 
-function clearOrder() {
+async function clearOrder() {
+    if (orderItems.length === 0 || cartBusy) return;
+    const itemsToRefund = [...orderItems];
     orderItems = [];
     renderOrder();
+
+    try {
+        await fetch('../api/cart_stock.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'refund_batch',
+                items: itemsToRefund
+            })
+        });
+    } catch (err) {
+        console.error("Clear order refund error:", err);
+    }
 }
 
 // ── Checkout ──────────────────────────────────
@@ -304,6 +440,7 @@ function submitConfirmedOrder() {
             return;
         }
 
+        orderSubmitted = true;
         showReceipt(res.order_id, subtotal, vat, total, snapshot);
     })
     .catch(err => {

@@ -106,17 +106,21 @@ $C = [
 ];
 
 function navBtnClasses(bool $active): string {
-    $base = 'group flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-[10px] '
+    $base = 'kfs-nav-btn group flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-[10px] '
           . 'text-[13px] font-medium transition-colors duration-150 relative';
     if ($active) {
-        return $base . ' text-white font-semibold shadow-[0_6px_16px_-6px_rgba(201,123,61,0.65)]'
+        return $base . ' active text-white font-semibold shadow-[0_6px_16px_-6px_rgba(201,123,61,0.65)]'
                       . ' bg-[linear-gradient(135deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_100%)]';
     }
     return $base . ' text-[rgba(251,243,233,0.72)] hover:bg-[rgba(251,243,233,0.06)] hover:text-[var(--cream,#fbf3e9)]';
 }
 
-$groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
+$groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
 ?>
+<!-- ── Required Stylesheets for Topbar & Navigation ── -->
+<link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__ . '/../css/sidebar.css') ?>">
+<link rel="stylesheet" href="../css/index.css?v=<?= filemtime(__DIR__ . '/../css/index.css') ?>">
+
 <!-- ── Kofee Manila Smooth Page Transition & Loader ── -->
 <style>
   @view-transition {
@@ -266,7 +270,7 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 </div>
 
 <!-- ── Top bar: always visible, holds the Menu toggle ── -->
-<header class="fixed top-0 inset-x-0 h-14 z-[200] flex items-center gap-3 px-4
+<header id="kofee-topbar" class="kfs-topbar fixed top-0 inset-x-0 h-14 z-[200] flex items-center gap-3 px-4
                bg-[var(--espresso,#2c1a0e)] text-[var(--cream,#fbf3e9)] shadow-md">
 
     <button id="sidebar-menu-btn" onclick="toggleSidebar()"
@@ -343,7 +347,7 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 </header>
 
 <!-- Spacer so page content (rendered after this include) isn't hidden under the fixed top bar -->
-<div class="h-14"></div>
+<div class="kfs-topbar-spacer topbar-spacer h-14"></div>
 
 <!-- ── Backdrop ── -->
 <div id="sidebar-backdrop" onclick="toggleSidebar(false)"
@@ -474,8 +478,8 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
 
     <div class="flex-1"></div>
 
-    <div class="flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2">
-        <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
+    <div class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2">
+        <div class="kfs-user-avatar w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                     bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                     text-[var(--espresso-deep,#1c1108)]">
             <?= htmlspecialchars($initials) ?>
@@ -490,7 +494,7 @@ $groupLabel = 'text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,
         </div>
     </div>
 
-    <button class="flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
+    <button class="kfs-logout-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
                    bg-[rgba(198,40,40,0.14)] text-[#f2a9a9] hover:bg-[rgba(198,40,40,0.24)] transition-colors duration-150"
         onclick="window.location.href='../auth/logout.php'">
         <?= icon('logout') ?><span>Logout</span>

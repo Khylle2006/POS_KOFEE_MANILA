@@ -1,1 +1,8 @@
-@import 'tailwindcss';
+@import "tailwindcss";
+
+@source "../portal.html";
+@source "../index.html";
+@source "../auth";
+@source "../php";
+@source "../includes";
+@source "../js";
