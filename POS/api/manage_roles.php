@@ -15,7 +15,7 @@ if ($user['role'] !== 'admin') {
 $data   = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $data['action'] ?? '';
 
-if ($action === 'add') {
+if ($action === 'add' || $action === 'create') {
     $result = create_role($data['role_key'] ?? '', $data['label'] ?? '');
     echo json_encode($result);
     exit;

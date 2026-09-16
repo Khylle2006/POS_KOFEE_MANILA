@@ -150,27 +150,85 @@ function set_role_permission(string $role, string $perm_key, bool $granted): arr
 }
 
 // ═══════════════════════════════════════════════
-//  PERMISSION CHECK - THE FIXED VERSION
-//  COMPATIBLE WITH PHP 7.0+
+//  PERMISSION CHECK & SESSION SYNCHRONIZATION
 // ═══════════════════════════════════════════════
 
 /**
- * Does the CURRENT logged-in user have this permission?
- * Admin always returns true — it's a hardcoded bypass so admin
- * can never lock itself out while editing permissions.
- * 
- * IMPROVED: Now checks database if session role is missing
+ * Common permission aliases so both action-based ("can_view_inventory")
+ * and module-based ("inventory.view") slugs evaluate identically.
  */
-function has_permission(string $perm_key): bool {
-    static $cache = array();
+function get_permission_aliases(string $perm_key): array {
+    $map = [
+        // Inventory & Recipes
+        'can_view_inventory'       => ['inventory.view', 'can_view_inventory'],
+        'inventory.view'           => ['can_view_inventory', 'inventory.view'],
+        'can_manage_inventory'     => ['inventory.manage', 'can_manage_inventory'],
+        'inventory.manage'         => ['can_manage_inventory', 'inventory.manage'],
 
-    // 1. Must be logged in
-    if (!isset($_SESSION['user_id'])) {
-        return false;
-    }
+        // Menu & Items
+        'can_add_item'             => ['menu.manage', 'menu.edit', 'can_add_item'],
+        'menu.manage'              => ['can_add_item', 'menu.manage'],
+        'can_edit_pricing'         => ['menu.edit', 'can_edit_pricing'],
+        'menu.edit'                => ['can_edit_pricing', 'menu.edit', 'can_add_item'],
+        'can_delete_item'          => ['menu.delete', 'can_delete_item'],
+        'menu.delete'              => ['can_delete_item', 'menu.delete'],
 
-    // 2. Prefer the full multi-role list set at login; fall back to the
-    //    single legacy role for older sessions that predate user_roles.
+        // POS & Orders
+        'can_new_order'            => ['orders.new', 'can_new_order'],
+        'orders.new'               => ['can_new_order', 'orders.new'],
+        'can_view_orders'          => ['orders.pending', 'can_view_orders'],
+        'orders.pending'           => ['can_view_orders', 'orders.pending'],
+        'can_view_history'         => ['orders.history', 'can_view_history'],
+        'orders.history'           => ['can_view_history', 'orders.history'],
+
+        // Reports & Analytics
+        'can_view_reports'         => ['analytics.view', 'reports.view', 'can_view_reports'],
+        'analytics.view'           => ['can_view_reports', 'analytics.view'],
+        'reports.view'             => ['can_view_reports', 'analytics.view'],
+
+        // Permissions & Admin
+        'can_manage_permissions'   => ['permissions.manage', 'manage_permissions', 'can_manage_permissions'],
+        'permissions.manage'       => ['can_manage_permissions', 'manage_permissions', 'permissions.manage'],
+        'manage_permissions'       => ['can_manage_permissions', 'permissions.manage', 'manage_permissions'],
+
+        // Users & HR
+        'can_manage_users'         => ['users.manage', 'can_manage_users'],
+        'users.manage'             => ['can_manage_users', 'users.manage'],
+        'can_manage_attendance'    => ['attendance.view', 'attendance.manage', 'can_manage_attendance'],
+        'attendance.view'          => ['can_manage_attendance', 'attendance.view'],
+        'can_manage_leave'         => ['leave.view', 'leave.manage', 'hr_leave', 'can_manage_leave'],
+        'leave.view'               => ['can_manage_leave', 'leave.view', 'hr_leave'],
+        'dashboard.view'           => ['dashboard.view', 'can_view_dashboard'],
+
+        // Procurement
+        'can_view_procurement'     => ['procurement.view', 'can_view_procurement'],
+        'procurement.view'         => ['can_view_procurement', 'procurement.view'],
+        'can_manage_requisitions'  => ['procurement.requisitions', 'procurement.requisition.create', 'can_manage_requisitions'],
+        'procurement.requisitions' => ['can_manage_requisitions', 'procurement.requisitions'],
+        'can_manage_rfq'           => ['procurement.rfq.manage', 'can_manage_rfq'],
+        'procurement.rfq.manage'   => ['can_manage_rfq', 'procurement.rfq.manage'],
+        'can_manage_po'            => ['procurement.po.manage', 'can_manage_po'],
+        'procurement.po.manage'    => ['can_manage_po', 'procurement.po.manage'],
+        'can_receive_goods'        => ['procurement.receiving', 'can_receive_goods'],
+        'procurement.receiving'    => ['can_receive_goods', 'procurement.receiving'],
+        'can_manage_invoices'      => ['procurement.invoice.create', 'can_manage_invoices'],
+        'procurement.invoice.create' => ['can_manage_invoices', 'procurement.invoice.create'],
+        'can_match_invoices'       => ['procurement.invoice.match', 'can_match_invoices'],
+        'procurement.invoice.match'=> ['can_match_invoices', 'procurement.invoice.match'],
+        'can_manage_suppliers'     => ['procurement.suppliers.manage', 'can_manage_suppliers'],
+        'procurement.suppliers.manage' => ['can_manage_suppliers', 'procurement.suppliers.manage'],
+    ];
+
+    return $map[$perm_key] ?? [$perm_key];
+}
+
+/**
+ * Loads and synchronizes the active user's role permissions into $_SESSION['permissions'].
+ */
+function sync_user_session_permissions(): array {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (empty($_SESSION['user_id'])) return [];
+
     $roles = [];
     if (!empty($_SESSION['roles']) && is_array($_SESSION['roles'])) {
         $roles = $_SESSION['roles'];
@@ -178,89 +236,103 @@ function has_permission(string $perm_key): bool {
         $roles = [$_SESSION['role']];
     }
 
-    // 3. Session has neither — recover from the database.
     if (empty($roles)) {
-        $user_id = $_SESSION['user_id'];
         try {
             $pdo = get_db();
-
             $stmt = $pdo->prepare("SELECT role FROM user_roles WHERE user_id = ?");
-            $stmt->execute([$user_id]);
-            $db_roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-            if ($db_roles) {
-                $roles = $db_roles;
-            } else {
-                $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
-                $stmt->execute([$user_id]);
-                $single = $stmt->fetchColumn();
+            $stmt->execute([$_SESSION['user_id']]);
+            $roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            if (empty($roles)) {
+                $uStmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+                $uStmt->execute([$_SESSION['user_id']]);
+                $single = $uStmt->fetchColumn();
                 if ($single) $roles = [$single];
             }
-
             if ($roles) {
                 $_SESSION['roles'] = $roles;
                 $_SESSION['role']  = $roles[0];
-            } else {
-                error_log("User {$user_id} has no role assigned");
-                return false;
             }
         } catch (Exception $e) {
-            error_log("Error fetching user roles: " . $e->getMessage());
-            return false;
+            error_log("Error syncing user roles: " . $e->getMessage());
         }
     }
 
-    // 4. Admin in ANY held role grants full access.
+    // Admin holds all permissions
     if (in_array('admin', $roles, true)) {
+        $_SESSION['permissions'] = ['*'];
+        return ['*'];
+    }
+
+    $allPerms = [];
+    try {
+        $pdo = get_db();
+        if (!empty($roles)) {
+            $inClause = implode(',', array_fill(0, count($roles), '?'));
+            $stmt = $pdo->prepare("SELECT DISTINCT perm_key FROM role_permissions WHERE role IN ($inClause)");
+            $stmt->execute($roles);
+            $allPerms = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        }
+    } catch (Exception $e) {
+        error_log("Error syncing permissions for roles: " . $e->getMessage());
+    }
+
+    $_SESSION['permissions'] = $allPerms;
+    return $allPerms;
+}
+
+/**
+ * Does the CURRENT logged-in user have this permission?
+ * Checks $_SESSION permissions directly, pulling from database if not initialized.
+ * Admin always returns true.
+ */
+function has_permission(string $perm_key): bool {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+
+    // 1. Must be authenticated
+    if (empty($_SESSION['user_id'])) {
+        return false;
+    }
+
+    // 2. Admin bypass — full access across the platform
+    $roles = $_SESSION['roles'] ?? (isset($_SESSION['role']) ? [$_SESSION['role']] : []);
+    if (in_array('admin', $roles, true) || (isset($_SESSION['role']) && $_SESSION['role'] === 'admin')) {
         return true;
     }
 
-    // 5. Check every held role — first one that grants it wins.
-    foreach ($roles as $role) {
-        if (!isset($cache[$role])) {
-            try {
-                $cache[$role] = get_role_permissions($role);
-            } catch (Exception $e) {
-                error_log("Error fetching role permissions for '{$role}': " . $e->getMessage());
-                continue;
-            }
-        }
-        if (in_array($perm_key, $cache[$role], true)) {
+    // 3. Ensure permissions are cached in $_SESSION
+    if (!isset($_SESSION['permissions']) || !is_array($_SESSION['permissions'])) {
+        sync_user_session_permissions();
+    }
+
+    $perms = $_SESSION['permissions'] ?? [];
+
+    if (in_array('*', $perms, true)) {
+        return true;
+    }
+
+    // 4. Test exact key as well as any configured aliases
+    $candidates = get_permission_aliases($perm_key);
+    foreach ($candidates as $cand) {
+        if (in_array($cand, $perms, true)) {
             return true;
         }
     }
 
-    $username = $_SESSION['username'] ?? 'unknown';
-    error_log("Permission denied: User '{$username}' (roles: " . implode(',', $roles) . ") needs '{$perm_key}'");
     return false;
 }
 
 /**
  * Redirect away if the current user lacks a permission.
- * IMPROVED: Better error handling and logging
  */
 function require_permission(string $perm_key): void {
+    if (session_status() === PHP_SESSION_NONE) session_start();
     if (!isset($_SESSION['user_id'])) {
-        error_log("require_permission: User not logged in, redirecting to login");
         header('Location: ../auth/login.php');
         exit;
     }
 
     if (!has_permission($perm_key)) {
-        $username = isset($_SESSION['username']) ? $_SESSION['username'] : 'unknown';
-        error_log("require_permission: User {$_SESSION['user_id']} ('{$username}') denied for '{$perm_key}'");
-
-        $_SESSION = array();
-        if (ini_get("session.use_cookies")) {
-            $params = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000,
-                $params["path"], $params["domain"],
-                $params["secure"], $params["httponly"]
-            );
-        }
-        session_destroy();
-
-        header('Location: ../auth/login.php?reason=forbidden');
+        header('Location: dashboard.php?error=unauthorized');
         exit;
     }
 }
@@ -352,41 +424,91 @@ function install_default_permissions(): void {
     try {
         $pdo = get_db();
         
-        // Insert default permissions if they don't exist
-        $default_permissions = array(
-            array('menu.manage', 'Manage Menu', 'menu'),
-            array('menu.edit', 'Edit Menu Items', 'menu'),
-            array('menu.delete', 'Delete Menu Items', 'menu'),
-            array('orders.view', 'View Orders', 'orders'),
-            array('orders.process', 'Process Orders', 'orders'),
-            array('reports.view', 'View Reports', 'reports'),
-            array('users.manage', 'Manage Users', 'users'),
-            array('settings.view', 'View Settings', 'settings'),
-            array('settings.edit', 'Edit Settings', 'settings'),
-        );
+        // Define comprehensive default permissions with both standard keys and action aliases
+        $default_permissions = [
+            ['dashboard.view', 'View Dashboard Overview', 'reports', 'Access system summary metrics, daily charts, and quick actions'],
+            ['orders.new', 'Create POS Orders', 'orders', 'Ring up customer orders and process checkout payments'],
+            ['orders.pending', 'Kitchen & Pending Orders', 'orders', 'View and fulfill active orders in the kitchen/barista queue'],
+            ['orders.history', 'Order Receipts & History', 'orders', 'View completed transaction history and print receipts'],
+            ['inventory.view', 'View Inventory & BOM', 'inventory', 'View ingredient stock levels, unit costs, and reorder flags'],
+            ['inventory.manage', 'Manage & Restock Inventory', 'inventory', 'Add new ingredients, adjust stock, and record deliveries'],
+            ['menu.manage', 'Menu Management & Add Items', 'menu', 'Create new drinks and recipes in the menu manager'],
+            ['menu.edit', 'Edit Items & Pricing', 'menu', 'Modify drink prices, descriptions, and recipe configurations'],
+            ['menu.delete', 'Delete & Archive Items', 'menu', 'Archive or permanently delete menu products'],
+            ['analytics.view', 'Financial Analytics & Reports', 'reports', 'View sales reports, P&L, bestsellers, and cashier summaries'],
+            ['users.manage', 'Staff & User Management', 'users', 'Create and modify employee accounts and system roles'],
+            ['attendance.view', 'Attendance & Time-Clock', 'hr', 'Review staff clock-in/out records and calculate working hours'],
+            ['leave.view', 'Leave & PTO Management', 'hr', 'Review, approve, and reject employee leave requests'],
+            ['permissions.manage', 'Manage Role Permissions', 'settings', 'Configure dynamic RBAC permissions matrix for system roles'],
+            // Procurement Permissions
+            ['procurement.view', 'View Procurement', 'Procurement', 'See the procurement dashboard and requisition list'],
+            ['procurement.requisitions', 'Create / Edit Requisitions', 'Procurement', 'View and manage purchase requisitions'],
+            ['procurement.requisition.create', 'File Purchase Requisitions', 'Procurement', 'Request new goods or services for department'],
+            ['procurement.requisition.review', 'Review Requisitions', 'Procurement', 'Check budget availability, approve or reject requisitions'],
+            ['procurement.rfq.manage', 'Manage RFQs', 'Procurement', 'Create and send Requests for Quotation to suppliers'],
+            ['procurement.bidding.review', 'Review Supplier Bids', 'Procurement', 'Evaluate submitted quotes on price, quality, delivery, risk'],
+            ['procurement.negotiation', 'Negotiate Supplier Terms', 'Procurement', 'Contact suppliers and negotiate final commercial terms'],
+            ['procurement.po.manage', 'Manage Purchase Orders', 'Procurement', 'Create, send, and approve Purchase Orders'],
+            ['procurement.receiving', 'Record Goods Receipt', 'Procurement', 'Confirm delivery and log received quantities (GRN)'],
+            ['procurement.grn.discrepancy.manage', 'Resolve Delivery Discrepancies', 'Procurement', 'Review and act on short/over/damaged delivery discrepancies'],
+            ['procurement.invoice.create', 'Log Supplier Invoices', 'Procurement', 'Record incoming supplier invoices against a Purchase Order'],
+            ['procurement.invoice.match', 'Match Invoices (3-Way Match)', 'Procurement', 'Match Purchase Order, Goods Receipt, and Invoice'],
+            ['procurement.payment.process', 'Process Supplier Payments', 'Procurement', 'Schedule and execute payments to suppliers'],
+            ['procurement.performance.rate', 'Rate Supplier Performance', 'Procurement', 'Score suppliers on quality, timeliness, price, and communication'],
+            ['procurement.close', 'Close & Rate Orders', 'Procurement', 'Close completed orders and rate supplier performance'],
+            ['procurement.reports.view', 'View Procurement Reports', 'Procurement', 'Access procurement reports and export data'],
+            ['procurement.audit.view', 'View Procurement Audit Log', 'Procurement', 'See the full procurement activity/audit trail'],
+            ['procurement.budget.manage', 'Manage Procurement Budgets', 'Procurement', 'Allocate and adjust departmental procurement budgets per period'],
+            ['procurement.attachments.manage', 'Manage Procurement Attachments', 'Procurement', 'Upload and view supporting documents on procurement records'],
+            ['procurement.suppliers.manage', 'Manage Suppliers', 'Procurement', 'Add, edit, or deactivate suppliers in the directory'],
+            ['procurement.supplier.portal', 'Supplier Portal Access', 'Procurement', 'Supplier-side access: view RFQ invites, submit bids, acknowledge POs'],
+        ];
         
+        $pStmt = $pdo->prepare("INSERT IGNORE INTO permissions (perm_key, label, category, description) VALUES (?, ?, ?, ?)");
         foreach ($default_permissions as $perm) {
-            $stmt = $pdo->prepare("INSERT IGNORE INTO permissions (perm_key, label, category) VALUES (?, ?, ?)");
-            $stmt->execute($perm);
+            $pStmt->execute($perm);
         }
         
-        // Ensure admin role exists
-        $pdo->prepare("INSERT IGNORE INTO roles (role_key, label, is_system) VALUES ('admin', 'Administrator', 1)")->execute();
+        // Ensure standard roles exist
+        $roles_to_ensure = [
+            ['admin', 'Administrator', 1],
+            ['manager', 'Branch Manager', 0],
+            ['cashier', 'Cashier', 0],
+            ['staff', 'Crew / Barista', 0],
+            ['procurement', 'Procurement Officer', 0],
+            ['warehouse', 'Warehouse / Receiving', 0],
+            ['finance', 'Finance Officer', 0],
+            ['supplier', 'Supplier', 0],
+        ];
         
-        // Give admin all permissions
-        $perms = $pdo->query("SELECT perm_key FROM permissions")->fetchAll(PDO::FETCH_COLUMN);
-        foreach ($perms as $perm) {
-            $pdo->prepare("INSERT IGNORE INTO role_permissions (role, perm_key) VALUES ('admin', ?)")->execute(array($perm));
+        $rStmt = $pdo->prepare("INSERT IGNORE INTO roles (role_key, label, is_system) VALUES (?, ?, ?)");
+        foreach ($roles_to_ensure as $r) {
+            $rStmt->execute($r);
         }
         
-        // Create default roles
-        $default_roles = array(
-            array('manager', 'Manager', 0),
-            array('staff', 'Staff', 0),
-        );
+        // Ensure Admin has all permissions
+        $allPerms = $pdo->query("SELECT perm_key FROM permissions")->fetchAll(PDO::FETCH_COLUMN);
+        $rpStmt = $pdo->prepare("INSERT IGNORE INTO role_permissions (role, perm_key) VALUES (?, ?)");
+        foreach ($allPerms as $pk) {
+            $rpStmt->execute(['admin', $pk]);
+        }
         
-        foreach ($default_roles as $role) {
-            $pdo->prepare("INSERT IGNORE INTO roles (role_key, label, is_system) VALUES (?, ?, ?)")->execute($role);
+        // Default role grants
+        $default_grants = [
+            'manager'     => ['dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'inventory.view', 'inventory.manage', 'menu.manage', 'menu.edit', 'analytics.view', 'attendance.view', 'leave.view', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review'],
+            'cashier'     => ['dashboard.view', 'orders.new', 'orders.pending', 'orders.history'],
+            'staff'       => ['dashboard.view', 'orders.pending', 'attendance.view'],
+            'crew'        => ['dashboard.view', 'orders.new', 'orders.pending', 'attendance.view'],
+            'procurement' => ['dashboard.view', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review', 'procurement.rfq.manage', 'procurement.bidding.review', 'procurement.negotiation', 'procurement.po.manage', 'procurement.close', 'procurement.reports.view', 'procurement.suppliers.manage', 'procurement.performance.rate', 'procurement.attachments.manage'],
+            'warehouse'   => ['dashboard.view', 'inventory.view', 'inventory.manage', 'procurement.view', 'procurement.receiving', 'procurement.grn.discrepancy.manage'],
+            'finance'     => ['dashboard.view', 'analytics.view', 'procurement.view', 'procurement.invoice.create', 'procurement.invoice.match', 'procurement.payment.process', 'procurement.budget.manage', 'procurement.reports.view', 'procurement.audit.view'],
+            'supplier'    => ['procurement.supplier.portal'],
+        ];
+
+        foreach ($default_grants as $r => $perms) {
+            foreach ($perms as $pk) {
+                $rpStmt->execute([$r, $pk]);
+            }
         }
         
     } catch (Exception $e) {

@@ -49,19 +49,32 @@ $roles   = $user['roles'] ?? [$role];  // ALL roles this account holds — used 
 $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
-    'dashboard'    => has_permission('dashboard.view'),
-    'new_order'    => has_permission('orders.new'),
-    'pending'      => has_permission('orders.pending'),
-    'history'      => has_permission('orders.history'),
-    'analytics'    => has_permission('analytics.view'),
-    'menu_manager' => has_permission('menu.manage'),
-    'inventory'    => has_permission('inventory.view'),
-    'users'        => has_permission('users.manage'),
-    'hr_employees' => (bool)array_intersect(['admin', 'hr'], $roles),
-    'hr_attendance'=> (bool)array_intersect(['admin', 'hr'], $roles),
-    'hr_leave'     => true,
-    'hr_requests'  => true,
-    'manage_permissions' => in_array('admin', $roles, true),
+    'dashboard'          => has_permission('dashboard.view'),
+    'new_order'          => has_permission('orders.new'),
+    'pending'            => has_permission('orders.pending'),
+    'history'            => has_permission('orders.history'),
+    'inventory'          => has_permission('inventory.view'),
+    'menu_manager'       => has_permission('menu.manage'),
+    'analytics'          => has_permission('analytics.view'),
+    'users'              => has_permission('users.manage'),
+    'hr_employees'       => has_permission('users.manage'),
+    'hr_attendance'      => has_permission('attendance.view'),
+    'hr_leave'           => has_permission('leave.view'),
+    'hr_requests'        => has_permission('leave.view') || in_array('admin', $roles, true),
+    'manage_permissions' => has_permission('permissions.manage'),
+
+    // Procurement Module Access
+    'procurement_view'         => has_permission('procurement.view'),
+    'procurement_requisitions' => has_permission('procurement.requisitions') || has_permission('procurement.requisition.create'),
+    'procurement_rfq'          => has_permission('procurement.rfq.manage') || has_permission('procurement.bidding.review'),
+    'procurement_po'           => has_permission('procurement.po.manage'),
+    'procurement_receiving'    => has_permission('procurement.receiving'),
+    'procurement_invoices'     => has_permission('procurement.invoice.create'),
+    'procurement_match'        => has_permission('procurement.invoice.match'),
+    'procurement_payments'     => has_permission('procurement.payment.process'),
+    'procurement_suppliers'    => has_permission('procurement.suppliers.manage'),
+    'procurement_performance'  => has_permission('procurement.performance.rate'),
+    'procurement_reports'      => has_permission('procurement.reports.view'),
 ];
 
 // ── Live badge counts (best-effort; never break the sidebar if a
@@ -105,14 +118,16 @@ $C = [
     'caramel-light' => 'var(--caramel-light,#d9a06b)',
 ];
 
-function navBtnClasses(bool $active): string {
-    $base = 'kfs-nav-btn group flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-[10px] '
-          . 'text-[13px] font-medium transition-colors duration-150 relative';
-    if ($active) {
-        return $base . ' active text-white font-semibold shadow-[0_6px_16px_-6px_rgba(201,123,61,0.65)]'
-                      . ' bg-[linear-gradient(135deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_100%)]';
+if (!function_exists('navBtnClasses')) {
+    function navBtnClasses(bool $active): string {
+        $base = 'kfs-nav-btn group flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-[10px] '
+              . 'text-[13px] font-medium transition-colors duration-150 relative';
+        if ($active) {
+            return $base . ' active text-white font-semibold shadow-[0_6px_16px_-6px_rgba(201,123,61,0.65)]'
+                          . ' bg-[linear-gradient(135deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_100%)]';
+        }
+        return $base . ' text-[rgba(251,243,233,0.72)] hover:bg-[rgba(251,243,233,0.06)] hover:text-[var(--cream,#fbf3e9)]';
     }
-    return $base . ' text-[rgba(251,243,233,0.72)] hover:bg-[rgba(251,243,233,0.06)] hover:text-[var(--cream,#fbf3e9)]';
 }
 
 $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
@@ -435,6 +450,76 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     <div class="<?= $groupLabel ?>">Reports</div>
     <button class="<?= navBtnClasses($current === 'analytics.php') ?>" onclick="window.location.href='analytics.php'">
         <?= icon('analytics') ?><span class="flex-1 truncate">Analytics</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_view'] || $access['procurement_requisitions'] || $access['procurement_rfq'] || $access['procurement_po'] || $access['procurement_receiving'] || $access['procurement_invoices'] || $access['procurement_match'] || $access['procurement_payments'] || $access['procurement_suppliers'] || $access['procurement_performance'] || $access['procurement_reports']): ?>
+    <div class="<?= $groupLabel ?>">Procurement</div>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_view']): ?>
+    <button class="<?= navBtnClasses($current === 'procurement_dashboard.php') ?>" onclick="window.location.href='procurement_dashboard.php'">
+        <?= icon('portal') ?><span class="flex-1 truncate">Procurement</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_requisitions']): ?>
+    <button class="<?= navBtnClasses($current === 'requisitions.php') ?>" onclick="window.location.href='requisitions.php'">
+        <?= icon('requests') ?><span class="flex-1 truncate">Requisitions</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_rfq']): ?>
+    <button class="<?= navBtnClasses($current === 'rfq.php') ?>" onclick="window.location.href='rfq.php'">
+        <?= icon('rfq') ?><span class="flex-1 truncate">RFQs &amp; Bids</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_po']): ?>
+    <button class="<?= navBtnClasses($current === 'purchase_orders.php') ?>" onclick="window.location.href='purchase_orders.php'">
+        <?= icon('truck') ?><span class="flex-1 truncate">Purchase Orders</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_receiving']): ?>
+    <button class="<?= navBtnClasses($current === 'goods_receipts.php') ?>" onclick="window.location.href='goods_receipts.php'">
+        <?= icon('truck') ?><span class="flex-1 truncate">Goods Receipts</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_invoices']): ?>
+    <button class="<?= navBtnClasses($current === 'invoices.php') ?>" onclick="window.location.href='invoices.php'">
+        <?= icon('invoice') ?><span class="flex-1 truncate">Invoices</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_match']): ?>
+    <button class="<?= navBtnClasses($current === 'three_way_match.php') ?>" onclick="window.location.href='three_way_match.php'">
+        <?= icon('scale') ?><span class="flex-1 truncate">3-Way Match</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_payments']): ?>
+    <button class="<?= navBtnClasses($current === 'payments.php') ?>" onclick="window.location.href='payments.php'">
+        <?= icon('coin') ?><span class="flex-1 truncate">Supplier Payments</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_suppliers']): ?>
+    <button class="<?= navBtnClasses($current === 'suppliers.php') ?>" onclick="window.location.href='suppliers.php'">
+        <?= icon('employees') ?><span class="flex-1 truncate">Suppliers</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_performance']): ?>
+    <button class="<?= navBtnClasses($current === 'supplier_performace.php') ?>" onclick="window.location.href='supplier_performace.php'">
+        <?= icon('star') ?><span class="flex-1 truncate">Supplier Ratings</span>
+    </button>
+    <?php endif; ?>
+
+    <?php if ($access['procurement_reports']): ?>
+    <button class="<?= navBtnClasses($current === 'procurement_reports.php') ?>" onclick="window.location.href='procurement_reports.php'">
+        <?= icon('analytics') ?><span class="flex-1 truncate">Procurement Reports</span>
     </button>
     <?php endif; ?>
 
