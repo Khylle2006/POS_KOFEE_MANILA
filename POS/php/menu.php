@@ -137,6 +137,17 @@ require_permission('orders.new');
         <span>Total</span><span id="confirm-total" style="color:#c47d3e">₱0.00</span>
       </div>
       <div style="font-size:12px;color:#9a7e65;margin-top:6px" id="confirm-type"></div>
+      <div style="margin-top:14px;text-align:left">
+        <div style="font-size:12px;font-weight:800;color:#2c1a0e;margin-bottom:7px">Payment Method</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:7px;cursor:pointer">
+          <input type="radio" name="checkout-payment" value="cash" checked onchange="selectPaymentMethod(this.value)">
+          Cash
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="radio" name="checkout-payment" value="paymongo" onchange="selectPaymentMethod(this.value)">
+          PayMongo (GCash, Maya, Card)
+        </label>
+      </div>
     </div>
     <div class="receipt-footer">
       <button class="btn-print" onclick="closeConfirmOrder()">Cancel</button>

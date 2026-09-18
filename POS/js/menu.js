@@ -373,6 +373,17 @@ async function clearOrder() {
 // ── Checkout ──────────────────────────────────
 // ── Checkout ──────────────────────────────────
 let pendingCheckout = null;
+let selectedPaymentMethod = 'cash';
+
+function selectPaymentMethod(method) {
+    selectedPaymentMethod = method === 'paymongo' ? 'paymongo' : 'cash';
+    const button = document.getElementById('confirm-order-btn');
+    if (button) {
+        button.textContent = selectedPaymentMethod === 'paymongo'
+            ? '✅ Continue to PayMongo'
+            : '✅ Confirm & Place Order';
+    }
+}
 
 function checkout() {
     if (orderItems.length === 0) {
@@ -399,7 +410,8 @@ function checkout() {
     document.getElementById('confirm-type').textContent     = typeMap[orderType] || "Dine In";
 
     document.getElementById('confirm-order-btn').disabled = false;
-    document.getElementById('confirm-order-btn').textContent = '✅ Confirm & Place Order';
+    document.querySelector('input[name="checkout-payment"][value="cash"]').checked = true;
+    selectPaymentMethod('cash');
 
     document.getElementById('confirm-overlay').classList.add('open');
 }
@@ -419,37 +431,54 @@ function submitConfirmedOrder() {
     const { subtotal, vat, total, snapshot, typeMap } = pendingCheckout;
     const btn = document.getElementById('confirm-order-btn');
     btn.disabled = true;
-    btn.textContent = 'Placing order…';
+    btn.textContent = selectedPaymentMethod === 'paymongo' ? 'Opening PayMongo…' : 'Placing order…';
 
     const payload = {
         total,
-        payment_method: typeMap[orderType] || "Dine In",
+        payment_method: selectedPaymentMethod,
+        order_type: typeMap[orderType] || "Dine In",
         items: snapshot.map(o => ({
             id:    o.id,
             qty:   o.qty,
             price: o.price,
-            size:  o.size
+            size:  o.size,
+            name:  o.name
         }))
     };
 
-    fetch('../api/checkout.php', {
+    const endpoint = selectedPaymentMethod === 'paymongo'
+        ? '../api/create_paymongo_checkout.php'
+        : '../api/checkout.php';
+    if (selectedPaymentMethod === 'paymongo') {
+        sessionStorage.setItem('paymongo_pending', JSON.stringify({ subtotal, vat, total, snapshot, orderType }));
+    }
+
+    fetch(endpoint, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(payload)
     })
     .then(r => r.json())
     .then(res => {
-        closeConfirmOrder();
-
         if (!res.success) {
+            sessionStorage.removeItem('paymongo_pending');
+            btn.disabled = false;
+            selectPaymentMethod(selectedPaymentMethod);
             showSimpleError(res.error ?? "Unknown error");
             return;
         }
 
+        if (selectedPaymentMethod === 'paymongo') {
+            window.location.href = res.checkout_url;
+            return;
+        }
+
+        closeConfirmOrder();
         orderSubmitted = true;
         showReceipt(res.order_id, subtotal, vat, total, snapshot);
     })
     .catch(err => {
+        sessionStorage.removeItem('paymongo_pending');
         closeConfirmOrder();
         showSimpleError(err.message);
     });
@@ -522,6 +551,24 @@ function printReceipt() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('order_id');
+    const pending = sessionStorage.getItem('paymongo_pending');
+    if (params.get('paymongo_success') === '1' && orderId && pending) {
+        const receipt = JSON.parse(pending);
+        sessionStorage.removeItem('paymongo_pending');
+        fetch(`../api/check_paymongo_status.php?order_id=${encodeURIComponent(orderId)}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res.success && res.paid) {
+                    orderSubmitted = true;
+                    showReceipt(res.order_id, receipt.subtotal, receipt.vat, receipt.total, receipt.snapshot);
+                } else {
+                    showSimpleError('PayMongo has not confirmed this payment yet.');
+                }
+            })
+            .catch(() => showSimpleError('Unable to verify the PayMongo payment.'));
+    }
     document.getElementById('receipt-overlay')?.addEventListener('click', function(e) {
         if (e.target === this) closeReceipt();
     });
@@ -547,6 +594,7 @@ window.submitConfirmedOrder = submitConfirmedOrder;
 window.closeNoItems         = closeNoItems;
 window.clearOrder      = clearOrder;
 window.checkout        = checkout;
+window.selectPaymentMethod = selectPaymentMethod;
 window.closeReceipt    = closeReceipt;
 window.printReceipt    = printReceipt;
 window.addToOrder      = addToOrder;
