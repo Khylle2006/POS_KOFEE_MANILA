@@ -568,6 +568,9 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='manage_users.php'">
         <?= icon('employees') ?><span class="flex-1 truncate">Manage Employees</span>
     </button>
+    <button class="<?= navBtnClasses($current === 'recruitment.php') ?>" onclick="window.location.href='recruitment.php'">
+        <?= icon('order') ?><span class="flex-1 truncate">Recruitment &amp; Careers</span>
+    </button>
     <?php endif; ?>
 
     <?php if ($access['hr_attendance']): ?>
