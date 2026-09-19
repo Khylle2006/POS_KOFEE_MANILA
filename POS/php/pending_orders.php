@@ -47,7 +47,7 @@ $user = current_user();
 <!-- Confirmation Modal -->
 <div class="modal-overlay" id="confirm-overlay">
   <div class="confirm-card">
-    <div class="confirm-icon" id="conf-icon">❓</div>
+    <div class="confirm-icon" id="conf-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
     <h3 id="conf-title">Confirm Action</h3>
     <p id="conf-message">Are you sure?</p>
     <div class="confirm-actions">
@@ -80,7 +80,7 @@ async function loadOrders() {
     updateMeta();
   } catch (e) {
     document.getElementById('orders-grid').innerHTML =
-      '<div class="loading-wrap">⚠️ Failed to load orders</div>';
+      '<div class="loading-wrap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Failed to load orders</div>';
   }
 }
 
@@ -134,14 +134,19 @@ function renderOrders() {
 
   if (!filtered.length) {
     grid.innerHTML = `<div class="empty-state">
-      <div class="empty-icon">🫙</div>
+      <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div>
       <p>No orders found</p>
       <small>Try a different filter</small>
     </div>`;
     return;
   }
 
-  const typeIcon = { 'Dine In': '🍽️', 'Take Out': '🥡', 'Delivery': '🚗' };
+  const typeIcon = {
+    'Dine In': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle"><path d="M18 2v20M21 2v6a3 3 0 0 1-3 3M14 2v6a3 3 0 0 0 3 3M3 2v7c0 1.1.9 2 2 2h2c1.1 0 2-.9 2-2V2M6 11v11"/></svg>',
+    'Take Out': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
+    'Delivery': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle"><rect x="1" y="7" width="22" height="11" rx="2"/><path d="M5 7l2-4h10l2 4"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>'
+  };
+  const defaultTypeIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>';
 
   grid.innerHTML = filtered.map(o => {
     const parsed = parseItems(o.items);
@@ -156,13 +161,13 @@ function renderOrders() {
       hour: 'numeric', minute: '2-digit', hour12: true
     });
 
-    const icon = typeIcon[o.payment_method] || '📋';
+    const icon = typeIcon[o.payment_method] || defaultTypeIcon;
     const s = o.status || 'pending';
 
     const actions = s === 'pending' ? `
       <div class="card-actions">
-        <button class="action-btn btn-complete" onclick="askConfirm(${o.id}, 'completed')">✓ Done</button>
-        <button class="action-btn btn-cancel" onclick="askConfirm(${o.id}, 'cancelled')">✕ Cancel</button>
+        <button class="action-btn btn-complete" onclick="askConfirm(${o.id}, 'completed')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle"><polyline points="20 6 9 17 4 12"/></svg> Done</button>
+        <button class="action-btn btn-cancel" onclick="askConfirm(${o.id}, 'cancelled')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel</button>
       </div>` : '';
 
     return `
@@ -191,15 +196,15 @@ function statusLabel(s) {
 
 // ── Confirm Modal ──────────────────────────────
 const configs = {
-  pending:   { icon:'⏳', title:'Mark as Pending',   msg:'Move this order back to pending?',        cls:'ok-pending',  label:'Mark Pending'   },
-  completed: { icon:'✅', title:'Complete Order',     msg:'Mark this order as completed?',           cls:'ok-complete', label:'Complete'        },
-  cancelled: { icon:'❌', title:'Cancel Order',       msg:'Are you sure you want to cancel this order? This can be undone.', cls:'ok-cancel', label:'Yes, Cancel' },
+  pending:   { icon:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', title:'Mark as Pending',   msg:'Move this order back to pending?', cls:'ok-pending', label:'Mark Pending' },
+  completed: { icon:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>', title:'Complete Order', msg:'Mark this order as completed?', cls:'ok-complete', label:'Complete' },
+  cancelled: { icon:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>', title:'Cancel Order', msg:'Are you sure you want to cancel this order? This can be undone.', cls:'ok-cancel', label:'Yes, Cancel' },
 };
 
 function askConfirm(orderId, status) {
   pendingAction = { orderId, status };
   const c = configs[status];
-  document.getElementById('conf-icon').textContent    = c.icon;
+  document.getElementById('conf-icon').innerHTML      = c.icon;
   document.getElementById('conf-title').textContent   = c.title;
   document.getElementById('conf-message').textContent = c.msg;
   const ok = document.getElementById('conf-ok');

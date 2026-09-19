@@ -55,7 +55,8 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
-img, svg { display: block; max-width: 100%; }
+img { display: block; max-width: 100%; }
+svg { display: inline-block; vertical-align: middle; max-width: 100%; }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
@@ -331,7 +332,7 @@ thead th, .recent-table th {
   text-transform: uppercase; letter-spacing: .06em; text-align: left;
   background: #F4EBE0; border-bottom: 2px solid var(--border);
 }
-tbody td, .recent-table td { padding: 12px 16px; font-size: 12.5px; border-bottom: 1px solid #EADBCC; vertical-align: middle; color: var(--text-main); }
+tbody td, .recent-table td { padding: 10px 16px; font-size: 12.5px; border-bottom: 1px solid #EADBCC; vertical-align: middle; color: var(--text-main); }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: #FEFAF4; }
 .muted-cell { color: var(--text-muted); font-weight: 600; }
@@ -349,17 +350,21 @@ tbody tr:hover td { background: #FEFAF4; }
   border-color: #8B4513; color: #7A3A10; background: var(--accent-lt); font-weight: 700;
 }
 
-/* ── Action buttons (row-level, e.g. manage_users) ─ */
-.act-group { display: flex; gap: 6px; flex-wrap: wrap; }
+/* ── Action buttons (row-level, e.g. manage_users, procurement tables) ─ */
+.act-group { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .act-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   border: 1.5px solid var(--border); background: #fff; border-radius: var(--radius-sm);
-  padding: 6px 12px; font-size: 11.5px; font-weight: 600; color: var(--text-main);
+  padding: 5px 13px; font-size: 12px; font-weight: 600; color: var(--text-main);
+  white-space: nowrap; line-height: 1.2; cursor: pointer; text-decoration: none;
+  transition: all .15s ease; vertical-align: middle;
 }
-.act-btn:hover { border-color: var(--caramel); color: var(--caramel); }
+.act-btn svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+.act-btn:hover { border-color: var(--caramel); color: var(--caramel); background: var(--accent-lt); }
 .act-activate { color: var(--green); border-color: #cfe8d1; }
-.act-activate:hover { background: var(--green-lt); }
+.act-activate:hover { background: var(--green-lt); border-color: var(--green); color: var(--green); }
 .act-block, .act-hold { color: var(--red); border-color: #f3d3ce; }
-.act-block:hover, .act-hold:hover { background: var(--red-lt); }
+.act-block:hover, .act-hold:hover { background: var(--red-lt); border-color: var(--red); color: var(--red); }
 
 /* ── Custom modal overlay (replaces SweetAlert2 site-wide) ─ */
 .modal-overlay {
@@ -1128,4 +1133,49 @@ tbody tr:hover td { background: #FEFAF4; }
 .prog-error-banner.hidden {
   display: none !important;
 }
+
+/* ── SweetAlert2 Café Theme Overrides ─────────── */
+.swal2-popup {
+  border-radius: 16px !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  border: 1.5px solid var(--border, #D8C7B5) !important;
+  box-shadow: 0 16px 36px rgba(36, 26, 46, 0.18) !important;
+  padding: 24px !important;
+}
+.swal2-title {
+  font-family: 'Playfair Display', serif !important;
+  color: var(--espresso, #241A2E) !important;
+  font-size: 1.35rem !important;
+  font-weight: 700 !important;
+}
+.swal2-html-container {
+  color: var(--text-main, #3E2F3B) !important;
+  font-size: 0.92rem !important;
+  line-height: 1.5 !important;
+}
+.swal2-actions {
+  gap: 10px !important;
+  margin-top: 18px !important;
+}
+.swal2-styled.swal2-confirm {
+  background: linear-gradient(135deg, var(--caramel, #8B5E3C) 0%, var(--espresso, #241A2E) 160%) !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  padding: 10px 22px !important;
+  box-shadow: 0 4px 12px rgba(139, 94, 60, 0.3) !important;
+}
+.swal2-styled.swal2-cancel {
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  padding: 10px 20px !important;
+  background: #fff !important;
+  color: var(--text-main, #3E2F3B) !important;
+  border: 1.5px solid var(--border, #D8C7B5) !important;
+}
+.swal2-timer-progress-bar {
+  background: var(--caramel, #8B5E3C) !important;
+}
+
 

@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('menu.manage');
 
@@ -29,9 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ── File leave — requesters only, always tied to THEIR OWN employee record ──
     if ($action === 'file') {
         if ($is_reviewer) {
-            $toast = '⚠️ HR/Admin accounts review leave and cannot file new requests.'; $toast_type = 'error';
+            $toast = 'HR/Admin accounts review leave and cannot file new requests.'; $toast_type = 'error';
         } elseif (!$my_employee) {
-            $toast = "⚠️ Your account isn't linked to an employee profile yet. Ask HR to link it first."; $toast_type = 'error';
+            $toast = "Your account isn't linked to an employee profile yet. Ask HR to link it first."; $toast_type = 'error';
         } else {
             $type   = in_array($_POST['leave_type'] ?? '', $leave_types) ? $_POST['leave_type'] : 'Vacation';
             $start  = $_POST['start_date'] ?? '';
@@ -39,16 +40,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reason = trim($_POST['reason'] ?? '');
 
             if (!$start || !$end) {
-                $toast = '⚠️ Start date and end date are required.'; $toast_type = 'error';
+                $toast = 'Start date and end date are required.'; $toast_type = 'error';
             } elseif (strtotime($end) < strtotime($start)) {
-                $toast = '⚠️ End date cannot be before start date.'; $toast_type = 'error';
+                $toast = 'End date cannot be before start date.'; $toast_type = 'error';
             } else {
                 $days = (strtotime($end) - strtotime($start)) / 86400 + 1;
                 $pdo->prepare(
                     'INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, days_count, reason, status)
                      VALUES (:e,:t,:s,:en,:d,:r,"pending")'
                 )->execute([':e'=>$my_employee['id'], ':t'=>$type, ':s'=>$start, ':en'=>$end, ':d'=>$days, ':r'=>$reason]);
-                $toast = '✅ Leave request filed.';
+                $toast = 'Leave request filed successfully.';
             }
         }
     }
@@ -56,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ── Approve / Reject — reviewers only ──
     if ($action === 'review') {
         if (!$is_reviewer) {
-            $toast = '⚠️ Only HR/Admin can review leave requests.'; $toast_type = 'error';
+            $toast = 'Only HR/Admin can review leave requests.'; $toast_type = 'error';
         } else {
             $id     = (int)($_POST['id'] ?? 0);
             $status = $_POST['status'] ?? '';
@@ -82,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                 }
-                $toast = $status === 'approved' ? '✅ Leave approved.' : '❌ Leave rejected.';
+                $toast = $status === 'approved' ? 'Leave approved.' : 'Leave rejected.';
             }
         }
     }
@@ -93,11 +94,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id) {
             if ($is_reviewer) {
                 $pdo->prepare('DELETE FROM leave_requests WHERE id=:id')->execute([':id'=>$id]);
-                $toast = '🗑️ Leave request deleted.';
+                $toast = 'Leave request deleted.';
             } elseif ($my_employee) {
                 $del = $pdo->prepare("DELETE FROM leave_requests WHERE id=:id AND employee_id=:e AND status='pending'");
                 $del->execute([':id'=>$id, ':e'=>$my_employee['id']]);
-                $toast = $del->rowCount() ? '🗑️ Leave request cancelled.' : '⚠️ Only your own pending requests can be cancelled.';
+                $toast = $del->rowCount() ? 'Leave request cancelled.' : 'Only your own pending requests can be cancelled.';
                 if (!$del->rowCount()) $toast_type = 'error';
             }
         }
@@ -167,7 +168,7 @@ foreach ($leaves as $l) {
       <p><?= $is_reviewer ? 'Review and approve employee leave' : 'File and track your leave requests' ?></p>
     </div>
     <?php if (!$is_reviewer && $my_employee): ?>
-      <button class="btn-add" onclick="openFile()">➕ File Leave</button>
+      <button class="btn-add" onclick="openFile()"><?= icon('plus', 16) ?> <span>File Leave</span></button>
     <?php endif; ?>
   </div>
 
@@ -175,14 +176,14 @@ foreach ($leaves as $l) {
 
     <?php if (!$is_reviewer && !$my_employee): ?>
       <div class="notice-banner">
-        ⚠️ Your account isn't linked to an employee profile yet, so you can't file leave. Ask HR to link your account on the Employees page.
+        Your account isn't linked to an employee profile yet, so you can't file leave. Ask HR to link your account on the Employees page.
       </div>
     <?php endif; ?>
 
     <div class="stat-row">
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0">⏳</div><div><div class="mini-stat-val"><?= $pending_c ?></div><div class="mini-stat-lbl">Pending</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e8f5e9">✅</div><div><div class="mini-stat-val"><?= $approved_c ?></div><div class="mini-stat-lbl">Approved</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#ffebee">❌</div><div><div class="mini-stat-val"><?= $rejected_c ?></div><div class="mini-stat-lbl">Rejected</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0;color:#e67e22"><?= icon('clock', 18) ?></div><div><div class="mini-stat-val"><?= $pending_c ?></div><div class="mini-stat-lbl">Pending</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e8f5e9;color:#27ae60"><?= icon('check-circle', 18) ?></div><div><div class="mini-stat-val"><?= $approved_c ?></div><div class="mini-stat-lbl">Approved</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#ffebee;color:#c0392b"><?= icon('x-circle', 18) ?></div><div><div class="mini-stat-val"><?= $rejected_c ?></div><div class="mini-stat-lbl">Rejected</div></div></div>
     </div>
 
     <div class="filter-bar">
@@ -194,7 +195,7 @@ foreach ($leaves as $l) {
 
     <div class="leave-grid">
       <?php if (empty($leaves)): ?>
-        <div class="empty-state">🫙 No leave requests found.</div>
+        <div class="empty-state"><?= icon('calendar', 24) ?> No leave requests found.</div>
       <?php else: foreach ($leaves as $l): ?>
         <div class="leave-card">
           <div class="lc-head">
@@ -217,13 +218,13 @@ foreach ($leaves as $l) {
                   <input type="hidden" name="action" value="review"/>
                   <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
                   <input type="hidden" name="status" value="approved"/>
-                  <button type="submit" class="act-btn act-activate" style="width:100%">✅ Approve</button>
+                  <button type="submit" class="act-btn act-activate" style="width:100%"><?= icon('check', 13) ?> Approve</button>
                 </form>
                 <form method="POST" style="display:inline;flex:1">
                   <input type="hidden" name="action" value="review"/>
                   <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
                   <input type="hidden" name="status" value="rejected"/>
-                  <button type="submit" class="act-btn act-block" style="width:100%">❌ Reject</button>
+                  <button type="submit" class="act-btn act-block" style="width:100%"><?= icon('x', 13) ?> Reject</button>
                 </form>
               <?php else: ?>
                 <span style="color:var(--text-muted);font-size:12px;padding:8px 0">Reviewed — request closed</span>
@@ -233,7 +234,7 @@ foreach ($leaves as $l) {
                 <form method="POST" style="display:inline;flex:1" onsubmit="return confirm('Cancel this leave request?')">
                   <input type="hidden" name="action" value="delete"/>
                   <input type="hidden" name="id" value="<?= $l['id'] ?>"/>
-                  <button type="submit" class="act-btn act-block" style="width:100%">✕ Cancel</button>
+                  <button type="submit" class="act-btn act-block" style="width:100%"><?= icon('x', 13) ?> Cancel</button>
                 </form>
               <?php else: ?>
                 <span style="color:var(--text-muted);font-size:12px;padding:8px 0">No actions available</span>
@@ -251,8 +252,8 @@ foreach ($leaves as $l) {
 <div class="modal-bg" id="file-modal" onclick="if(event.target===this) closeFile()">
   <div class="modal">
     <div class="modal-header">
-      <h3>➕ File Leave Request</h3>
-      <button class="modal-close" onclick="closeFile()">✕</button>
+      <h3><?= icon('plus', 18) ?> File Leave Request</h3>
+      <button class="modal-close" onclick="closeFile()"><?= icon('x', 16) ?></button>
     </div>
     <form method="POST" id="leave-file-form">
       <input type="hidden" name="action" value="file"/>
@@ -288,7 +289,7 @@ foreach ($leaves as $l) {
 
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeFile()">Cancel</button>
-        <button type="submit" class="btn-save" id="leave-submit-btn">✔ Submit Request</button>
+        <button type="submit" class="btn-save" id="leave-submit-btn"><?= icon('check', 14) ?> Submit Request</button>
       </div>
     </form>
   </div>
@@ -348,7 +349,7 @@ function calcDays() {
         KofeeValidator.clearError(eInput);
       }
       const days = Math.round((eTime - sTime) / 86400000) + 1;
-      preview.textContent = `📅 Duration: ${days} day${days > 1 ? 's' : ''}`;
+      preview.textContent = `Duration: ${days} day${days > 1 ? 's' : ''}`;
       preview.style.display = 'block';
     }
   } else {

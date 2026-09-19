@@ -359,7 +359,7 @@ function check_and_trigger_reorder(int $ingredient_id, ?int $actor_id = null): i
         notify_event(
             action_type: 'INVENTORY_AUTO_REORDER',
             perm_key:    'procurement.requisitions',
-            title:       '🤖 Auto-reorder filed — ' . $item['name'],
+            title:       'Auto-reorder filed — ' . $item['name'],
             message:     sprintf('Stock hit %s %s. Requested %s %s from the default supplier.',
                             rtrim(rtrim(number_format((float)$item['quantity'], 2), '0'), '.'), $item['unit'],
                             rtrim(rtrim(number_format($qty, 2), '0'), '.'), $item['unit']),
@@ -441,7 +441,7 @@ function dispatch_expiry_warnings(): int {
             notify_event(
                 action_type: 'INVENTORY_EXPIRY_WARNING',
                 perm_key:    'inventory.view',
-                title:       '⏳ Expiring soon — ' . $b['name'],
+                title:       'Expiring soon — ' . $b['name'],
                 message:     sprintf('%s %s expires on %s.',
                                 rtrim(rtrim(number_format((float)$b['qty_remaining'], 2), '0'), '.'),
                                 $b['unit'], date('M d, Y', strtotime($b['expiry_date']))),

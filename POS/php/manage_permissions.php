@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('permissions.manage');
 
@@ -40,17 +41,18 @@ foreach ($editableRoles as $r) {
 $selectedLabel = $selectedRole['label'] ?? ucfirst($selected);
 $isSystemRole  = (bool)($selectedRole['is_system'] ?? false);
 
-// Standard category icons & grouping
+// Standard category icon keys & grouping
 $categoryIcons = [
-    'Procurement' => '🛒',
-    'Orders'      => '💳',
-    'Inventory'   => '📦',
-    'Menu'        => '☕',
-    'Reports'     => '📊',
-    'Users'       => '👥',
-    'Hr'          => '⏰',
-    'Settings'    => '🔐',
-    'General'     => '🏠',
+    'Procurement' => 'shopping-cart',
+    'Orders'      => 'credit-card',
+    'Inventory'   => 'package',
+    'Menu'        => 'coffee',
+    'Reports'     => 'bar-chart',
+    'Users'       => 'users',
+    'Hr'          => 'clock',
+    'HR'          => 'clock',
+    'Settings'    => 'lock',
+    'General'     => 'home',
 ];
 
 $permsByCategory = [];
@@ -106,8 +108,8 @@ $totalPermsCount = count($permissions);
     <!-- ── Roles Card ── -->
     <div class="roles-card">
       <div class="roles-card-head">
-        <h2>🏛️ System &amp; Custom Roles</h2>
-        <button type="button" class="btn-add-role" onclick="openAddRole()">➕ Add New Role</button>
+        <h2><?= icon('permissions', 20) ?> System &amp; Custom Roles</h2>
+        <button type="button" class="btn-add-role" onclick="openAddRole()"><?= icon('plus', 14) ?> Add New Role</button>
       </div>
 
       <?php if (empty($editableRoles)): ?>
@@ -117,13 +119,13 @@ $totalPermsCount = count($permissions);
           Select a role to inspect and edit permissions
           <?php if ($selectedRole): ?>
             <span class="role-info-badge">
-              <?= $isSystemRole ? '🔒 System Role' : '✨ Custom Role' ?>
+              <?= $isSystemRole ? (icon('lock', 12) . ' System Role') : (icon('sparkles', 12) . ' Custom Role') ?>
             </span>
           <?php endif; ?>
         </label>
         <div class="role-picker-row">
           <form method="GET" id="role-picker-form" style="flex:1">
-            <select class="role-picker" name="role" id="role-picker" onchange="document.getElementById('role-picker-form').submit()">
+            <select class="role-picker" name="role" id="role-picker" onchange="handleRoleChange(this)">
               <?php foreach ($editableRoles as $r):
                 $rGrants = $grants[$r['role_key']] ?? [];
                 $rCount = count(array_intersect($allPermKeys, $rGrants));
@@ -136,7 +138,7 @@ $totalPermsCount = count($permissions);
           </form>
           <button type="button" class="btn-remove-role" id="btn-remove-role" onclick="removeRole()"
                   <?= $isSystemRole ? 'disabled style="opacity:0.4;cursor:not-allowed;" title="System roles cannot be removed"' : 'title="Delete custom role"' ?>>
-            🗑️ Remove Role
+            <?= icon('trash', 14) ?> Remove Role
           </button>
         </div>
       <?php endif; ?>
@@ -155,18 +157,18 @@ $totalPermsCount = count($permissions);
       <!-- ── Category Filter Tabs ── -->
       <div class="category-tabs" id="categoryTabs">
         <button type="button" class="cat-tab active" data-cat="all" onclick="selectCategory('all', this)">
-          <span>🌟 All</span>
+          <span><?= icon('star', 13) ?> All</span>
           <span class="cat-badge" id="badge-all"><?= $grantedTotal ?>/<?= $totalPermsCount ?></span>
         </button>
 
         <?php foreach ($permsByCategory as $catName => $catPerms):
-          $icon = $categoryIcons[$catName] ?? '📁';
+          $catIconKey = $categoryIcons[$catName] ?? 'folder';
           $catPermKeys = array_column($catPerms, 'perm_key');
           $catGrantedCount = count(array_intersect($catPermKeys, $currentGrants));
           $catTotalCount = count($catPerms);
         ?>
         <button type="button" class="cat-tab" data-cat="<?= htmlspecialchars($catName) ?>" onclick="selectCategory('<?= htmlspecialchars($catName) ?>', this)">
-          <span><?= $icon ?> <?= htmlspecialchars($catName) ?></span>
+          <span><?= icon($catIconKey, 14) ?> <?= htmlspecialchars($catName) ?></span>
           <span class="cat-badge" id="badge-cat-<?= htmlspecialchars($catName) ?>"><?= $catGrantedCount ?>/<?= $catTotalCount ?></span>
         </button>
         <?php endforeach; ?>
@@ -175,16 +177,16 @@ $totalPermsCount = count($permissions);
       <!-- ── Search & Fast Batch Toolbar ── -->
       <div class="perm-toolbar">
         <div class="perm-search-box">
-          <span class="perm-search-icon">🔍</span>
+          <span class="perm-search-icon"><?= icon('search', 14) ?></span>
           <input type="text" id="perm-search" placeholder="Search permission, action, or slug…" oninput="filterPerms()"/>
         </div>
 
         <div class="perm-actions-group">
           <button type="button" class="btn-cat-action" onclick="bulkSetVisible(true)" title="Grant all visible permissions in current view">
-            ✅ Grant All Shown
+            <?= icon('check', 13) ?> Grant All Shown
           </button>
           <button type="button" class="btn-cat-action" onclick="bulkSetVisible(false)" title="Revoke all visible permissions in current view">
-            ❌ Revoke All Shown
+            <?= icon('x', 13) ?> Revoke All Shown
           </button>
         </div>
       </div>
@@ -192,14 +194,14 @@ $totalPermsCount = count($permissions);
       <!-- ── Permission Rows Grouped by Category ── -->
       <div id="permissions-container">
         <?php if (empty($permissions)): ?>
-          <div class="perm-empty">🫙 No permissions defined in the database.</div>
+          <div class="perm-empty"><?= icon('inbox', 18) ?> No permissions defined in the database.</div>
         <?php else: ?>
           <?php foreach ($permsByCategory as $catName => $catPerms):
-            $catIcon = $categoryIcons[$catName] ?? '📁';
+            $catIconKey = $categoryIcons[$catName] ?? 'folder';
           ?>
             <div class="perm-category-group" data-cat="<?= htmlspecialchars($catName) ?>">
               <div class="perm-category-header">
-                <span><?= $catIcon ?> <?= htmlspecialchars($catName) ?></span>
+                <span><?= icon($catIconKey, 16) ?> <?= htmlspecialchars($catName) ?></span>
                 <span class="category-group-stat" style="font-weight:600;opacity:0.8">
                   <?= count($catPerms) ?> permissions
                 </span>
@@ -225,7 +227,7 @@ $totalPermsCount = count($permissions);
                           data-original="<?= $isOn ? '1' : '0' ?>"
                           onclick="togglePerm(this)"
                           title="<?= $isOn ? 'Granted — click to revoke' : 'Not granted — click to grant' ?>">
-                    ✓
+                    <?= icon('check', 13) ?>
                   </button>
                 </div>
               <?php endforeach; ?>
@@ -242,7 +244,7 @@ $totalPermsCount = count($permissions);
         <span id="dirty-text">All changes saved to database</span>
       </div>
       <button class="btn-save-changes" id="save-btn" onclick="saveChanges()">
-        💾 Save Changes
+        <?= icon('save', 15) ?> Save Changes
       </button>
     </div>
     <?php endif; ?>
@@ -254,8 +256,8 @@ $totalPermsCount = count($permissions);
 <div class="modal-bg" id="add-role-modal" onclick="if(event.target===this) closeAddRole()">
   <div class="modal">
     <div class="modal-header">
-      <h3>➕ Add a New Role</h3>
-      <button type="button" class="modal-close" onclick="closeAddRole()">✕</button>
+      <h3><?= icon('plus', 16) ?> Add a New Role</h3>
+      <button type="button" class="modal-close" onclick="closeAddRole()"><?= icon('x', 14) ?></button>
     </div>
     <div class="section-body">
       <div class="field-group" style="margin-bottom:14px">
@@ -274,7 +276,7 @@ $totalPermsCount = count($permissions);
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-cancel" onclick="closeAddRole()">Cancel</button>
-      <button type="button" class="btn-save" id="btn-create-role" onclick="addRole()">➕ Create Role</button>
+      <button type="button" class="btn-save" id="btn-create-role" onclick="addRole()"><?= icon('plus', 14) ?> Create Role</button>
     </div>
   </div>
 </div>
@@ -283,8 +285,8 @@ $totalPermsCount = count($permissions);
 <div class="modal-bg" id="save-confirm-modal" onclick="if(event.target===this) closeSaveConfirm()">
   <div class="modal" style="max-width:460px">
     <div class="modal-header">
-      <h3>💾 Save Permission Changes?</h3>
-      <button type="button" class="modal-close" onclick="closeSaveConfirm()">✕</button>
+      <h3><?= icon('save', 16) ?> Save Permission Changes?</h3>
+      <button type="button" class="modal-close" onclick="closeSaveConfirm()"><?= icon('x', 14) ?></button>
     </div>
     <div class="section-body">
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
@@ -294,7 +296,7 @@ $totalPermsCount = count($permissions);
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-cancel" onclick="closeSaveConfirm()">Cancel</button>
-      <button type="button" class="btn-save" id="save-confirm-btn" onclick="doSaveChanges()">✔ Confirm &amp; Save</button>
+      <button type="button" class="btn-save" id="save-confirm-btn" onclick="doSaveChanges()"><?= icon('check', 14) ?> Confirm &amp; Save</button>
     </div>
   </div>
 </div>

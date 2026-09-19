@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.invoice.match');
 
@@ -95,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$invoice || !$po) {
-        $toast = '⚠️ Invoice or Purchase Order not found.'; $toast_type = 'error';
+        $toast = 'Invoice or Purchase Order not found.'; $toast_type = 'error';
     } elseif ($action === 'confirm_match') {
         $result = run_three_way_match($pdo, $invoice, $po);
         $summary = $result['passed']
@@ -114,28 +115,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "3-way match exception on Invoice {$invoice['invoice_number']}",
                 $summary, 'three_way_match.php?invoice_id=' . $invoice_id, $user['id']
             );
-            $toast = '⚠️ Match exceptions found — invoice marked disputed.'; $toast_type = 'error';
+            $toast = 'Match exceptions found — invoice marked disputed.'; $toast_type = 'error';
         } else {
-            $toast = '✅ 3-way match passed — invoice ready for approval.';
+            $toast = '3-way match passed — invoice ready for approval.';
         }
     } elseif ($action === 'force_approve') {
         require_permission('procurement.invoice.match');
         $override_note = trim($_POST['override_note'] ?? '');
         if (!$override_note) {
-            $toast = '⚠️ An override justification is required to force-approve a disputed invoice.'; $toast_type = 'error';
+            $toast = 'An override justification is required to force-approve a disputed invoice.'; $toast_type = 'error';
         } else {
             $pdo->prepare("UPDATE invoices SET status='approved', match_notes = CONCAT(COALESCE(match_notes,''), ' | Override: ', :n) WHERE id = :id")
                 ->execute([':n' => $override_note, ':id' => $invoice_id]);
             audit_log('invoice', $invoice_id, 'force_approved', $override_note);
-            $toast = '✅ Invoice force-approved with override note.';
+            $toast = 'Invoice force-approved with override note.';
         }
     } elseif ($action === 'approve') {
         if ($invoice['status'] !== 'matched') {
-            $toast = '⚠️ Only a cleanly matched invoice can be approved this way.'; $toast_type = 'error';
+            $toast = 'Only a cleanly matched invoice can be approved this way.'; $toast_type = 'error';
         } else {
             $pdo->prepare("UPDATE invoices SET status='approved' WHERE id = :id")->execute([':id' => $invoice_id]);
             audit_log('invoice', $invoice_id, 'approved');
-            $toast = '✅ Invoice approved for payment.';
+            $toast = 'Invoice approved for payment.';
         }
     }
 
@@ -219,9 +220,9 @@ if ($invoice) {
         </div>
 
         <div class="match-col">
-          <div class="match-box"><h4>📋 Purchase Order</h4><div class="amt"><?= php_currency($result['po_total']) ?></div><p class="muted-cell">Awarded total</p></div>
-          <div class="match-box"><h4>📦 Goods Receipt</h4><div class="amt"><?= count($result['line_results']) ?></div><p class="muted-cell">line item(s) checked against received qty</p></div>
-          <div class="match-box"><h4>🧾 Invoice</h4><div class="amt"><?= php_currency($result['inv_total']) ?></div><p class="muted-cell"><?= $result['variance_pct'] ?>% variance vs PO</p></div>
+          <div class="match-box"><h4><?= icon('clipboard', 14, '', 'vertical-align:middle;margin-right:4px') ?> Purchase Order</h4><div class="amt"><?= php_currency($result['po_total']) ?></div><p class="muted-cell">Awarded total</p></div>
+          <div class="match-box"><h4><?= icon('package', 14, '', 'vertical-align:middle;margin-right:4px') ?> Goods Receipt</h4><div class="amt"><?= count($result['line_results']) ?></div><p class="muted-cell">line item(s) checked against received qty</p></div>
+          <div class="match-box"><h4><?= icon('invoice', 14, '', 'vertical-align:middle;margin-right:4px') ?> Invoice</h4><div class="amt"><?= php_currency($result['inv_total']) ?></div><p class="muted-cell"><?= $result['variance_pct'] ?>% variance vs PO</p></div>
         </div>
 
         <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin:18px 0 6px">Line-Level Check (Invoiced vs Received)</h4>
@@ -233,7 +234,7 @@ if ($invoice) {
             <div><?= htmlspecialchars($lr['item_name']) ?></div>
             <div><?= number_format($lr['invoiced_qty'],2) ?></div>
             <div><?= number_format($lr['received_qty'],2) ?></div>
-            <div><?= $lr['over_billed'] ? '⚠️ Over-billed' : '✅ OK' ?></div>
+            <div><?= $lr['over_billed'] ? '<span style="color:var(--red,#c53030);display:inline-flex;align-items:center;gap:4px">' . icon('alert-triangle', 13) . ' Over-billed</span>' : '<span style="color:var(--green,#2f855a);display:inline-flex;align-items:center;gap:4px">' . icon('check', 13) . ' OK</span>' ?></div>
           </div>
         <?php endforeach; ?>
 
@@ -243,22 +244,22 @@ if ($invoice) {
             <?php foreach ($result['exceptions'] as $e): ?><li><?= htmlspecialchars($e) ?></li><?php endforeach; ?>
           </ul>
         <?php else: ?>
-          <p style="margin-top:16px;padding:10px 12px;background:#eef8ef;border-left:3px solid var(--green,#3a9d4f);border-radius:6px;font-size:12.5px">✅ No exceptions — PO, Goods Receipt, and Invoice all reconcile within tolerance.</p>
+          <p style="margin-top:16px;padding:10px 12px;background:#eef8ef;border-left:3px solid var(--green,#3a9d4f);border-radius:6px;font-size:12.5px;display:flex;align-items:center;gap:6px"><?= icon('check-circle', 16, '', 'color:var(--green,#3a9d4f);flex-shrink:0') ?> No exceptions — PO, Goods Receipt, and Invoice all reconcile within tolerance.</p>
         <?php endif; ?>
 
         <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
           <?php if (in_array($invoice['status'], ['pending','disputed'], true)): ?>
             <form method="POST"><input type="hidden" name="action" value="confirm_match"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
-              <button type="submit" class="btn-save">🔗 Run Match</button></form>
+              <button type="submit" class="btn-save"><?= icon('check', 14) ?> Run Match</button></form>
           <?php endif; ?>
 
           <?php if ($invoice['status'] === 'matched'): ?>
             <form method="POST"><input type="hidden" name="action" value="approve"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
-              <button type="submit" class="btn-save">✅ Approve for Payment</button></form>
+              <button type="submit" class="btn-save"><?= icon('check', 14) ?> Approve for Payment</button></form>
           <?php endif; ?>
 
           <?php if ($invoice['status'] === 'disputed'): ?>
-            <button type="button" class="act-btn" onclick="document.getElementById('override-form').classList.toggle('open-inline')">⚠️ Override & Force-Approve</button>
+            <button type="button" class="act-btn" onclick="document.getElementById('override-form').classList.toggle('open-inline')"><?= icon('alert-triangle', 13) ?> Override & Force-Approve</button>
           <?php endif; ?>
         </div>
 

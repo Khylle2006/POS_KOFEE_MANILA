@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.view');
 
@@ -18,18 +19,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create_rfq') {
         require_permission('procurement.rfq.manage');
 
-       $req_id    = (int)($_POST['requisition_id'] ?? 0);
-        $due_date  = $_POST['due_date'] ?: null;
+        $req_id    = (int)($_POST['requisition_id'] ?? 0);
+        $due_date  = $_POST['due_date'] ?? null;
         $suppliers = array_map('intval', $_POST['suppliers'] ?? []);
 
+        // Guard: Requisition must be in 'approved' status before an RFQ can be opened
         $req_stmt = $pdo->prepare('SELECT status FROM purchase_requisitions WHERE id = :id');
         $req_stmt->execute([':id' => $req_id]);
         $req_status = $req_stmt->fetchColumn();
 
         if (!$req_id || empty($suppliers)) {
-            $toast = '⚠️ Invite at least one supplier.'; $toast_type = 'error';
+            $toast = 'Invite at least one supplier.'; $toast_type = 'error';
         } elseif ($req_status !== 'approved') {
-            $toast = '⚠️ Only approved requisitions can go out for RFQ.'; $toast_type = 'error';
+            $toast = 'Only approved requisitions can go out for RFQ.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -46,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sup = $sup_user_stmt->fetch();
                     if ($sup && $sup['user_id']) {
                         notify_user(
-                            (int)$sup['user_id'], 'rfq_invite', '📨 New RFQ invitation',
+                            (int)$sup['user_id'], 'rfq_invite', 'New RFQ invitation',
                             'You have been invited to quote on a new RFQ.',
                             'supplier_portal.php'
                         );
@@ -54,11 +56,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->prepare("UPDATE purchase_requisitions SET status='sourcing' WHERE id=:id")->execute([':id'=>$req_id]);                $pdo->commit();
-                header('Location: rfq.php?id=' . $rfq_id . '&toast=' . urlencode('✅ RFQ created and sent to ' . count($suppliers) . ' supplier(s).'));
+                header('Location: rfq.php?id=' . $rfq_id . '&toast=' . urlencode('RFQ created and sent to ' . count($suppliers) . ' supplier(s).'));
                 exit;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
+                $toast = $e->getMessage(); $toast_type = 'error';
             }
         }
     }
@@ -73,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notes   = trim($_POST['notes'] ?? '');
 
         if (!$rfq_id || !$sup_id || $total <= 0) {
-            $toast = '⚠️ Select a supplier and enter a valid quote.'; $toast_type = 'error';
+            $toast = 'Select a supplier and enter a valid quote.'; $toast_type = 'error';
         } else {
             $pdo->prepare('
                 INSERT INTO bids (rfq_id, supplier_id, quoted_total, lead_time_days, notes)
@@ -83,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':r'=>$rfq_id, ':s'=>$sup_id, ':t'=>$total, ':l'=>$lead, ':n'=>$notes,
                 ':t2'=>$total, ':l2'=>$lead, ':n2'=>$notes,
             ]);
-            $toast = '✅ Bid recorded.';
+            $toast = 'Bid recorded.';
         }
         header('Location: rfq.php?id=' . $rfq_id . ($toast ? '&toast=' . urlencode($toast) . '&type=' . $toast_type : ''));
         exit;
@@ -94,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bid_id = (int)($_POST['bid_id'] ?? 0);
         $rfq_id = (int)($_POST['rfq_id'] ?? 0);
         $pdo->prepare("UPDATE bids SET status='shortlisted' WHERE id=:id")->execute([':id'=>$bid_id]);
-        header('Location: rfq.php?id=' . $rfq_id . '&toast=' . urlencode('⭐ Bid shortlisted.'));
+        header('Location: rfq.php?id=' . $rfq_id . '&toast=' . urlencode('Bid shortlisted.'));
         exit;
     }
 
@@ -128,11 +130,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $po_id = (int)$pdo->lastInsertId();
 
             $pdo->commit();
-            header('Location: purchase_orders.php?id=' . $po_id . '&toast=' . urlencode('✅ Supplier Signed — Purchase Order created!'));
+            header('Location: purchase_orders.php?id=' . $po_id . '&toast=' . urlencode('Supplier Signed — Purchase Order created!'));
             exit;
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
+            $toast = $e->getMessage(); $toast_type = 'error';
             header('Location: rfq.php?id=' . $rfq_id . '&toast=' . urlencode($toast) . '&type=error');
             exit;
         }
@@ -266,7 +268,7 @@ if (!$rfq && !$requisition) {
               <?php endforeach; ?>
             </div>
           </div>
-          <button type="submit" class="btn-save">📨 Create &amp; Send RFQ</button>
+          <button type="submit" class="btn-save"><?= icon('send', 14) ?> Create &amp; Send RFQ</button>
         </form>
         <?php endif; ?>
       </div>
@@ -299,12 +301,12 @@ if (!$rfq && !$requisition) {
             <input class="field-input" type="number" min="0" name="lead_time_days" value="0"/></div>
           <div class="field-group" style="margin:0;flex:1;min-width:160px"><label class="field-label">Notes</label>
             <input class="field-input" type="text" name="notes" placeholder="Optional"/></div>
-          <button type="submit" class="btn-save">➕ Record Offers</button>
+          <button type="submit" class="btn-save"><?= icon('plus', 14) ?> Record Offers</button>
         </form>
         <?php endif; ?>
 
         <?php if (count($bids) >= 2): $best_total = min(array_column($bids, 'quoted_total')); $best_lead = min(array_column($bids, 'lead_time_days')); ?>
-        <h3 style="font-size:13.5px;margin-bottom:10px">⚖️ Compare Offers Side-by-Side</h3>
+        <h3 style="font-size:13.5px;margin-bottom:10px"><?= icon('scale', 16) ?> Compare Offers Side-by-Side</h3>
         <div class="table-scroll-wrapper" style="margin-bottom:22px">
           <table>
             <thead>
@@ -320,7 +322,7 @@ if (!$rfq && !$requisition) {
                 <td class="muted-cell" style="font-weight:600">Quoted Total</td>
                 <?php foreach ($bids as $b): ?>
                   <td style="font-weight:800<?= $b['quoted_total']==$best_total ? ';color:var(--green)' : '' ?>">
-                    ₱<?= number_format($b['quoted_total'],2) ?><?= $b['quoted_total']==$best_total ? ' 🏅' : '' ?>
+                    ₱<?= number_format($b['quoted_total'],2) ?><?= $b['quoted_total']==$best_total ? (' ' . icon('award', 13, '', 'color:var(--green);vertical-align:middle;')) : '' ?>
                   </td>
                 <?php endforeach; ?>
               </tr>
@@ -328,7 +330,7 @@ if (!$rfq && !$requisition) {
                 <td class="muted-cell" style="font-weight:600">Lead Time</td>
                 <?php foreach ($bids as $b): ?>
                   <td style="font-weight:700<?= $b['lead_time_days']==$best_lead ? ';color:var(--green)' : '' ?>">
-                    <?= $b['lead_time_days'] ?> day(s)<?= $b['lead_time_days']==$best_lead ? ' 🏅' : '' ?>
+                    <?= $b['lead_time_days'] ?> day(s)<?= $b['lead_time_days']==$best_lead ? (' ' . icon('award', 13, '', 'color:var(--green);vertical-align:middle;')) : '' ?>
                   </td>
                 <?php endforeach; ?>
               </tr>
@@ -343,7 +345,7 @@ if (!$rfq && !$requisition) {
                 <?php foreach ($bids as $b): ?>
                   <td>
                     <?php if ($b['status']==='selected'): ?><span class="status-badge status-approved">Accepted</span>
-                    <?php elseif ($b['status']==='shortlisted'): ?><span class="status-badge status-pending">⭐ Shortlisted</span>
+                    <?php elseif ($b['status']==='shortlisted'): ?><span class="status-badge status-pending"><?= icon('star', 11) ?> Shortlisted</span>
                     <?php elseif ($b['status']==='rejected'): ?><span class="status-badge status-rejected">Rejected</span>
                     <?php else: ?><span class="status-badge status-pending">Submitted</span>
                     <?php endif; ?>
@@ -364,7 +366,7 @@ if (!$rfq && !$requisition) {
             <div class="bid-info">
               <div class="bid-supplier"><?= htmlspecialchars($b['supplier_name']) ?>
                 <?php if ($b['status']==='selected'): ?><span class="status-badge status-approved" style="margin-left:6px">Accepted Offer</span><?php endif; ?>
-                <?php if ($b['status']==='shortlisted'): ?><span class="status-badge status-pending" style="margin-left:6px">⭐ Shortlisted</span><?php endif; ?>
+                <?php if ($b['status']==='shortlisted'): ?><span class="status-badge status-pending" style="margin-left:6px"><?= icon('star', 11) ?> Shortlisted</span><?php endif; ?>
               </div>
               <div class="bid-meta"><?= $b['lead_time_days'] ?> day lead time <?= $b['notes'] ? ' · "' . htmlspecialchars($b['notes']) . '"' : '' ?></div>
             </div>
@@ -373,7 +375,7 @@ if (!$rfq && !$requisition) {
               <div class="act-group">
                 <?php if (has_permission('procurement.bidding.review') && $b['status']==='submitted'): ?>
                   <form method="POST"><input type="hidden" name="action" value="shortlist"/><input type="hidden" name="bid_id" value="<?= $b['id'] ?>"/><input type="hidden" name="rfq_id" value="<?= $rfq['id'] ?>"/>
-                    <button type="submit" class="act-btn">⭐ Shortlist</button></form>
+                    <button type="submit" class="act-btn"><?= icon('star', 12) ?> Shortlist</button></form>
                 <?php endif; ?>
                 <?php if (has_permission('procurement.po.manage')): ?>
                   <button class="act-btn act-activate" onclick="openAward(<?= $b['id'] ?>, '<?= htmlspecialchars($b['supplier_name'], ENT_QUOTES) ?>')">Contract Signed</button>
@@ -388,17 +390,17 @@ if (!$rfq && !$requisition) {
       <!-- ── List of all RFQs ── -->
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>Requisition</th><th>Department</th><th>Offers</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Requisition</th><th>Department</th><th>Offers</th><th>Status</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($rfq_list)): ?>
-            <tr class="empty-row"><td colspan="5">🫙 No RFQs yet. Approve a requisition first, then click "Start RFQ".</td></tr>
+            <tr class="empty-row"><td colspan="5"><?= icon('inbox', 18) ?> No RFQs yet. Approve a requisition first, then click "Start RFQ".</td></tr>
           <?php else: foreach ($rfq_list as $r): ?>
             <tr>
               <td style="font-weight:700"><?= htmlspecialchars($r['req_title']) ?></td>
               <td><?= htmlspecialchars($r['department']) ?></td>
               <td><?= $r['bid_count'] ?></td>
               <td><span class="status-badge status-<?= $r['status']==='awarded'?'approved':'pending' ?>"><?= ucfirst($r['status']) ?></span></td>
-              <td><button class="act-btn" onclick="window.location.href='rfq.php?id=<?= $r['id'] ?>'">👁 View</button></td>
+              <td style="text-align:center"><button class="act-btn" onclick="window.location.href='rfq.php?id=<?= $r['id'] ?>'"><?= icon('eye', 13) ?> View</button></td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>
@@ -412,7 +414,7 @@ if (!$rfq && !$requisition) {
 <!-- Award modal -->
 <div class="modal-overlay" id="award-modal">
   <div class="modal">
-    <div class="modal-header"><h3>🏆 Accept Offer & Create Purchase Order</h3><button class="modal-close" onclick="closeAward()">✕</button></div>
+    <div class="modal-header"><h3><?= icon('trophy', 16) ?> Accept Offer &amp; Create Purchase Order</h3><button class="modal-close" onclick="closeAward()"><?= icon('x', 14) ?></button></div>
     <form method="POST">
       <input type="hidden" name="action" value="award"/>
       <input type="hidden" name="rfq_id" value="<?= $rfq['id'] ?? '' ?>"/>
@@ -428,7 +430,7 @@ if (!$rfq && !$requisition) {
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeAward()">Cancel</button>
-        <button type="submit" class="btn-save">✔ Accept Offer</button>
+        <button type="submit" class="btn-save"><?= icon('check', 14) ?> Accept Offer</button>
       </div>
     </form>
   </div>

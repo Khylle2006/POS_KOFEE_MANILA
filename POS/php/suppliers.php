@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.suppliers.manage');
 
@@ -30,17 +31,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!$name) {
-            $toast = '⚠️ Supplier name is required.'; $toast_type = 'error';
+            $toast = 'Supplier name is required.'; $toast_type = 'error';
         } elseif ($link_conflict) {
-            $toast = '⚠️ That login account is already linked to another supplier.'; $toast_type = 'error';
+            $toast = 'That login account is already linked to another supplier.'; $toast_type = 'error';
         } elseif ($id) {
             $pdo->prepare('UPDATE suppliers SET name=:n, contact_person=:c, email=:e, phone=:p, address=:a, user_id=:u WHERE id=:id')
                 ->execute([':n'=>$name, ':c'=>$contact, ':e'=>$email, ':p'=>$phone, ':a'=>$address, ':u'=>$user_id, ':id'=>$id]);
-            $toast = '✅ Supplier updated!';
+            $toast = 'Supplier updated!';
         } else {
             $pdo->prepare('INSERT INTO suppliers (name, contact_person, email, phone, address, status, user_id) VALUES (:n,:c,:e,:p,:a,"active",:u)')
                 ->execute([':n'=>$name, ':c'=>$contact, ':e'=>$email, ':p'=>$phone, ':a'=>$address, ':u'=>$user_id]);
-            $toast = '✅ "' . htmlspecialchars($name) . '" added to your supplier directory!';
+            $toast = '"' . htmlspecialchars($name) . '" added to your supplier directory!';
         }
     }
 
@@ -49,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status = $_POST['status'] ?? '';
         if ($id && in_array($status, ['active','inactive'])) {
             $pdo->prepare('UPDATE suppliers SET status=:s WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
-            $toast = $status === 'active' ? '✅ Supplier reactivated.' : '🚫 Supplier marked inactive.';
+            $toast = $status === 'active' ? 'Supplier reactivated.' : 'Supplier marked inactive.';
         }
     }
 
@@ -113,19 +114,19 @@ $eligible_logins = $login_stmt->fetchAll();
       <h1>Suppliers</h1>
       <p>Your procurement supplier directory</p>
     </div>
-    <button class="btn-add" onclick="openAdd()">➕ Add Supplier</button>
+    <button class="btn-add" onclick="openAdd()"><?= icon('plus', 14) ?> Add Supplier</button>
   </div>
 
   <div class="page-body">
 
     <div class="stat-row" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#fdf3ea">🏢</div><div><div class="mini-stat-val"><?= $total ?></div><div class="mini-stat-lbl">Total Suppliers</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:var(--green-lt)">✅</div><div><div class="mini-stat-val"><?= $active ?></div><div class="mini-stat-lbl">Active</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#fdf3ea"><?= icon('briefcase', 18, '', 'color:var(--caramel)') ?></div><div><div class="mini-stat-val"><?= $total ?></div><div class="mini-stat-lbl">Total Suppliers</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:var(--green-lt)"><?= icon('check', 18, '', 'color:var(--green)') ?></div><div><div class="mini-stat-val"><?= $active ?></div><div class="mini-stat-lbl">Active</div></div></div>
     </div>
 
     <div class="filter-bar" style="padding:0">
       <form method="GET" style="display:contents">
-        <input class="filter-input" type="text" name="search" placeholder="🔍 Search name, contact, or email…"
+        <input class="filter-input" type="text" name="search" placeholder="Search name, contact, or email…"
                value="<?= htmlspecialchars($search) ?>" style="flex:1;min-width:220px"/>
         <button type="submit" class="act-btn act-activate">Search</button>
       </form>
@@ -138,32 +139,32 @@ $eligible_logins = $login_stmt->fetchAll();
         </thead>
         <tbody>
         <?php if (empty($suppliers)): ?>
-          <tr class="empty-row"><td colspan="8">🫙 No suppliers yet — add your first one.</td></tr>
+          <tr class="empty-row"><td colspan="8"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No suppliers yet — add your first one.</td></tr>
         <?php else: foreach ($suppliers as $s): ?>
           <tr>
             <td style="font-weight:700"><?= htmlspecialchars($s['name']) ?></td>
             <td><?= htmlspecialchars($s['contact_person'] ?: '—') ?></td>
             <td class="muted-cell"><?= htmlspecialchars($s['email'] ?: '—') ?></td>
             <td class="muted-cell"><?= htmlspecialchars($s['phone'] ?: '—') ?></td>
-            <td><?= $s['login_username'] ? '🔑 ' . htmlspecialchars($s['login_username']) : '<span class="muted-cell">Not linked</span>' ?></td>
-            <td><?= $s['rating_avg'] ? '⭐ ' . number_format($s['rating_avg'],1) . ' (' . $s['rating_count'] . ')' : '<span class="muted-cell">Not rated</span>' ?></td>
+            <td><?= $s['login_username'] ? '<span style="display:inline-flex;align-items:center;gap:4px">' . icon('key', 12) . ' ' . htmlspecialchars($s['login_username']) . '</span>' : '<span class="muted-cell">Not linked</span>' ?></td>
+            <td><?= $s['rating_avg'] ? '<span style="display:inline-flex;align-items:center;gap:4px;color:var(--amber,#b45309)">' . icon('star', 12, '', 'fill:currentColor') . ' ' . number_format($s['rating_avg'],1) . ' (' . $s['rating_count'] . ')</span>' : '<span class="muted-cell">Not rated</span>' ?></td>
             <td><span class="badge badge-<?= $s['status']==='active'?'active':'blocked' ?>"><?= ucfirst($s['status']) ?></span></td>
             <td>
               <div class="act-group">
-                <button class="act-btn" onclick='openEdit(<?= htmlspecialchars(json_encode($s), ENT_QUOTES) ?>)'>✏️ Edit</button>
+                <button class="act-btn" onclick='openEdit(<?= htmlspecialchars(json_encode($s), ENT_QUOTES) ?>)'><?= icon('edit', 13) ?> Edit</button>
                 <?php if ($s['status'] === 'active'): ?>
                   <form method="POST" style="display:inline">
                     <input type="hidden" name="action" value="set_status"/>
                     <input type="hidden" name="id" value="<?= $s['id'] ?>"/>
                     <input type="hidden" name="status" value="inactive"/>
-                    <button type="submit" class="act-btn act-block">🚫 Deactivate</button>
+                    <button type="submit" class="act-btn act-block"><?= icon('x', 13) ?> Deactivate</button>
                   </form>
                 <?php else: ?>
                   <form method="POST" style="display:inline">
                     <input type="hidden" name="action" value="set_status"/>
                     <input type="hidden" name="id" value="<?= $s['id'] ?>"/>
                     <input type="hidden" name="status" value="active"/>
-                    <button type="submit" class="act-btn act-activate">✅ Activate</button>
+                    <button type="submit" class="act-btn act-activate"><?= icon('check', 13) ?> Activate</button>
                   </form>
                 <?php endif; ?>
               </div>
@@ -180,8 +181,8 @@ $eligible_logins = $login_stmt->fetchAll();
 <div class="modal-overlay" id="supplier-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="modal-title">➕ Add Supplier</h3>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+      <h3 id="modal-title" style="display:flex;align-items:center;gap:6px"><span id="modal-icon"><?= icon('plus', 16) ?></span> <span id="modal-title-text">Add Supplier</span></h3>
+      <button class="modal-close" onclick="closeModal()" aria-label="Close"><?= icon('x', 14) ?></button>
     </div>
     <form method="POST" id="supplier-form">
       <input type="hidden" name="action" value="save"/>
@@ -224,7 +225,7 @@ $eligible_logins = $login_stmt->fetchAll();
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
-        <button type="submit" class="btn-save" id="save-btn">➕ Add Supplier</button>
+        <button type="submit" class="btn-save" id="save-btn"><?= icon('plus', 14) ?> Add Supplier</button>
       </div>
     </form>
   </div>
@@ -245,8 +246,9 @@ function resetLoginOptions(currentUserId) {
   });
 }
 function openAdd() {
-  document.getElementById('modal-title').textContent = '➕ Add Supplier';
-  document.getElementById('save-btn').textContent = '➕ Add Supplier';
+  document.getElementById('modal-title-text').textContent = 'Add Supplier';
+  document.getElementById('modal-icon').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  document.getElementById('save-btn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Supplier';
   document.getElementById('f-id').value = '';
   document.getElementById('f-name').value = '';
   document.getElementById('f-contact').value = '';
@@ -258,8 +260,9 @@ function openAdd() {
   document.getElementById('supplier-modal').classList.add('open');
 }
 function openEdit(s) {
-  document.getElementById('modal-title').textContent = '✏️ Edit Supplier';
-  document.getElementById('save-btn').textContent = '💾 Save Changes';
+  document.getElementById('modal-title-text').textContent = 'Edit Supplier';
+  document.getElementById('modal-icon').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  document.getElementById('save-btn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes';
   document.getElementById('f-id').value = s.id;
   document.getElementById('f-name').value = s.name;
   document.getElementById('f-contact').value = s.contact_person || '';

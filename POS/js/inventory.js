@@ -20,12 +20,12 @@ function selectItem(id) {
   const isOut = qty <= 0;
   const isLow = !isOut && qty <= reorder;
   const statusCls = isOut ? 'badge-out' : isLow ? 'badge-low' : 'badge-ok';
-  const statusTxt = isOut ? '🔴 Out of stock' : isLow ? '⚠️ Low stock' : '✅ In stock';
+  const statusTxt = isOut ? 'Out of stock' : isLow ? 'Low stock' : 'In stock';
   const color = isOut ? 'var(--red)' : isLow ? 'var(--amber)' : 'var(--accent)';
 
   document.getElementById('detail-panel').innerHTML = `
     <div class="detail-head">
-      <div class="detail-icon">${ing.cat_icon}</div>
+      <div class="detail-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></div>
       <div class="detail-title">
         <h2>${escHtml(ing.name)}</h2>
         <p>${escHtml(ing.brand || '—')} · ${escHtml(ing.cat_name)} · ${escHtml(ing.unit)}</p>
@@ -50,14 +50,14 @@ function selectItem(id) {
         <div class="restock-row">
           <input type="number" name="qty" placeholder="Enter quantity (${escHtml(ing.unit)})"
                  step="0.1" min="0.1" required/>
-          <button type="submit" class="btn-confirm">✔ Confirm</button>
+          <button type="submit" class="btn-confirm">Confirm</button>
         </div>
       </form>
     </div>
 
     <div class="detail-actions">
-      <button class="btn-edit" onclick='openEdit(${JSON.stringify(ing)})'>✏️ Edit Details</button>
-      <button class="btn-del" onclick="openDelete(${ing.id}, '${escHtml(ing.name)}')">🗑️ Delete</button>
+      <button class="btn-edit" onclick='openEdit(${JSON.stringify(ing)})'>Edit Details</button>
+      <button class="btn-del" onclick="openDelete(${ing.id}, '${escHtml(ing.name)}')">Delete</button>
     </div>
   `;
 }
@@ -79,7 +79,7 @@ function restockItem(e, id) {
   const ing = items[id];
   ing.quantity = parseFloat(ing.quantity) + parseFloat(qty);
   
-  showToast(`✅ Restocked ${qty} ${ing.unit} of ${ing.name}`, 'success');
+  showToast(`Restocked ${qty} ${ing.unit} of ${ing.name}`, 'success');
   selectItem(id); // Refresh detail panel
   updateRowStatus(id);
 }
@@ -122,8 +122,8 @@ function showToast(message, type = 'success') {
 
 // ── Add modal ─────────────────────────────────
 function openAdd() {
-  document.getElementById('modal-title').textContent = '➕ Add Ingredient';
-  document.getElementById('modal-save-btn').textContent = '➕ Add Item';
+  document.getElementById('modal-title').textContent = 'Add Ingredient';
+  document.getElementById('modal-save-btn').textContent = 'Add Item';
   document.getElementById('f-action').value = 'add';
   document.getElementById('f-ing-id').value = '';
   document.getElementById('f-name').value = '';
@@ -137,8 +137,8 @@ function openAdd() {
 
 // ── Edit modal ────────────────────────────────
 function openEdit(ing) {
-  document.getElementById('modal-title').textContent = '✏️ Edit Ingredient';
-  document.getElementById('modal-save-btn').textContent = '💾 Save Changes';
+  document.getElementById('modal-title').textContent = 'Edit Ingredient';
+  document.getElementById('modal-save-btn').textContent = 'Save Changes';
   document.getElementById('f-action').value = 'edit';
   document.getElementById('f-ing-id').value = ing.id;
   document.getElementById('f-cat').value = ing.cat_id || 1;
@@ -162,7 +162,7 @@ document.getElementById('item-form').addEventListener('submit', function(e) {
   const reorder = parseFloat(document.getElementById('f-reorder').value) || 1;
   
   if (!name || !unit) {
-    showToast('⚠️ Name and unit are required', 'error');
+    showToast('Name and unit are required', 'error');
     return;
   }
   
@@ -170,7 +170,6 @@ document.getElementById('item-form').addEventListener('submit', function(e) {
     const newId = Math.max(...Object.keys(items).map(Number)) + 1;
     const cat_id = parseInt(document.getElementById('f-cat').value);
     const cat_map = {1: 'Coffee', 2: 'Milk', 3: 'Syrups', 4: 'Tea'};
-    const icon_map = {1: '☕', 2: '🥛', 3: '🧊', 4: '🍵'};
     
     items[newId] = {
       id: newId,
@@ -179,11 +178,11 @@ document.getElementById('item-form').addEventListener('submit', function(e) {
       unit: unit,
       quantity: qty,
       reorder_at: reorder,
-      cat_icon: icon_map[cat_id] || '📦',
+      cat_icon: '',
       cat_name: cat_map[cat_id] || 'Other'
     };
     
-    showToast(`✅ "${name}" added successfully!`, 'success');
+    showToast(`"${name}" added successfully!`, 'success');
     closeModal();
     location.reload(); // Reload to show new item
   } else {
@@ -193,7 +192,7 @@ document.getElementById('item-form').addEventListener('submit', function(e) {
       items[id].brand = brand || '—';
       items[id].unit = unit;
       items[id].reorder_at = reorder;
-      showToast(`✅ "${name}" updated successfully!`, 'success');
+      showToast(`"${name}" updated successfully!`, 'success');
       closeModal();
       selectItem(id);
     }
@@ -218,7 +217,7 @@ document.querySelector('#delete-modal form').addEventListener('submit', function
   const id = parseInt(document.getElementById('del-id').value);
   const name = items[id]?.name || 'Item';
   delete items[id];
-  showToast(`🗑️ "${name}" deleted successfully!`, 'success');
+  showToast(`"${name}" deleted successfully!`, 'success');
   closeDelete();
   location.reload();
 });

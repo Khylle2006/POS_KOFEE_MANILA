@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.view');
 
@@ -27,11 +28,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $po = $pdo->prepare('SELECT * FROM purchase_orders WHERE id = :id'); $po->execute([':id' => $po_id]); $po = $po->fetch();
 
         if (!$po) {
-            $toast = '⚠️ Purchase Order not found.'; $toast_type = 'error';
+            $toast = 'Purchase Order not found.'; $toast_type = 'error';
         } elseif (!$inv_num) {
-            $toast = '⚠️ Invoice number is required.'; $toast_type = 'error';
+            $toast = 'Invoice number is required.'; $toast_type = 'error';
         } elseif (empty($lines)) {
-            $toast = '⚠️ Add at least one line item.'; $toast_type = 'error';
+            $toast = 'Add at least one line item.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -95,12 +96,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'three_way_match.php?invoice_id=' . $invoice_id, $user['id']
                 );
 
-                $toast = '✅ Invoice logged. Ready for 3-way matching.';
+                $toast = 'Invoice logged. Ready for 3-way matching.';
                 header('Location: invoices.php?id=' . $invoice_id . '&toast=' . urlencode($toast) . '&type=success');
                 exit;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
+                $toast = $e->getMessage(); $toast_type = 'error';
             }
         }
     }
@@ -110,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['id'] ?? 0);
         $pdo->prepare("UPDATE invoices SET status='cancelled' WHERE id=:id AND status IN ('pending','disputed')")->execute([':id' => $id]);
         audit_log('invoice', $id, 'cancelled');
-        $toast = '🚫 Invoice cancelled.';
+        $toast = 'Invoice cancelled.';
         header('Location: invoices.php?id=' . $id . '&toast=' . urlencode($toast) . '&type=success');
         exit;
     }
@@ -264,7 +265,7 @@ $invoices = $list_stmt->fetchAll();
 
           <div style="margin-top:16px;text-align:right;display:flex;gap:10px;justify-content:flex-end">
             <a href="invoices.php" class="btn-cancel">Cancel</a>
-            <button type="submit" class="btn-save" id="invoice-submit-btn">🧾 Log Invoice</button>
+            <button type="submit" class="btn-save" id="invoice-submit-btn"><?= icon('invoice', 14) ?> Log Invoice</button>
           </div>
         </form>
       </div>
@@ -306,14 +307,14 @@ $invoices = $list_stmt->fetchAll();
           <?php if (in_array($invoice['status'], ['pending','disputed'], true) && has_permission('procurement.invoice.create')): ?>
             <form method="POST" onsubmit="return confirm('Cancel this invoice?')">
               <input type="hidden" name="action" value="cancel"/><input type="hidden" name="id" value="<?= $invoice['id'] ?>"/>
-              <button type="submit" class="btn-cancel">🚫 Cancel Invoice</button>
+              <button type="submit" class="btn-cancel"><?= icon('x', 13) ?> Cancel Invoice</button>
             </form>
           <?php endif; ?>
           <?php if (in_array($invoice['status'], ['pending','disputed'], true) && has_permission('procurement.invoice.match')): ?>
-            <a href="three_way_match.php?invoice_id=<?= $invoice['id'] ?>" class="btn-save">🔗 Run 3-Way Match</a>
+            <a href="three_way_match.php?invoice_id=<?= $invoice['id'] ?>" class="btn-save"><?= icon('link', 13) ?> Run 3-Way Match</a>
           <?php endif; ?>
           <?php if ($invoice['status'] === 'approved' && has_permission('procurement.payment.process')): ?>
-            <a href="payments.php?new_for_invoice=<?= $invoice['id'] ?>" class="btn-save">💸 Schedule Payment</a>
+            <a href="payments.php?new_for_invoice=<?= $invoice['id'] ?>" class="btn-save"><?= icon('dollar', 13) ?> Schedule Payment</a>
           <?php endif; ?>
         </div>
       </div>
@@ -325,7 +326,7 @@ $invoices = $list_stmt->fetchAll();
 <div class="table-card" style="padding:0;margin-bottom:18px;overflow:hidden">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1.5px solid var(--border)">
     <h3 style="font-size:13.5px;font-weight:700;color:var(--espresso);display:flex;align-items:center;gap:6px;margin:0">
-      🧾 Log a New Invoice
+      <?= icon('invoice', 16) ?> Log a New Invoice
     </h3>
     <?php if (!empty($eligible_pos)): ?>
       <span class="count-badge" style="background:var(--blue-lt);color:var(--blue)"><?= count($eligible_pos) ?></span>
@@ -334,13 +335,13 @@ $invoices = $list_stmt->fetchAll();
 
   <?php if (empty($eligible_pos)): ?>
     <div style="padding:30px 18px;text-align:center;color:var(--text-muted);font-size:13px">
-      📦 No delivered Purchase Orders awaiting invoicing right now.
+      No delivered Purchase Orders awaiting invoicing right now.
     </div>
   <?php else: ?>
     <div>
       <?php foreach ($eligible_pos as $ep): ?>
         <div class="kf-invoice-row" onclick="window.location.href='invoices.php?new_for_po=<?= $ep['id'] ?>'">
-          <div class="kf-invoice-icon" style="background:var(--blue-lt)">📦</div>
+          <div class="kf-invoice-icon" style="background:var(--blue-lt)"><?= icon('package', 18) ?></div>
           <div class="kf-invoice-info">
             <div class="kf-invoice-num">
               PO #<?= str_pad($ep['id'],5,'0',STR_PAD_LEFT) ?>
@@ -408,10 +409,10 @@ $invoices = $list_stmt->fetchAll();
       </div>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>Invoice #</th><th>PO #</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th></th></tr></thead>
+          <thead><tr><th>Invoice #</th><th>PO #</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($invoices)): ?>
-            <tr class="empty-row"><td colspan="7">🫙 No invoices logged yet.</td></tr>
+            <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No invoices logged yet.</td></tr>
           <?php else: foreach ($invoices as $i): ?>
             <tr>
               <td style="font-weight:700"><?= htmlspecialchars($i['invoice_number']) ?></td>
@@ -420,7 +421,7 @@ $invoices = $list_stmt->fetchAll();
               <td style="font-weight:700"><?= php_currency($i['total_amount']) ?></td>
               <td><span class="status-badge status-<?= in_array($i['status'],['approved','matched','paid'])?'approved':($i['status']==='disputed'?'rejected':'pending') ?>"><?= status_badge($i['status']) ?></span></td>
               <td class="muted-cell"><?= date('M d, Y', strtotime($i['created_at'])) ?></td>
-              <td><button class="act-btn" onclick="window.location.href='invoices.php?id=<?= $i['id'] ?>'">👁 View</button></td>
+              <td style="text-align:center"><button class="act-btn" onclick="window.location.href='invoices.php?id=<?= $i['id'] ?>'"><?= icon('eye', 13) ?> View</button></td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>

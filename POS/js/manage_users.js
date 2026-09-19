@@ -6,7 +6,9 @@
 function togglePw(id, btn) {
   const inp = document.getElementById(id);
   inp.type = inp.type === 'password' ? 'text' : 'password';
-  btn.textContent = inp.type === 'password' ? '👁️' : '🙈';
+  btn.innerHTML = inp.type === 'password' 
+    ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 }
 
 function toggleSection(kind) {
@@ -45,15 +47,15 @@ function resetModal() {
 
 function openAdd() {
   resetModal();
-  document.getElementById('modal-title').textContent = '➕ Add Staff Member';
-  document.getElementById('save-btn').textContent     = '➕ Add Staff Member';
+  document.getElementById('modal-title').textContent = 'Add Staff Member';
+  document.getElementById('save-btn').textContent     = 'Add Staff Member';
   document.getElementById('staff-modal').classList.add('open');
 }
 
 function openEdit(r) {
   resetModal();
-  document.getElementById('modal-title').textContent = '✏️ Edit Staff Member';
-  document.getElementById('save-btn').textContent     = '💾 Save Changes';
+  document.getElementById('modal-title').textContent = 'Edit Staff Member';
+  document.getElementById('save-btn').textContent     = 'Save Changes';
 
   document.getElementById('f-emp-id').value  = r.emp_id  || '';
   document.getElementById('f-user-id').value = r.user_id || '';
@@ -170,7 +172,7 @@ document.getElementById('staff-form').addEventListener('submit', function (e) {
 
   // 3. Section Toggles Check
   if (!wantAccount && !wantEmployee) {
-    errBox.textContent = '⚠️ Enable at least a Login Account or an Employee Profile.';
+    errBox.textContent = 'Enable at least a Login Account or an Employee Profile.';
     errBox.style.display = 'block';
     return;
   }
@@ -189,7 +191,7 @@ document.getElementById('staff-form').addEventListener('submit', function (e) {
     }
 
     if (!anyRole) {
-      errBox.textContent = '⚠️ Select at least one role for the login account.';
+      errBox.textContent = 'Select at least one role for the login account.';
       errBox.style.display = 'block';
       if (!firstInvalid) firstInvalid = document.querySelector('#f-roles input');
       isValid = false;
@@ -296,7 +298,7 @@ document.getElementById('staff-form').addEventListener('submit', function (e) {
       } else {
         saveBtn.disabled = false;
       }
-      errBox.textContent = '⚠️ Network error — nothing was saved.';
+      errBox.textContent = 'Network error — nothing was saved.';
       errBox.style.display = 'block';
     });
 });
@@ -304,12 +306,12 @@ document.getElementById('staff-form').addEventListener('submit', function (e) {
 // ── Status change confirm modal (Activate / Block / Deactivate / Reactivate) ──
 const STATUS_CONFIG = {
   set_account_status: {
-    active:  { icon: '✅', title: 'Activate Account?', msg: n => `"${n}"'s login account will be reactivated and they can sign in again.`, cls: '' },
-    blocked: { icon: '🚫', title: 'Block Account?',    msg: n => `"${n}" will be blocked and cannot sign in until reactivated.`, cls: 'background:var(--red)' },
+    active:  { iconHtml: '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>', title: 'Activate Account?', msg: n => `"${n}"'s login account will be reactivated and they can sign in again.`, cls: '' },
+    blocked: { iconHtml: '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c0392b" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>', title: 'Block Account?',    msg: n => `"${n}" will be blocked and cannot sign in until reactivated.`, cls: 'background:var(--red)' },
   },
   set_employee_status: {
-    active:   { icon: '✅', title: 'Reactivate Employee?', msg: n => `"${n}" will be marked active again.`, cls: '' },
-    inactive: { icon: '⏸️', title: 'Deactivate Employee?', msg: n => `"${n}" will be marked inactive.`, cls: 'background:var(--amber)' },
+    active:   { iconHtml: '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>', title: 'Reactivate Employee?', msg: n => `"${n}" will be marked active again.`, cls: '' },
+    inactive: { iconHtml: '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#e67e22" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>', title: 'Deactivate Employee?', msg: n => `"${n}" will be marked inactive.`, cls: 'background:var(--amber)' },
   }
 };
 
@@ -317,7 +319,7 @@ function askStatusConfirm(action, id, status, name, idKind) {
   const cfg = STATUS_CONFIG[action] && STATUS_CONFIG[action][status];
   if (!cfg) return;
 
-  document.getElementById('sc-icon').textContent    = cfg.icon;
+  document.getElementById('sc-icon').innerHTML      = cfg.iconHtml;
   document.getElementById('sc-title').textContent   = cfg.title;
   document.getElementById('sc-message').textContent = cfg.msg(name);
   document.getElementById('sc-confirm-btn').setAttribute('style', cfg.cls);

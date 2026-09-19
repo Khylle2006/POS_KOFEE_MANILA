@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.reports.view');
 
@@ -234,13 +235,13 @@ function dash_count_safe(PDO $pdo, string $sql, bool $float = false) {
 }
 
 $report_labels = [
-    'requisitions'    => ['📋 Requisitions', 'All filed purchase requisitions'],
-    'rfq_bids'        => ['📤 RFQ & Bids', 'Requests for quotation and supplier bids received'],
-    'purchase_orders' => ['📦 Purchase Orders', 'All purchase orders across the lifecycle'],
-    'goods_receipts'  => ['🚚 Goods Receipts', 'Delivery / GRN log with discrepancy counts'],
-    'invoices'        => ['🧾 Invoices', 'Supplier invoices and their match status'],
-    'payments'        => ['💸 Payments', 'Scheduled and completed supplier payments'],
-    'suppliers'       => ['🏢 Supplier Spend', 'Total spend and rating per supplier'],
+    'requisitions'    => ['clipboard', 'Requisitions', 'All filed purchase requisitions'],
+    'rfq_bids'        => ['rfq', 'RFQ & Bids', 'Requests for quotation and supplier bids received'],
+    'purchase_orders' => ['package', 'Purchase Orders', 'All purchase orders across the lifecycle'],
+    'goods_receipts'  => ['truck', 'Goods Receipts', 'Delivery / GRN log with discrepancy counts'],
+    'invoices'        => ['invoice', 'Invoices', 'Supplier invoices and their match status'],
+    'payments'        => ['dollar', 'Payments', 'Scheduled and completed supplier payments'],
+    'suppliers'       => ['building', 'Supplier Spend', 'Total spend and rating per supplier'],
 ];
 $status_options = [
     'requisitions'    => ['pending','approved','rejected','sourcing','awarded','closed'],
@@ -293,30 +294,32 @@ function qs(array $overrides = []): string {
     <!-- ── Summary strip ─────────────────────────────── -->
     <div class="mini-grid">
       <div class="mini-stat">
-        <div class="mini-stat-icon" style="background:var(--amber-lt);color:var(--amber)">📝</div>
+        <div class="mini-stat-icon" style="background:var(--amber-lt);color:var(--amber)"><?= icon('file-text', 18) ?></div>
         <div><div class="mini-stat-val"><?= $summary['open_requisitions'] ?></div><div class="mini-stat-lbl">Open Requisitions</div></div>
       </div>
       <div class="mini-stat">
-        <div class="mini-stat-icon" style="background:var(--blue-lt);color:var(--blue)">📦</div>
+        <div class="mini-stat-icon" style="background:var(--blue-lt);color:var(--blue)"><?= icon('package', 18) ?></div>
         <div><div class="mini-stat-val"><?= $summary['active_pos'] ?></div><div class="mini-stat-lbl">Active POs</div></div>
       </div>
       <div class="mini-stat">
-        <div class="mini-stat-icon" style="background:var(--accent-lt);color:var(--caramel)">💰</div>
+        <div class="mini-stat-icon" style="background:var(--accent-lt);color:var(--caramel)"><?= icon('coin', 18) ?></div>
         <div><div class="mini-stat-val" style="font-size:15px"><?= php_currency($summary['po_value_open']) ?></div><div class="mini-stat-lbl">Open PO Value</div></div>
       </div>
       <div class="mini-stat">
-        <div class="mini-stat-icon" style="background:var(--green-lt);color:var(--green)">✅</div>
+        <div class="mini-stat-icon" style="background:var(--green-lt);color:var(--green)"><?= icon('check-circle', 18) ?></div>
         <div><div class="mini-stat-val" style="font-size:15px"><?= php_currency($summary['paid_this_period']) ?></div><div class="mini-stat-lbl">Paid (last 90 days)</div></div>
       </div>
     </div>
 
     <!-- ── Report type tabs ──────────────────────────── -->
     <div class="report-tabs">
-      <?php foreach ($report_labels as $key => [$label, $desc]): ?>
-        <a href="procurement_reports.php?report=<?= $key ?>" class="filter-pill <?= $report===$key?'active':'' ?>"><?= $label ?></a>
+      <?php foreach ($report_labels as $key => [$iconKey, $label, $desc]): ?>
+        <a href="procurement_reports.php?report=<?= $key ?>" class="filter-pill <?= $report===$key?'active':'' ?>">
+          <?= icon($iconKey, 14, '', 'margin-right:4px;vertical-align:middle;') ?> <?= htmlspecialchars($label) ?>
+        </a>
       <?php endforeach; ?>
     </div>
-    <p class="muted-cell" style="margin-top:-10px"><?= $report_labels[$report][1] ?></p>
+    <p class="muted-cell" style="margin-top:-10px"><?= $report_labels[$report][2] ?></p>
 
     <!-- ── Filters ────────────────────────────────────── -->
     <form class="filter-form" method="GET">
@@ -391,7 +394,7 @@ function qs(array $overrides = []): string {
     <div class="table-scroll-wrapper">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px 0">
         <span class="muted-cell" style="font-size:12px"><?= count($rows) ?> record(s)</span>
-        <button class="act-btn" onclick="exportReportCSV()">⬇ Export CSV</button>
+        <button class="act-btn" onclick="exportReportCSV()"><?= icon('download', 14) ?> Export CSV</button>
       </div>
       <table id="report-table">
         <thead>
@@ -399,7 +402,7 @@ function qs(array $overrides = []): string {
         </thead>
         <tbody>
           <?php if (empty($rows)): ?>
-            <tr class="empty-row"><td colspan="<?= count($columns) ?>">🫙 No records match these filters.</td></tr>
+            <tr class="empty-row"><td colspan="<?= count($columns) ?>"><?= icon('inbox', 18) ?> No records match these filters.</td></tr>
           <?php else: foreach ($rows as $r): ?>
             <tr>
               <?php foreach (array_keys($columns) as $key): ?>

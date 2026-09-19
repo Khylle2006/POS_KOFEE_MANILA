@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.view');
 
@@ -207,7 +208,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($can['requisition_review']): ?>
         <div class="stat-card" onclick="window.location.href='requisitions.php'">
           <?php if ($reqs_awaiting_review > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--amber-lt);color:var(--amber)">📝</div>
+          <div class="stat-icon" style="background:var(--amber-lt);color:var(--amber)"><?= icon('file-text', 18) ?></div>
           <div class="stat-label">Awaiting Review</div>
           <div class="stat-value"><?= $reqs_awaiting_review ?></div>
           <div class="stat-sub">Requisitions pending a decision</div>
@@ -216,7 +217,7 @@ $my_recent_reqs = dash_rows($pdo, "
 
       <?php if ($can['requisition_create']): ?>
         <div class="stat-card" onclick="window.location.href='requisitions.php'">
-          <div class="stat-icon" style="background:var(--accent-lt);color:var(--caramel)">📋</div>
+          <div class="stat-icon" style="background:var(--accent-lt);color:var(--caramel)"><?= icon('clipboard', 18) ?></div>
           <div class="stat-label">My Requisitions</div>
           <div class="stat-value"><?= $my_pending_req ?></div>
           <div class="stat-sub">Still awaiting a decision</div>
@@ -226,7 +227,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($can['rfq']): ?>
         <div class="stat-card" onclick="window.location.href='requisitions.php'">
           <?php if ($reqs_awaiting_rfq > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--blue-lt);color:var(--blue)">🔍</div>
+          <div class="stat-icon" style="background:var(--blue-lt);color:var(--blue)"><?= icon('search', 18) ?></div>
           <div class="stat-label">Ready to Source</div>
           <div class="stat-value"><?= $reqs_awaiting_rfq ?></div>
           <div class="stat-sub">Approved, no RFQ started yet</div>
@@ -235,7 +236,7 @@ $my_recent_reqs = dash_rows($pdo, "
 
       <?php if ($can['rfq'] || $can['bid_review']): ?>
         <div class="stat-card" onclick="window.location.href='rfq.php'">
-          <div class="stat-icon" style="background:var(--blue-lt);color:var(--blue)">📤</div>
+          <div class="stat-icon" style="background:var(--blue-lt);color:var(--blue)"><?= icon('rfq', 18) ?></div>
           <div class="stat-label">Open RFQs</div>
           <div class="stat-value"><?= $open_rfqs ?></div>
           <div class="stat-sub">Awaiting supplier quotes</div>
@@ -245,7 +246,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($can['bid_review']): ?>
         <div class="stat-card" onclick="window.location.href='rfq.php'">
           <?php if ($bids_awaiting_review > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--green-lt);color:var(--green)">🏷️</div>
+          <div class="stat-icon" style="background:var(--green-lt);color:var(--green)"><?= icon('tag', 18) ?></div>
           <div class="stat-label">Bids to Evaluate</div>
           <div class="stat-value"><?= $bids_awaiting_review ?></div>
           <div class="stat-sub">Submitted quotes, no decision yet</div>
@@ -254,7 +255,7 @@ $my_recent_reqs = dash_rows($pdo, "
 
       <?php if ($can['po'] || $can['receiving']): ?>
         <div class="stat-card" onclick="window.location.href='purchase_orders.php'">
-          <div class="stat-icon" style="background:var(--accent-lt);color:var(--caramel)">📦</div>
+          <div class="stat-icon" style="background:var(--accent-lt);color:var(--caramel)"><?= icon('package', 18) ?></div>
           <div class="stat-label">POs in Flight</div>
           <div class="stat-value"><?= $pos_in_flight ?></div>
           <div class="stat-sub">Sent or acknowledged, not delivered</div>
@@ -264,7 +265,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($can['receiving']): ?>
         <div class="stat-card" onclick="window.location.href='goods_receipts.php'">
           <?php if ($deliveries_awaiting > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--green-lt);color:var(--green)">🚚</div>
+          <div class="stat-icon" style="background:var(--green-lt);color:var(--green)"><?= icon('truck', 18) ?></div>
           <div class="stat-label">Deliveries Due</div>
           <div class="stat-value"><?= $deliveries_awaiting ?></div>
           <div class="stat-sub">POs awaiting a Goods Receipt</div>
@@ -274,7 +275,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($can['grn_discrepancy']): ?>
         <div class="stat-card" onclick="window.location.href='goods_receipts.php'">
           <?php if ($grn_discrepancies > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--red-lt);color:var(--red)">⚠️</div>
+          <div class="stat-icon" style="background:var(--red-lt);color:var(--red)"><?= icon('alert-triangle', 18) ?></div>
           <div class="stat-label">GRN Discrepancies</div>
           <div class="stat-value"><?= $grn_discrepancies ?></div>
           <div class="stat-sub">Short, damaged, or rejected items</div>
@@ -284,7 +285,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($can['invoice_create'] || $can['invoice_match']): ?>
         <div class="stat-card" onclick="window.location.href='invoices.php'">
           <?php if ($invoices_pending > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--amber-lt);color:var(--amber)">🧾</div>
+          <div class="stat-icon" style="background:var(--amber-lt);color:var(--amber)"><?= icon('invoice', 18) ?></div>
           <div class="stat-label">Invoices Pending</div>
           <div class="stat-value"><?= $invoices_pending ?></div>
           <div class="stat-sub">Logged, not yet matched</div>
@@ -294,7 +295,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($can['invoice_match']): ?>
         <div class="stat-card" onclick="window.location.href='three_way_match.php'">
           <?php if ($invoices_disputed > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--red-lt);color:var(--red)">⚖️</div>
+          <div class="stat-icon" style="background:var(--red-lt);color:var(--red)"><?= icon('scale', 18) ?></div>
           <div class="stat-label">Match Exceptions</div>
           <div class="stat-value"><?= $invoices_disputed ?></div>
           <div class="stat-sub">Disputed 3-way matches</div>
@@ -304,7 +305,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($show_payments): ?>
         <div class="stat-card" onclick="window.location.href='payments.php'">
           <?php if ((int)$payments_scheduled['cnt'] > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--blue-lt);color:var(--blue)">💸</div>
+          <div class="stat-icon" style="background:var(--blue-lt);color:var(--blue)"><?= icon('dollar', 18) ?></div>
           <div class="stat-label">Payments Scheduled</div>
           <div class="stat-value"><?= (int)$payments_scheduled['cnt'] ?></div>
           <div class="stat-sub"><?= php_currency((float)$payments_scheduled['total']) ?> queued</div>
@@ -314,7 +315,7 @@ $my_recent_reqs = dash_rows($pdo, "
       <?php if ($can['rate'] || $can['close']): ?>
         <div class="stat-card" onclick="window.location.href='supplier_performace.php'">
           <?php if ($orders_ready_to_close > 0): ?><span class="kpi-flag">Action needed</span><?php endif; ?>
-          <div class="stat-icon" style="background:var(--green-lt);color:var(--green)">🏁</div>
+          <div class="stat-icon" style="background:var(--green-lt);color:var(--green)"><?= icon('flag', 18) ?></div>
           <div class="stat-label">Ready to Close</div>
           <div class="stat-value"><?= $orders_ready_to_close ?></div>
           <div class="stat-sub">Delivered &amp; paid, awaiting rating</div>
@@ -328,34 +329,34 @@ $my_recent_reqs = dash_rows($pdo, "
       <div class="section-title">Quick Access</div>
       <div class="quick-grid">
         <?php if ($can['requisition_create'] || $can['requisition_review']): ?>
-          <a class="quick-card" href="requisitions.php"><span class="qc-icon">📋</span><span class="qc-label">Requisitions</span><span class="qc-sub">File &amp; review requests</span></a>
+          <a class="quick-card" href="requisitions.php"><span class="qc-icon"><?= icon('clipboard', 20) ?></span><span class="qc-label">Requisitions</span><span class="qc-sub">File &amp; review requests</span></a>
         <?php endif; ?>
         <?php if ($can['rfq'] || $can['bid_review']): ?>
-          <a class="quick-card" href="rfq.php"><span class="qc-icon">📤</span><span class="qc-label">RFQ &amp; Bids</span><span class="qc-sub">Source &amp; evaluate quotes</span></a>
+          <a class="quick-card" href="rfq.php"><span class="qc-icon"><?= icon('rfq', 20) ?></span><span class="qc-label">RFQ &amp; Bids</span><span class="qc-sub">Source &amp; evaluate quotes</span></a>
         <?php endif; ?>
         <?php if ($can['po'] || $can['receiving']): ?>
-          <a class="quick-card" href="purchase_orders.php"><span class="qc-icon">📦</span><span class="qc-label">Purchase Orders</span><span class="qc-sub">Track order fulfillment</span></a>
+          <a class="quick-card" href="purchase_orders.php"><span class="qc-icon"><?= icon('package', 20) ?></span><span class="qc-label">Purchase Orders</span><span class="qc-sub">Track order fulfillment</span></a>
         <?php endif; ?>
         <?php if ($can['receiving'] || $can['grn_discrepancy']): ?>
-          <a class="quick-card" href="goods_receipts.php"><span class="qc-icon">🚚</span><span class="qc-label">Goods Receiving</span><span class="qc-sub">Log deliveries (GRN)</span></a>
+          <a class="quick-card" href="goods_receipts.php"><span class="qc-icon"><?= icon('truck', 20) ?></span><span class="qc-label">Goods Receiving</span><span class="qc-sub">Log deliveries (GRN)</span></a>
         <?php endif; ?>
         <?php if ($can['invoice_create'] || $can['invoice_match']): ?>
-          <a class="quick-card" href="invoices.php"><span class="qc-icon">🧾</span><span class="qc-label">Invoices</span><span class="qc-sub">Log &amp; match supplier bills</span></a>
+          <a class="quick-card" href="invoices.php"><span class="qc-icon"><?= icon('invoice', 20) ?></span><span class="qc-label">Invoices</span><span class="qc-sub">Log &amp; match supplier bills</span></a>
         <?php endif; ?>
         <?php if ($can['invoice_match']): ?>
-          <a class="quick-card" href="three_way_match.php"><span class="qc-icon">⚖️</span><span class="qc-label">3-Way Match</span><span class="qc-sub">PO ↔ GRN ↔ Invoice</span></a>
+          <a class="quick-card" href="three_way_match.php"><span class="qc-icon"><?= icon('scale', 20) ?></span><span class="qc-label">3-Way Match</span><span class="qc-sub">PO ↔ GRN ↔ Invoice</span></a>
         <?php endif; ?>
         <?php if ($can['payment']): ?>
-          <a class="quick-card" href="payments.php"><span class="qc-icon">💸</span><span class="qc-label">Payments</span><span class="qc-sub">Schedule &amp; complete</span></a>
+          <a class="quick-card" href="payments.php"><span class="qc-icon"><?= icon('dollar', 20) ?></span><span class="qc-label">Payments</span><span class="qc-sub">Schedule &amp; complete</span></a>
         <?php endif; ?>
         <?php if ($can['rate'] || $can['close']): ?>
-          <a class="quick-card" href="supplier_performace.php"><span class="qc-icon">🏁</span><span class="qc-label">Close &amp; Rate</span><span class="qc-sub">Score supplier performance</span></a>
+          <a class="quick-card" href="supplier_performace.php"><span class="qc-icon"><?= icon('flag', 20) ?></span><span class="qc-label">Close &amp; Rate</span><span class="qc-sub">Score supplier performance</span></a>
         <?php endif; ?>
         <?php if ($can['suppliers']): ?>
-          <a class="quick-card" href="suppliers.php"><span class="qc-icon">🏢</span><span class="qc-label">Suppliers</span><span class="qc-sub">Manage supplier records</span></a>
+          <a class="quick-card" href="suppliers.php"><span class="qc-icon"><?= icon('building', 20) ?></span><span class="qc-label">Suppliers</span><span class="qc-sub">Manage supplier records</span></a>
         <?php endif; ?>
         <?php if ($can['reports']): ?>
-          <a class="quick-card" href="procurement_reports.php"><span class="qc-icon">📊</span><span class="qc-label">Reports</span><span class="qc-sub">Filter &amp; export data</span></a>
+          <a class="quick-card" href="procurement_reports.php"><span class="qc-icon"><?= icon('bar-chart', 20) ?></span><span class="qc-label">Reports</span><span class="qc-sub">Filter &amp; export data</span></a>
         <?php endif; ?>
       </div>
     </div>
@@ -365,7 +366,7 @@ $my_recent_reqs = dash_rows($pdo, "
         <!-- ── Budget utilization ────────────────────────── -->
         <?php if (!empty($budget_rows)): ?>
           <div class="table-card" style="padding:18px 20px;margin-bottom:18px">
-            <div class="section-title" style="margin-bottom:14px">💰 Budget Utilization — <?= htmlspecialchars($period_label) ?></div>
+            <div class="section-title" style="margin-bottom:14px"><?= icon('coin', 16) ?> Budget Utilization — <?= htmlspecialchars($period_label) ?></div>
             <?php foreach ($budget_rows as $b):
               $alloc = (float)$b['allocated_amount']; $used = (float)$b['used_amount'];
               $pct   = $alloc > 0 ? min(100, round($used / $alloc * 100)) : ($used > 0 ? 100 : 0);
@@ -377,7 +378,7 @@ $my_recent_reqs = dash_rows($pdo, "
                   <span class="budget-amt"><?= php_currency($used) ?> / <?= $alloc > 0 ? php_currency($alloc) : 'No allocation' ?></span>
                 </div>
                 <div class="budget-bar-wrap"><div class="budget-bar-fill <?= $over ? 'over' : '' ?>" style="width:<?= $pct ?>%"></div></div>
-                <?php if ($over): ?><div class="budget-amt" style="color:var(--red);margin-top:4px">⚠️ Over allocation</div><?php endif; ?>
+                <?php if ($over): ?><div class="budget-amt" style="color:var(--red);margin-top:4px"><?= icon('alert-triangle', 13) ?> Over allocation</div><?php endif; ?>
               </div>
             <?php endforeach; ?>
           </div>
@@ -387,7 +388,7 @@ $my_recent_reqs = dash_rows($pdo, "
         <?php if ($can['requisition_create'] && !empty($my_recent_reqs)): ?>
           <div class="table-scroll-wrapper" style="margin-bottom:18px">
             <table>
-              <thead><tr><th colspan="4" style="background:#fff;font-size:13px;padding-top:14px">📋 My Recent Requisitions</th></tr>
+              <thead><tr><th colspan="4" style="background:#fff;font-size:13px;padding-top:14px"><?= icon('clipboard', 15) ?> My Recent Requisitions</th></tr>
               <tr><th>Title</th><th>Est. Total</th><th>Status</th><th>Date</th></tr></thead>
               <tbody>
                 <?php foreach ($my_recent_reqs as $r): ?>
@@ -406,7 +407,7 @@ $my_recent_reqs = dash_rows($pdo, "
         <!-- ── Recent activity / audit trail ───────────────── -->
         <?php if ($can['audit']): ?>
           <div class="table-card" style="padding:18px 20px">
-            <div class="section-title" style="margin-bottom:6px">🕘 Recent Activity</div>
+            <div class="section-title" style="margin-bottom:6px"><?= icon('clock', 16) ?> Recent Activity</div>
             <?php if (empty($recent_activity)): ?>
               <p class="muted-cell" style="padding:10px 0">No activity logged yet.</p>
             <?php else: foreach ($recent_activity as $a):
@@ -429,7 +430,7 @@ $my_recent_reqs = dash_rows($pdo, "
         <!-- ── Supplier leaderboard ─────────────────────────── -->
         <?php if (!empty($top_suppliers)): ?>
           <div class="table-card" style="padding:18px 20px">
-            <div class="section-title" style="margin-bottom:6px">🏆 Top Suppliers</div>
+            <div class="section-title" style="margin-bottom:6px"><?= icon('trophy', 16) ?> Top Suppliers</div>
             <?php foreach ($top_suppliers as $i => $s): ?>
               <div class="leader-row">
                 <div style="display:flex;align-items:center;gap:10px">

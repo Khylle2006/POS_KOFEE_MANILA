@@ -326,7 +326,9 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
   <!-- ── MODAL: TRACK APPLICATION ────────────────────────── -->
   <div class="km-modal-backdrop" id="trackModalBackdrop" onclick="handleBackdropClick(event, 'trackModalBackdrop')">
     <div class="km-modal" style="max-width: 500px;">
-      <button type="button" class="km-modal-close" onclick="closeTrackModal()">✕</button>
+      <button type="button" class="km-modal-close" onclick="closeTrackModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
       <div class="km-modal-header">
         <h3 class="km-modal-title">Track your application</h3>
         <p class="km-modal-subtitle">Enter your Application Code (e.g. KM-2026-BAR-XXXX) or registered email address.</p>
@@ -350,7 +352,9 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
   <!-- ── MODAL: JOB DETAILS ──────────────────────────────── -->
   <div class="km-modal-backdrop" id="detailsModalBackdrop" onclick="handleBackdropClick(event, 'detailsModalBackdrop')">
     <div class="km-modal" style="max-width: 580px;">
-      <button type="button" class="km-modal-close" onclick="closeJobDetails()">✕</button>
+      <button type="button" class="km-modal-close" onclick="closeJobDetails()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
       <div class="km-modal-header">
         <div class="km-job-badges" style="margin-bottom: 8px;">
           <span class="km-job-tag" id="modalJobDepartment">Coffee & Barista</span>
@@ -396,7 +400,9 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
   <!-- ── MODAL: PRIVACY POLICY ────────────────────────────── -->
   <div class="km-modal-backdrop" id="privacyModalBackdrop" onclick="handleBackdropClick(event, 'privacyModalBackdrop')">
     <div class="km-modal" style="max-width: 520px;">
-      <button type="button" class="km-modal-close" onclick="closePrivacyModal()">✕</button>
+      <button type="button" class="km-modal-close" onclick="closePrivacyModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
       <div class="km-modal-header">
         <h3 class="km-modal-title">Privacy Notice for Applicants</h3>
         <p class="km-modal-subtitle">How Kofee Manila handles your candidate data</p>
@@ -415,7 +421,9 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
   <!-- ── MODAL: CONTACT US ────────────────────────────────── -->
   <div class="km-modal-backdrop" id="contactModalBackdrop" onclick="handleBackdropClick(event, 'contactModalBackdrop')">
     <div class="km-modal" style="max-width: 460px;">
-      <button type="button" class="km-modal-close" onclick="closeContactModal()">✕</button>
+      <button type="button" class="km-modal-close" onclick="closeContactModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
       <div class="km-modal-header">
         <h3 class="km-modal-title">Contact Our Talent Team</h3>
         <p class="km-modal-subtitle">We are always happy to connect with great talent.</p>

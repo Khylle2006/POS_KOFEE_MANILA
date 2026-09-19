@@ -139,7 +139,7 @@ try {
         notify_event(
             action_type: 'INVENTORY_EXPIRY_ADJUSTED',
             perm_key:    'inventory.manage',
-            title:       '📅 Expiry date adjusted — ' . $batch['item_name'],
+            title:       'Expiry date adjusted — ' . $batch['item_name'],
             message:     sprintf('Batch #%d expiry changed from %s to %s.',
                             $batch_id, $batch['expiry_date'] ?: '—', $expiry ?: '—'),
             target_url:  'inventory.php',

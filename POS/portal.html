@@ -47,7 +47,7 @@
   <header class="bg-[#170E1E] border-b border-[#2E1C3A] px-5 py-2.5 flex items-center justify-between shrink-0 z-40">
     <div class="flex items-center space-x-3">
       <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EAA869] to-[#C97B3D] flex items-center justify-center text-white font-serif font-bold text-base shadow-md shadow-[#C97B3D]/30">
-        ☕
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
       </div>
       <div>
         <div class="flex items-center space-x-2">
@@ -61,11 +61,11 @@
     <!-- Quick Actions & PHP Link Buttons -->
     <div class="flex items-center space-x-3">
       <a href="index.html" target="_blank" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#22152C] border border-[#3A244A] text-xs text-slate-300 hover:text-white transition">
-        <span>🌐</span>
+        <svg class="w-3.5 h-3.5 text-[#C97B3D]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         <span>View Customer Storefront</span>
       </a>
       <a href="auth/login.php" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#C97B3D] hover:bg-[#D98B4D] text-white text-xs font-bold transition shadow-sm">
-        <span>🔐</span>
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         <span>PHP Backend Login</span>
       </a>
       <div class="text-right border-l border-[#2E1C3A] pl-3">
@@ -88,17 +88,17 @@
           <span class="text-[10px] uppercase font-extrabold tracking-wider text-slate-500 block px-2 mb-2">1. Point of Sale (FOH)</span>
           <div class="space-y-1 text-xs">
             <button onclick="navTo('pos', this)" class="nav-item active-nav w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">💳</span>
+              <svg class="w-4 h-4 text-[#C97B3D]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
               <span class="font-bold flex-1 text-left">New Order POS</span>
               <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-[#EAA869] font-mono">menu.php</span>
             </button>
             <button onclick="navTo('kds', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">⏱️</span>
+              <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span class="font-bold flex-1 text-left">Barista &amp; Kitchen KDS</span>
               <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-bold font-mono">3</span>
             </button>
             <button onclick="navTo('history', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">🧾</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="13" y2="15"/></svg>
               <span class="font-bold flex-1 text-left">Order Receipts History</span>
             </button>
           </div>
@@ -109,16 +109,16 @@
           <span class="text-[10px] uppercase font-extrabold tracking-wider text-slate-500 block px-2 mb-2">2. Supply Chain &amp; BOM</span>
           <div class="space-y-1 text-xs">
             <button onclick="navTo('inventory', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">📦</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
               <span class="font-bold flex-1 text-left">Inventory &amp; Recipe BOM</span>
               <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">2 Low</span>
             </button>
             <button onclick="navTo('procurement', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">📝</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               <span class="font-bold flex-1 text-left">Purchase Requisitions (PR)</span>
             </button>
             <button onclick="navTo('suppliers', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">🚚</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/></svg>
               <span class="font-bold flex-1 text-left">Suppliers &amp; 3-Way Match</span>
             </button>
           </div>
@@ -129,25 +129,25 @@
           <span class="text-[10px] uppercase font-extrabold tracking-wider text-slate-500 block px-2 mb-2">3. People &amp; Workforce</span>
           <div class="space-y-1 text-xs">
             <button onclick="navTo('attendance', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">⏰</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 15l2 2 4-4"/></svg>
               <span class="font-bold flex-1 text-left">Time-Clock &amp; Attendance</span>
             </button>
             <button onclick="navTo('leave', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">🌴</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
               <span class="font-bold flex-1 text-left">Leave &amp; PTO Requests</span>
               <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">1 Pending</span>
             </button>
             <button onclick="navTo('staff', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">👥</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               <span class="font-bold flex-1 text-left">Staff Directory &amp; RBAC</span>
             </button>
             <a href="careers.php" target="_blank" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">☕</span>
+              <svg class="w-4 h-4 text-[#C97B3D]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
               <span class="font-bold flex-1 text-left">Careers Portal (Public)</span>
               <span class="text-[10px] px-1.5 py-0.5 rounded bg-[#C97B3D]/20 text-[#EAA869] font-bold">New</span>
             </a>
             <a href="php/recruitment.php" target="_blank" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">📋</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
               <span class="font-bold flex-1 text-left">Recruitment &amp; Resumes</span>
             </a>
           </div>
@@ -158,11 +158,11 @@
           <span class="text-[10px] uppercase font-extrabold tracking-wider text-slate-500 block px-2 mb-2">4. Finance &amp; Ledgers</span>
           <div class="space-y-1 text-xs">
             <button onclick="navTo('analytics', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">📊</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>
               <span class="font-bold flex-1 text-left">Executive Analytics &amp; P&amp;L</span>
             </button>
             <button onclick="navTo('payments', this)" class="nav-item w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-slate-400 border border-transparent hover:border-[#3D284E] hover:bg-[#22152B] transition">
-              <span class="text-base">💰</span>
+              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.2 15.4c.5.9 1.5 1.5 2.8 1.5 1.8 0 3-1 3-2.3 0-3.2-5.6-1.7-5.6-4.9 0-1.3 1.2-2.3 3-2.3 1.2 0 2.2.5 2.7 1.4M12 6.4v1.2M12 16.4v1.2"/></svg>
               <span class="font-bold flex-1 text-left">Cash Drawer &amp; Z-Read</span>
             </button>
           </div>
@@ -171,8 +171,9 @@
       </div>
 
       <div class="mt-auto p-4 border-t border-[#2E1C3A]">
-        <div class="p-3 bg-[#22152C] rounded-xl border border-[#3A244A] text-[11px] text-slate-400">
-          📍 Project: <strong class="text-amber-300">POS_KOFEE_MANILA</strong>
+        <div class="p-3 bg-[#22152C] rounded-xl border border-[#3A244A] text-[11px] text-slate-400 flex items-center">
+          <svg class="w-3.5 h-3.5 mr-1.5 text-[#C97B3D] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span>Project: <strong class="text-amber-300">POS_KOFEE_MANILA</strong></span>
         </div>
       </div>
     </aside>
@@ -199,8 +200,10 @@
           </div>
 
           <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3.5 overflow-y-auto pr-1">
-            <div onclick="addPosItem('Iced Spanish Latte', 95, '🧊')" class="p-3.5 bg-[#20142A] hover:bg-[#2A1A37] border border-[#382447] hover:border-[#C97B3D] rounded-2xl cursor-pointer transition shadow-sm group">
-              <span class="text-2xl mb-2 block">🧊</span>
+            <div onclick="addPosItem('Iced Spanish Latte', 95)" class="p-3.5 bg-[#20142A] hover:bg-[#2A1A37] border border-[#382447] hover:border-[#C97B3D] rounded-2xl cursor-pointer transition shadow-sm group">
+              <div class="w-9 h-9 rounded-xl bg-[#2D1B3B] flex items-center justify-center mb-2.5 text-[#EAA869] group-hover:bg-[#C97B3D]/20 transition">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 2h10l1 18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L7 2z"/><line x1="5" y1="6" x2="19" y2="6"/><path d="M10 10h4"/><path d="M9 14h6"/><line x1="12" y1="1" x2="12" y2="4"/></svg>
+              </div>
               <h4 class="font-bold text-xs text-slate-100 group-hover:text-amber-200">Iced Spanish Latte</h4>
               <p class="text-[10px] text-slate-400 mt-0.5">Espresso &bull; Condensed milk</p>
               <div class="mt-2.5 pt-2 border-t border-[#311F3E] flex justify-between items-center font-mono">
@@ -209,8 +212,10 @@
               </div>
             </div>
 
-            <div onclick="addPosItem('Caramel Macchiato', 105, '☕')" class="p-3.5 bg-[#20142A] hover:bg-[#2A1A37] border border-[#382447] hover:border-[#C97B3D] rounded-2xl cursor-pointer transition shadow-sm group">
-              <span class="text-2xl mb-2 block">☕</span>
+            <div onclick="addPosItem('Caramel Macchiato', 105)" class="p-3.5 bg-[#20142A] hover:bg-[#2A1A37] border border-[#382447] hover:border-[#C97B3D] rounded-2xl cursor-pointer transition shadow-sm group">
+              <div class="w-9 h-9 rounded-xl bg-[#2D1B3B] flex items-center justify-center mb-2.5 text-[#EAA869] group-hover:bg-[#C97B3D]/20 transition">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+              </div>
               <h4 class="font-bold text-xs text-slate-100 group-hover:text-amber-200">Caramel Macchiato</h4>
               <p class="text-[10px] text-slate-400 mt-0.5">Vanilla, espresso, drizzle</p>
               <div class="mt-2.5 pt-2 border-t border-[#311F3E] flex justify-between items-center font-mono">
@@ -219,8 +224,10 @@
               </div>
             </div>
 
-            <div onclick="addPosItem('Brown Sugar Boba', 100, '🧋')" class="p-3.5 bg-[#20142A] hover:bg-[#2A1A37] border border-[#382447] hover:border-[#C97B3D] rounded-2xl cursor-pointer transition shadow-sm group">
-              <span class="text-2xl mb-2 block">🧋</span>
+            <div onclick="addPosItem('Brown Sugar Boba', 100)" class="p-3.5 bg-[#20142A] hover:bg-[#2A1A37] border border-[#382447] hover:border-[#C97B3D] rounded-2xl cursor-pointer transition shadow-sm group">
+              <div class="w-9 h-9 rounded-xl bg-[#2D1B3B] flex items-center justify-center mb-2.5 text-[#EAA869] group-hover:bg-[#C97B3D]/20 transition">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12l-1.5 16a2 2 0 0 1-2 1.8H9.5A2 2 0 0 1 7.5 19L6 3z"/><line x1="10" y1="7" x2="14" y2="7"/><circle cx="10" cy="14" r="1.2" fill="currentColor"/><circle cx="14" cy="14" r="1.2" fill="currentColor"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></svg>
+              </div>
               <h4 class="font-bold text-xs text-slate-100 group-hover:text-amber-200">Brown Sugar Boba</h4>
               <p class="text-[10px] text-slate-400 mt-0.5">Fresh pearls &bull; Whole milk</p>
               <div class="mt-2.5 pt-2 border-t border-[#311F3E] flex justify-between items-center font-mono">
@@ -229,8 +236,10 @@
               </div>
             </div>
 
-            <div onclick="addPosItem('Butter Croissant', 75, '🥐')" class="p-3.5 bg-[#20142A] hover:bg-[#2A1A37] border border-[#382447] hover:border-[#C97B3D] rounded-2xl cursor-pointer transition shadow-sm group">
-              <span class="text-2xl mb-2 block">🥐</span>
+            <div onclick="addPosItem('Butter Croissant', 75)" class="p-3.5 bg-[#20142A] hover:bg-[#2A1A37] border border-[#382447] hover:border-[#C97B3D] rounded-2xl cursor-pointer transition shadow-sm group">
+              <div class="w-9 h-9 rounded-xl bg-[#2D1B3B] flex items-center justify-center mb-2.5 text-[#EAA869] group-hover:bg-[#C97B3D]/20 transition">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2C6.5 2 2 6.5 2 12c0 2.5 1 4.5 2.5 6l1.5-1.5C5 15.5 4.5 14 4.5 12 4.5 7.8 7.8 4.5 12 4.5s7.5 3.3 7.5 7.5c0 2-.5 3.5-1.5 4.5l1.5 1.5c1.5-1.5 2.5-3.5 2.5-6 0-5.5-4.5-10-10-10z"/><circle cx="9" cy="11" r="1.2" fill="currentColor"/><circle cx="15" cy="11" r="1.2" fill="currentColor"/><path d="M9 15c1.5 1.5 4.5 1.5 6 0"/></svg>
+              </div>
               <h4 class="font-bold text-xs text-slate-100 group-hover:text-amber-200">Butter Croissant</h4>
               <p class="text-[10px] text-slate-400 mt-0.5">Flaky French butter pastry</p>
               <div class="mt-2.5 pt-2 border-t border-[#311F3E] flex justify-between items-center font-mono">
@@ -260,8 +269,9 @@
               <span>Total (12% VAT Included)</span>
               <span class="font-bold text-base font-mono text-emerald-400" id="posGrandTotal">₱95.00</span>
             </div>
-            <button onclick="simulatedCheckout()" class="w-full py-2.5 rounded-xl bg-[#C97B3D] hover:bg-[#D98B4D] text-white font-bold text-xs shadow-lg shadow-[#C97B3D]/30 transition">
-              💳 Settle Payment (₱)
+            <button onclick="simulatedCheckout()" class="w-full py-2.5 rounded-xl bg-[#C97B3D] hover:bg-[#D98B4D] text-white font-bold text-xs shadow-lg shadow-[#C97B3D]/30 transition flex items-center justify-center space-x-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              <span>Settle Payment (₱)</span>
             </button>
           </div>
         </div>
@@ -297,7 +307,7 @@
               </ul>
             </div>
             <button onclick="kdsComplete(this)" class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition">
-              ✓ Mark Drink Ready
+              Mark Drink Ready
             </button>
           </div>
 
@@ -318,7 +328,7 @@
               </ul>
             </div>
             <button onclick="kdsComplete(this)" class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition">
-              ✓ Mark Drink Ready
+              Mark Drink Ready
             </button>
           </div>
 
@@ -339,7 +349,7 @@
               </ul>
             </div>
             <button onclick="kdsComplete(this)" class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition">
-              ✓ Mark Drink Ready
+              Mark Drink Ready
             </button>
           </div>
         </div>
@@ -411,22 +421,34 @@
           <div class="p-4 bg-[#1C1224] rounded-2xl border border-[#2F1E3C]">
             <span class="text-[11px] text-slate-400 uppercase font-bold">Benguet Arabica Beans</span>
             <div class="text-2xl font-mono font-extrabold text-amber-300 mt-1">4.2 kg</div>
-            <span class="text-[10px] text-rose-400 font-bold">⚠️ Below 5.0 kg Reorder Point</span>
+            <span class="text-[10px] text-rose-400 font-bold flex items-center gap-1 mt-1">
+              <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Below 5.0 kg Reorder Point</span>
+            </span>
           </div>
           <div class="p-4 bg-[#1C1224] rounded-2xl border border-[#2F1E3C]">
             <span class="text-[11px] text-slate-400 uppercase font-bold">Barista Oat Milk</span>
             <div class="text-2xl font-mono font-extrabold text-rose-400 mt-1">8 Cartons</div>
-            <span class="text-[10px] text-rose-400 font-bold">⚠️ Below 12 Cartons Point</span>
+            <span class="text-[10px] text-rose-400 font-bold flex items-center gap-1 mt-1">
+              <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Below 12 Cartons Point</span>
+            </span>
           </div>
           <div class="p-4 bg-[#1C1224] rounded-2xl border border-[#2F1E3C]">
             <span class="text-[11px] text-slate-400 uppercase font-bold">Whole Dairy Milk</span>
             <div class="text-2xl font-mono font-extrabold text-emerald-400 mt-1">28 Liters</div>
-            <span class="text-[10px] text-emerald-400 font-bold">✓ Optimal Stock</span>
+            <span class="text-[10px] text-emerald-400 font-bold flex items-center gap-1 mt-1">
+              <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Optimal Stock</span>
+            </span>
           </div>
           <div class="p-4 bg-[#1C1224] rounded-2xl border border-[#2F1E3C]">
             <span class="text-[11px] text-slate-400 uppercase font-bold">Takeaway 12oz Cups</span>
             <div class="text-2xl font-mono font-extrabold text-slate-200 mt-1">340 pcs</div>
-            <span class="text-[10px] text-slate-400 font-bold">✓ 4.5 Days Run-Rate</span>
+            <span class="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-1">
+              <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>4.5 Days Run-Rate</span>
+            </span>
           </div>
         </div>
       </div>
@@ -470,7 +492,10 @@
         </div>
         <div class="p-5 bg-[#1F1328] rounded-2xl border border-[#362245] space-y-3">
           <span class="font-bold text-sm text-white">Reconciliation Audit: Batch #GRN-882</span>
-          <p class="text-xs text-emerald-400">✓ 24 Cartons Oat Milk received and matched with Invoice #INV-994.</p>
+          <p class="text-xs text-emerald-400 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>24 Cartons Oat Milk received and matched with Invoice #INV-994.</span>
+          </p>
         </div>
       </div>
 
@@ -507,7 +532,7 @@
             <p class="text-xs text-slate-400 mt-0.5">Sick Leave (1 Day) &bull; September 14, 2026</p>
           </div>
           <button onclick="alert('Leave Approved!')" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs">
-            ✓ Approve
+            Approve
           </button>
         </div>
       </div>
@@ -573,8 +598,9 @@
             <h1 class="font-serif font-bold text-2xl text-white">Cash Drawer &amp; Z-Read</h1>
             <p class="text-xs text-slate-400">Day-end drawer balancing and reconciliation</p>
           </div>
-          <button onclick="alert('Z-Report Printed & Emailed to Owner!')" class="px-4 py-2 rounded-xl bg-[#C97B3D] hover:bg-[#D98B4D] text-white font-bold text-xs">
-            🖨️ Run Official Z-Report
+          <button onclick="alert('Z-Report Printed & Emailed to Owner!')" class="px-4 py-2 rounded-xl bg-[#C97B3D] hover:bg-[#D98B4D] text-white font-bold text-xs flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span>Run Official Z-Report</span>
           </button>
         </div>
         <div class="p-5 bg-[#1C1224] rounded-2xl border border-[#2F1E3C] max-w-lg space-y-2 text-xs">
@@ -604,7 +630,7 @@
     }
 
     let posItems = [{ name: 'Iced Spanish Latte', price: 95 }];
-    function addPosItem(name, price, icon) {
+    function addPosItem(name, price) {
       posItems.push({ name, price });
       renderPosTicket();
     }
@@ -631,20 +657,20 @@
 
     function simulatedCheckout() {
       if (posItems.length === 0) return alert('Please add items first!');
-      alert(`✅ Order Paid (₱${posItems.reduce((a,b)=>a+b.price,0).toFixed(2)})! Ticket pushed to Barista KDS.`);
+      alert(`Order Paid (₱${posItems.reduce((a,b)=>a+b.price,0).toFixed(2)})! Ticket pushed to Barista KDS.`);
       posItems = [];
       renderPosTicket();
       document.getElementById('posGrandTotal').innerText = '₱0.00';
     }
 
     function kdsComplete(btn) {
-      btn.innerText = '✓ Completed';
+      btn.innerText = 'Completed';
       btn.className = 'w-full py-2 rounded-xl bg-slate-700 text-slate-400 font-bold text-xs cursor-not-allowed';
       btn.disabled = true;
     }
 
     function approvePr(btn) {
-      btn.innerText = '✓ Approved & PO Emailed';
+      btn.innerText = 'Approved & PO Emailed';
       btn.className = 'px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold';
       btn.disabled = true;
     }

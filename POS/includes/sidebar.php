@@ -59,6 +59,7 @@ $access = [
     'analytics'          => has_permission('analytics.view'),
     'users'              => has_permission('users.manage'),
     'hr_employees'       => has_permission('users.manage'),
+    'recruitment'        => has_permission('recruitment.manage') || has_permission('users.manage'),
     'hr_attendance'      => has_permission('attendance.view'),
     'hr_leave'           => has_permission('leave.view'),
     'hr_requests'        => has_permission('leave.view') || in_array('admin', $roles, true),
@@ -568,8 +569,11 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='manage_users.php'">
         <?= icon('employees') ?><span class="flex-1 truncate">Manage Employees</span>
     </button>
+    <?php endif; ?>
+
+    <?php if ($access['recruitment']): ?>
     <button class="<?= navBtnClasses($current === 'recruitment.php') ?>" onclick="window.location.href='recruitment.php'">
-        <?= icon('order') ?><span class="flex-1 truncate">Recruitment &amp; Careers</span>
+        <?= icon('briefcase') ?><span class="flex-1 truncate">Recruitment &amp; Careers</span>
     </button>
     <?php endif; ?>
 

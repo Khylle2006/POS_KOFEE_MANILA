@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('menu.manage');
 
@@ -29,9 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ── File a request — requesters only, always tied to THEIR OWN employee record ──
     if ($action === 'file') {
         if ($is_reviewer) {
-            $toast = '⚠️ HR/Admin accounts review requests and cannot file new ones.'; $toast_type = 'error';
+            $toast = 'HR/Admin accounts review requests and cannot file new ones.'; $toast_type = 'error';
         } elseif (!$my_employee) {
-            $toast = "⚠️ Your account isn't linked to an employee profile yet. Ask HR to link it first."; $toast_type = 'error';
+            $toast = "Your account isn't linked to an employee profile yet. Ask HR to link it first."; $toast_type = 'error';
         } else {
             $type    = trim($_POST['request_type'] ?? '');
             $type    = $type ?: 'Other';
@@ -39,21 +40,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->prepare('INSERT INTO hr_requests (employee_id, request_type, details, status) VALUES (:e,:t,:d,"pending")')
                 ->execute([':e' => $my_employee['id'], ':t' => $type, ':d' => $details]);
-            $toast = '✅ Request filed.';
+            $toast = 'Request filed successfully.';
         }
     }
 
     // ── Approve / Reject / Complete — reviewers only ──
     if ($action === 'review') {
         if (!$is_reviewer) {
-            $toast = '⚠️ Only HR/Admin can review requests.'; $toast_type = 'error';
+            $toast = 'Only HR/Admin can review requests.'; $toast_type = 'error';
         } else {
             $id     = (int)($_POST['id'] ?? 0);
             $status = $_POST['status'] ?? '';
             if ($id && in_array($status, ['approved','rejected','completed'])) {
                 $pdo->prepare('UPDATE hr_requests SET status=:s, reviewed_by=:u, reviewed_at=NOW() WHERE id=:id')
                     ->execute([':s'=>$status, ':u'=>$user['id'], ':id'=>$id]);
-                $labels = ['approved'=>'✅ Request approved.', 'rejected'=>'❌ Request rejected.', 'completed'=>'📦 Request marked completed.'];
+                $labels = ['approved'=>'Request approved.', 'rejected'=>'Request rejected.', 'completed'=>'Request marked completed.'];
                 $toast  = $labels[$status];
             }
         }
@@ -65,11 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id) {
             if ($is_reviewer) {
                 $pdo->prepare('DELETE FROM hr_requests WHERE id=:id')->execute([':id'=>$id]);
-                $toast = '🗑️ Request deleted.';
+                $toast = 'Request deleted.';
             } elseif ($my_employee) {
                 $del = $pdo->prepare("DELETE FROM hr_requests WHERE id=:id AND employee_id=:e AND status='pending'");
                 $del->execute([':id'=>$id, ':e'=>$my_employee['id']]);
-                $toast = $del->rowCount() ? '🗑️ Request cancelled.' : '⚠️ Only your own pending requests can be cancelled.';
+                $toast = $del->rowCount() ? 'Request cancelled.' : 'Only your own pending requests can be cancelled.';
                 if (!$del->rowCount()) $toast_type = 'error';
             }
         }
@@ -149,7 +150,7 @@ foreach ($requests as $r) {
       <p><?= $is_reviewer ? 'Review employee document & administrative requests' : 'File and track your requests' ?></p>
     </div>
     <?php if (!$is_reviewer && $my_employee): ?>
-      <button class="btn btn-primary" onclick="openFile()">➕ New Request</button>
+      <button class="btn btn-primary" onclick="openFile()"><?= icon('plus', 16) ?> <span>New Request</span></button>
     <?php endif; ?>
   </div>
 
@@ -157,14 +158,14 @@ foreach ($requests as $r) {
 
     <?php if (!$is_reviewer && !$my_employee): ?>
       <div class="notice-banner">
-        ⚠️ Your account isn't linked to an employee profile yet, so you can't file requests. Ask HR to link your account on the Employees page.
+        Your account isn't linked to an employee profile yet, so you can't file requests. Ask HR to link your account on the Employees page.
       </div>
     <?php endif; ?>
 
     <div class="stat-row">
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0">⏳</div><div><div class="mini-stat-val"><?= $pending_c ?></div><div class="mini-stat-lbl">Pending</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e8f5e9">✅</div><div><div class="mini-stat-val"><?= $approved_c ?></div><div class="mini-stat-lbl">Approved</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e3f2fd">📦</div><div><div class="mini-stat-val"><?= $completed_c ?></div><div class="mini-stat-lbl">Completed</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0;color:#e67e22"><?= icon('clock', 18) ?></div><div><div class="mini-stat-val"><?= $pending_c ?></div><div class="mini-stat-lbl">Pending</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e8f5e9;color:#27ae60"><?= icon('check-circle', 18) ?></div><div><div class="mini-stat-val"><?= $approved_c ?></div><div class="mini-stat-lbl">Approved</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e3f2fd;color:#2980b9"><?= icon('package', 18) ?></div><div><div class="mini-stat-val"><?= $completed_c ?></div><div class="mini-stat-lbl">Completed</div></div></div>
     </div>
 
     <div class="filter-bar">
@@ -186,7 +187,7 @@ foreach ($requests as $r) {
           </thead>
           <tbody>
           <?php if (empty($requests)): ?>
-            <tr class="empty-row"><td colspan="<?= $is_reviewer ? 6 : 5 ?>">🫙 No requests found.</td></tr>
+            <tr class="empty-row"><td colspan="<?= $is_reviewer ? 6 : 5 ?>"><?= icon('requests', 16) ?> No requests found.</td></tr>
           <?php else: foreach ($requests as $r): ?>
             <tr>
               <?php if ($is_reviewer): ?>
@@ -204,20 +205,20 @@ foreach ($requests as $r) {
                         <input type="hidden" name="action" value="review"/>
                         <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
                         <input type="hidden" name="status" value="approved"/>
-                        <button type="submit" class="act-btn act-activate">✅ Approve</button>
+                        <button type="submit" class="act-btn act-activate"><?= icon('check', 13) ?> Approve</button>
                       </form>
                       <form method="POST" style="display:inline">
                         <input type="hidden" name="action" value="review"/>
                         <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
                         <input type="hidden" name="status" value="rejected"/>
-                        <button type="submit" class="act-btn act-block">❌ Reject</button>
+                        <button type="submit" class="act-btn act-block"><?= icon('x', 13) ?> Reject</button>
                       </form>
                     <?php elseif ($r['status'] === 'approved'): ?>
                       <form method="POST" style="display:inline">
                         <input type="hidden" name="action" value="review"/>
                         <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
                         <input type="hidden" name="status" value="completed"/>
-                        <button type="submit" class="act-btn act-hold">📦 Mark Completed</button>
+                        <button type="submit" class="act-btn act-hold"><?= icon('package', 13) ?> Mark Completed</button>
                       </form>
                     <?php endif; ?>
                   <?php else: ?>
@@ -225,7 +226,7 @@ foreach ($requests as $r) {
                       <form method="POST" style="display:inline" onsubmit="return confirm('Cancel this request?')">
                         <input type="hidden" name="action" value="delete"/>
                         <input type="hidden" name="id" value="<?= $r['id'] ?>"/>
-                        <button type="submit" class="act-btn act-block">✕ Cancel</button>
+                        <button type="submit" class="act-btn act-block"><?= icon('x', 13) ?> Cancel</button>
                       </form>
                     <?php else: ?>
                       <span style="color:var(--text-muted);font-size:12px">—</span>
@@ -247,8 +248,8 @@ foreach ($requests as $r) {
 <div class="modal-overlay" id="file-modal" onclick="if(event.target===this) closeFile()">
   <div class="modal">
     <div class="modal-header">
-      <h3>➕ New Request</h3>
-      <button class="modal-close" onclick="closeFile()">✕</button>
+      <h3><?= icon('plus', 18) ?> New Request</h3>
+      <button class="modal-close" onclick="closeFile()"><?= icon('x', 16) ?></button>
     </div>
     <form method="POST" id="hr-request-form">
       <input type="hidden" name="action" value="file"/>
@@ -273,7 +274,7 @@ foreach ($requests as $r) {
 
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeFile()">Cancel</button>
-        <button type="submit" class="btn-save" id="hr-submit-btn">✔ Submit Request</button>
+        <button type="submit" class="btn-save" id="hr-submit-btn"><?= icon('check', 14) ?> Submit Request</button>
       </div>
     </form>
   </div>

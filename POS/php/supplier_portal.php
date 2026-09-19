@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.supplier.portal');
 
@@ -34,9 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
         $chk->execute([':r' => $rfq_id, ':s' => $supplier['id']]);
 
         if (!$chk->fetch()) {
-            $toast = '⚠️ This RFQ is no longer open for quotes.'; $toast_type = 'error';
+            $toast = 'This RFQ is no longer open for quotes.'; $toast_type = 'error';
         } elseif ($total <= 0) {
-            $toast = '⚠️ Enter a valid quoted total.'; $toast_type = 'error';
+            $toast = 'Enter a valid quoted total.'; $toast_type = 'error';
         } else {
             $pdo->prepare('
                 INSERT INTO bids (rfq_id, supplier_id, quoted_total, lead_time_days, notes)
@@ -47,8 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 ':t2'=>$total, ':l2'=>$lead, ':n2'=>$notes,
             ]);
             audit_log('bid', $rfq_id, 'quoted', $supplier['name'] . ' quoted ' . php_currency($total));
-            notify_role_by_permission('procurement.bidding.review', 'bid_submitted', '📤 New quote submitted', $supplier['name'] . ' quoted ' . php_currency($total) . ' on RFQ #' . $rfq_id, 'rfq.php?id=' . $rfq_id);
-            $toast = '✅ Quote submitted.';
+            notify_role_by_permission('procurement.bidding.review', 'bid_submitted', 'New quote submitted', $supplier['name'] . ' quoted ' . php_currency($total) . ' on RFQ #' . $rfq_id, 'rfq.php?id=' . $rfq_id);
+            $toast = 'Quote submitted.';
         }
     }
 
@@ -58,9 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
         $upd->execute([':id' => $po_id, ':sid' => $supplier['id']]);
         if ($upd->rowCount()) {
             audit_log('po', $po_id, 'acknowledged', $supplier['name'] . ' acknowledged the order');
-            $toast = '👍 Order acknowledged.';
+            $toast = 'Order acknowledged.';
         } else {
-            $toast = '⚠️ Could not acknowledge — order may already be past that step.'; $toast_type = 'error';
+            $toast = 'Could not acknowledge — order may already be past that step.'; $toast_type = 'error';
         }
     }
 
@@ -76,10 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
         $upd->execute([':n' => $note ?: null, ':id' => $po_id, ':sid' => $supplier['id']]);
         if ($upd->rowCount()) {
             audit_log('po', $po_id, 'shipped', $supplier['name'] . ' marked the order shipped' . ($note ? " — {$note}" : ''));
-            notify_role_by_permission('procurement.receiving', 'po_shipped', '🚚 Order shipped', $supplier['name'] . ' shipped PO #' . $po_id, 'goods_receipts.php?po_id=' . $po_id);
-            $toast = '🚚 Marked as shipped.';
+            notify_role_by_permission('procurement.receiving', 'po_shipped', 'Order shipped', $supplier['name'] . ' shipped PO #' . $po_id, 'goods_receipts.php?po_id=' . $po_id);
+            $toast = 'Marked as shipped.';
         } else {
-            $toast = '⚠️ Could not mark shipped — order may already be past that step.'; $toast_type = 'error';
+            $toast = 'Could not mark shipped — order may already be past that step.'; $toast_type = 'error';
         }
     }
 
@@ -99,15 +100,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
         $already->execute([':id' => $po_id]);
 
         if (!$po) {
-            $toast = '⚠️ Purchase Order not found.'; $toast_type = 'error';
+            $toast = 'Purchase Order not found.'; $toast_type = 'error';
         } elseif ($po['status'] !== 'delivered') {
-            $toast = '⚠️ You can only invoice a PO after delivery is confirmed.'; $toast_type = 'error';
+            $toast = 'You can only invoice a PO after delivery is confirmed.'; $toast_type = 'error';
         } elseif ($already->fetch()) {
-            $toast = '⚠️ An invoice has already been submitted for this order.'; $toast_type = 'error';
+            $toast = 'An invoice has already been submitted for this order.'; $toast_type = 'error';
         } elseif (!$inv_num) {
-            $toast = '⚠️ Invoice number is required.'; $toast_type = 'error';
+            $toast = 'Invoice number is required.'; $toast_type = 'error';
         } elseif (empty($lines)) {
-            $toast = '⚠️ Enter quantities for at least one line item.'; $toast_type = 'error';
+            $toast = 'Enter quantities for at least one line item.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -169,10 +170,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                     $supplier['name'] . ' submitted an invoice — ready for 3-way match.',
                     'three_way_match.php?invoice_id=' . $invoice_id
                 );
-                $toast = '✅ Invoice submitted — awaiting match and approval.';
+                $toast = 'Invoice submitted — awaiting match and approval.';
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
+                $toast = $e->getMessage(); $toast_type = 'error';
             }
         }
     }
@@ -310,7 +311,7 @@ if ($supplier) {
     <?php else: ?>
 
       <!-- ── Open RFQ Invitations ── -->
-      <h3 class="portal-section-title">📨 Open RFQ Invitations <?= count($open_invites) ? '(' . count($open_invites) . ')' : '' ?></h3>
+      <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px"><?= icon('message', 16, '', 'color:var(--caramel)') ?> Open RFQ Invitations <?= count($open_invites) ? '(' . count($open_invites) . ')' : '' ?></h3>
       <?php if (empty($open_invites)): ?>
         <p class="muted-cell" style="margin-bottom:8px">No open RFQs waiting on a quote from you right now.</p>
       <?php else: foreach ($open_invites as $inv): ?>
@@ -339,13 +340,13 @@ if ($supplier) {
               <label class="field-label">Notes</label>
               <input class="field-input" type="text" name="notes" value="<?= htmlspecialchars($inv['bid_notes'] ?? '') ?>" placeholder="Optional"/>
             </div>
-            <button type="submit" class="btn-save"><?= $inv['bid_id'] ? '✏️ Update Quote' : '📤 Submit Quote' ?></button>
+            <button type="submit" class="btn-save"><?= $inv['bid_id'] ? icon('edit', 14) . ' Update Quote' : icon('send', 14) . ' Submit Quote' ?></button>
           </form>
         </div>
       <?php endforeach; endif; ?>
 
       <!-- ── My Purchase Orders ── -->
-      <h3 class="portal-section-title">📦 My Purchase Orders</h3>
+      <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px"><?= icon('package', 16, '', 'color:var(--caramel)') ?> My Purchase Orders</h3>
       <?php if (empty($my_pos)): ?>
         <p class="muted-cell" style="margin-bottom:8px">No purchase orders yet.</p>
       <?php else: foreach ($my_pos as $p): ?>
@@ -356,23 +357,23 @@ if ($supplier) {
               <p class="muted-cell"><?= htmlspecialchars($p['department']) ?> · <?= php_currency($p['total_amount']) ?><?= $p['expected_delivery_date'] ? ' · Expected ' . date('M d, Y', strtotime($p['expected_delivery_date'])) : '' ?></p>
               <p style="margin-top:6px;font-size:12px">
                 <span class="status-badge status-<?= in_array($p['status'],['closed','delivered'])?'approved':($p['status']==='cancelled'?'rejected':'pending') ?>"><?= status_badge($p['status']) ?></span>
-                <?php if ($p['shipped_at']): ?><span class="status-badge status-pending" style="margin-left:6px">🚚 Shipped <?= date('M d, Y', strtotime($p['shipped_at'])) ?></span><?php endif; ?>
+                <?php if ($p['shipped_at']): ?><span class="status-badge status-pending" style="margin-left:6px;display:inline-flex;align-items:center;gap:4px"><?= icon('truck', 12) ?> Shipped <?= date('M d, Y', strtotime($p['shipped_at'])) ?></span><?php endif; ?>
                 <?php if ($p['grn_status']): ?><span class="status-badge status-pending" style="margin-left:6px">GRN: <?= status_badge($p['grn_status']) ?></span><?php endif; ?>
                 <?php if ($p['invoice_status']): ?><span class="status-badge status-pending" style="margin-left:6px">Invoice: <?= status_badge($p['invoice_status']) ?></span><?php endif; ?>
-                <?php if ($p['paid_at']): ?><span class="status-badge status-approved" style="margin-left:6px">💸 Paid <?= date('M d, Y', strtotime($p['paid_at'])) ?></span><?php endif; ?>
+                <?php if ($p['paid_at']): ?><span class="status-badge status-approved" style="margin-left:6px;display:inline-flex;align-items:center;gap:4px"><?= icon('dollar', 12) ?> Paid <?= date('M d, Y', strtotime($p['paid_at'])) ?></span><?php endif; ?>
               </p>
-              <?php if ($p['shipping_notes']): ?><p class="muted-cell" style="margin-top:4px;font-style:italic">🚚 "<?= htmlspecialchars($p['shipping_notes']) ?>"</p><?php endif; ?>
+              <?php if ($p['shipping_notes']): ?><p class="muted-cell" style="margin-top:4px;font-style:italic;display:flex;align-items:center;gap:4px"><?= icon('truck', 12) ?> "<?= htmlspecialchars($p['shipping_notes']) ?>"</p><?php endif; ?>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <?php if ($p['status'] === 'sent'): ?>
                 <form method="POST"><input type="hidden" name="action" value="acknowledge_po"/><input type="hidden" name="po_id" value="<?= $p['id'] ?>"/>
-                  <button type="submit" class="act-btn act-activate">👍 Acknowledge Order</button></form>
+                  <button type="submit" class="act-btn act-activate"><?= icon('check', 13) ?> Acknowledge Order</button></form>
               <?php endif; ?>
               <?php if (in_array($p['status'],['sent','acknowledged'],true) && !$p['shipped_at']): ?>
-                <button type="button" class="act-btn act-activate" onclick="toggleShipForm(<?= $p['id'] ?>)">🚚 Mark as Shipped</button>
+                <button type="button" class="act-btn act-activate" onclick="toggleShipForm(<?= $p['id'] ?>)"><?= icon('truck', 13) ?> Mark as Shipped</button>
               <?php endif; ?>
               <?php if ($p['status'] === 'delivered' && !$p['invoice_id']): ?>
-                <button type="button" class="act-btn act-activate" onclick="toggleInvoiceForm(<?= $p['id'] ?>)">🧾 Submit Invoice</button>
+                <button type="button" class="act-btn act-activate" onclick="toggleInvoiceForm(<?= $p['id'] ?>)"><?= icon('invoice', 13) ?> Submit Invoice</button>
               <?php endif; ?>
             </div>
           </div>
@@ -385,7 +386,7 @@ if ($supplier) {
               <label class="field-label">Tracking / Carrier Note (optional)</label>
               <input class="field-input" type="text" name="shipping_notes" placeholder="e.g. LBC, tracking #1234"/>
             </div>
-            <button type="submit" class="btn-save">🚚 Confirm Shipped</button>
+            <button type="submit" class="btn-save"><?= icon('truck', 14) ?> Confirm Shipped</button>
           </form>
           <?php endif; ?>
 
@@ -424,20 +425,20 @@ if ($supplier) {
                 <?php endforeach; ?>
               </tbody>
             </table>
-            <div style="text-align:right"><button type="submit" class="btn-save">🧾 Submit Invoice</button></div>
+            <div style="text-align:right"><button type="submit" class="btn-save"><?= icon('invoice', 14) ?> Submit Invoice</button></div>
           </form>
           <?php endif; ?>
         </div>
       <?php endforeach; endif; ?>
 
       <!-- ── My Bid History ── -->
-      <h3 class="portal-section-title">📜 My Bid History</h3>
+      <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px"><?= icon('clipboard', 16, '', 'color:var(--caramel)') ?> My Bid History</h3>
       <div class="table-scroll-wrapper" style="margin-bottom:8px">
         <table>
           <thead><tr><th>Requisition</th><th>Quoted</th><th>Lead Time</th><th>Status</th><th>Submitted</th></tr></thead>
           <tbody>
           <?php if (empty($my_bids)): ?>
-            <tr class="empty-row"><td colspan="5">🫙 No quotes submitted yet.</td></tr>
+            <tr class="empty-row"><td colspan="5"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No quotes submitted yet.</td></tr>
           <?php else: foreach ($my_bids as $b): ?>
             <tr>
               <td style="font-weight:700"><?= htmlspecialchars($b['req_title']) ?></td>
@@ -452,7 +453,7 @@ if ($supplier) {
       </div>
 
       <!-- ── My Performance ── -->
-      <h3 class="portal-section-title">⭐ My Performance</h3>
+      <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px"><?= icon('star', 16, '', 'fill:currentColor;color:var(--amber,#b45309)') ?> My Performance</h3>
       <div class="table-card" style="padding:18px 20px;margin-bottom:8px">
         <p class="muted-cell" style="margin-bottom:12px"><?= $supplier['rating_count'] ?> rating(s) · Overall <?= $supplier['rating_avg'] ? number_format($supplier['rating_avg'],2) . '/5' : 'Not yet rated' ?></p>
         <?php if ($breakdown && $supplier['rating_count'] > 0): ?>

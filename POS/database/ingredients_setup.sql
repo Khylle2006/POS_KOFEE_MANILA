@@ -18,17 +18,17 @@
 CREATE TABLE IF NOT EXISTS ingredient_categories (
     id    INT AUTO_INCREMENT PRIMARY KEY,
     name  VARCHAR(100) NOT NULL,
-    icon  VARCHAR(10)  NOT NULL DEFAULT '📦',
+    icon  VARCHAR(50)  NOT NULL DEFAULT 'package',
     UNIQUE KEY uniq_cat_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT IGNORE INTO ingredient_categories (name, icon) VALUES
-    ('Coffee', '☕'),
-    ('Milk',   '🥛'),
-    ('Syrups', '🧊'),
-    ('Tea',    '🍵'),
-    ('Bakery', '🥐'),
-    ('Other',  '📦');
+    ('Coffee', 'coffee'),
+    ('Milk',   'milk'),
+    ('Syrups', 'droplet'),
+    ('Tea',    'cup-tea'),
+    ('Bakery', 'cake'),
+    ('Other',  'package');
 
 -- ── Ingredients ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS ingredients (

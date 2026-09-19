@@ -4,6 +4,7 @@ require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
 require_once '../includes/inventory_helpers.php';   // ← NEW
 require_once '../includes/shift_guard.php';         // ← NEW
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.view');
 
@@ -28,9 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $po = $po_stmt->fetch();
 
         if (!$po || !in_array($po['status'], ['sent', 'acknowledged'], true)) {
-            $toast = '⚠️ This Purchase Order is not ready to receive.'; $toast_type = 'error';
+            $toast = 'This Purchase Order is not ready to receive.'; $toast_type = 'error';
         } elseif (empty($items)) {
-            $toast = '⚠️ Enter received quantities for at least one item.'; $toast_type = 'error';
+            $toast = 'Enter received quantities for at least one item.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -185,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     notify_event(
                         action_type: 'INVENTORY_RESTOCK',
                         perm_key:    'inventory.view',
-                        title:       '📦 Inventory restocked from PO #' . $po_id,
+                        title:       'Inventory restocked from PO #' . $po_id,
                         message:     $batch_count . ' batch(es) recorded with delivery and expiry dates.',
                         target_url:  'inventory.php',
                         entity_type: 'grn',
@@ -202,20 +203,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'Received quantities/condition differ from what was ordered. Needs review.',
                         'goods_receipts.php?po_id=' . $po_id, $user['id']
                     );
-                    $toast = '⚠️ Receipt recorded — discrepancy flagged for review.'; $toast_type = 'error';
+                    $toast = 'Receipt recorded — discrepancy flagged for review.'; $toast_type = 'error';
                 } elseif ($grn_status === 'partial') {
-                    $toast = '📦 Partial receipt recorded. Remaining quantity still expected.';
+                    $toast = 'Partial receipt recorded. Remaining quantity still expected.';
                 } else {
-                    $toast = '✅ Delivery fully received — Purchase Order marked delivered. Inventory updated.';
+                    $toast = 'Delivery fully received — Purchase Order marked delivered. Inventory updated.';
                 }
 
                 if (!empty($unmatched_items)) {
-                    $toast .= ' ⚠️ No matching Inventory item for: ' . implode(', ', array_unique($unmatched_items)) . ' — add it in Inventory, then restock it manually.';
+                    $toast .= ' No matching Inventory item for: ' . implode(', ', array_unique($unmatched_items)) . ' — add it in Inventory, then restock it manually.';
                     $toast_type = 'error';
                 }
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
+                $toast = $e->getMessage(); $toast_type = 'error';
             }
         }
     }
@@ -228,7 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new_status  = in_array($_POST['new_status'] ?? '', ['complete','partial'], true) ? $_POST['new_status'] : 'partial';
 
         if (!$resolution) {
-            $toast = '⚠️ Add a resolution note before closing this discrepancy.'; $toast_type = 'error';
+            $toast = 'Add a resolution note before closing this discrepancy.'; $toast_type = 'error';
         } else {
             $grn = $pdo->prepare('SELECT * FROM goods_receipts WHERE id = :id'); $grn->execute([':id' => $grn_id]); $grn = $grn->fetch();
             if ($grn) {
@@ -240,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ->execute([':id' => $grn['po_id']]);
                 }
                 audit_log('grn', $grn_id, 'discrepancy_resolved', $resolution);
-                $toast = '✅ Discrepancy resolved.';
+                $toast = 'Discrepancy resolved.';
             }
         }
     }
@@ -395,7 +396,7 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
             <textarea class="field-input" name="grn_notes" placeholder="Overall receiving notes (optional)" style="width:100%;min-height:60px"></textarea>
           </div>
           <div style="margin-top:12px;text-align:right">
-            <button type="submit" class="btn-save" id="receipt-submit-btn">📦 Record Receipt</button>
+            <button type="submit" class="btn-save" id="receipt-submit-btn"><?= icon('package', 14) ?> Record Receipt</button>
           </div>
         </form>
         <?php else: ?>
@@ -423,7 +424,7 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
                 <option value="partial">Mark Partial</option>
                 <option value="complete">Mark Complete</option>
               </select>
-              <button type="submit" class="act-btn act-activate">✔ Resolve</button>
+              <button type="submit" class="act-btn act-activate"><?= icon('check', 13) ?> Resolve</button>
             </form>
           <?php endif; ?>
         </div>
@@ -435,17 +436,17 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
     <?php else: ?>
       <!-- ── List view ── -->
       <?php if (!empty($open_discrepancies)): ?>
-      <h3 style="font-size:13.5px;margin-bottom:8px">⚠️ Open Discrepancies</h3>
+      <h3 style="font-size:13.5px;margin-bottom:8px"><?= icon('alert-triangle', 16) ?> Open Discrepancies</h3>
       <div class="table-scroll-wrapper" style="margin-bottom:22px">
         <table>
-          <thead><tr><th>PO #</th><th>Supplier</th><th>Flagged</th><th></th></tr></thead>
+          <thead><tr><th>PO #</th><th>Supplier</th><th>Flagged</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php foreach ($open_discrepancies as $d): ?>
             <tr>
               <td style="font-weight:700">#<?= str_pad($d['po_id'],5,'0',STR_PAD_LEFT) ?></td>
               <td><?= htmlspecialchars($d['supplier_name']) ?></td>
               <td class="muted-cell"><?= date('M d, Y', strtotime($d['received_at'])) ?></td>
-              <td><button class="act-btn" onclick="window.location.href='goods_receipts.php?po_id=<?= $d['po_id'] ?>'">👁 Review</button></td>
+              <td style="text-align:center"><button class="act-btn" onclick="window.location.href='goods_receipts.php?po_id=<?= $d['po_id'] ?>'"><?= icon('eye', 13) ?> Review</button></td>
             </tr>
           <?php endforeach; ?>
           </tbody>
@@ -453,13 +454,13 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
       </div>
       <?php endif; ?>
 
-      <h3 style="font-size:13.5px;margin-bottom:8px">📦 Awaiting Delivery</h3>
+      <h3 style="font-size:13.5px;margin-bottom:8px"><?= icon('package', 16) ?> Awaiting Delivery</h3>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>PO #</th><th>Requisition</th><th>Supplier</th><th>Total</th><th>Status</th><th>Expected</th><th></th></tr></thead>
+          <thead><tr><th>PO #</th><th>Requisition</th><th>Supplier</th><th>Total</th><th>Status</th><th>Expected</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($ready_pos)): ?>
-            <tr class="empty-row"><td colspan="7">🫙 No Purchase Orders currently awaiting delivery.</td></tr>
+            <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No Purchase Orders currently awaiting delivery.</td></tr>
           <?php else: foreach ($ready_pos as $p): ?>
             <tr>
               <td style="font-weight:700">#<?= str_pad($p['id'],5,'0',STR_PAD_LEFT) ?></td>
@@ -468,7 +469,7 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
               <td style="font-weight:700">₱<?= number_format($p['total_amount'],2) ?></td>
               <td><span class="status-badge status-pending"><?= status_badge($p['status']) ?></span></td>
               <td class="muted-cell"><?= $p['expected_delivery_date'] ? date('M d, Y', strtotime($p['expected_delivery_date'])) : '—' ?></td>
-              <td><button class="act-btn" onclick="window.location.href='goods_receipts.php?po_id=<?= $p['id'] ?>'">📦 Receive</button></td>
+              <td style="text-align:center"><button class="act-btn" onclick="window.location.href='goods_receipts.php?po_id=<?= $p['id'] ?>'"><?= icon('package', 13) ?> Receive</button></td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>
@@ -499,7 +500,7 @@ document.getElementById('receipt-form')?.addEventListener('submit', function(e) 
   if (hasNegative) {
     e.preventDefault();
     if (errBox) {
-      errBox.textContent = '⚠️ Receiving quantities cannot be negative.';
+      errBox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Receiving quantities cannot be negative.';
       errBox.style.display = 'block';
     }
     return;
@@ -508,7 +509,7 @@ document.getElementById('receipt-form')?.addEventListener('submit', function(e) 
   if (!hasValidQty) {
     e.preventDefault();
     if (errBox) {
-      errBox.textContent = '⚠️ Enter a receiving quantity greater than 0 for at least one item.';
+      errBox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Enter a receiving quantity greater than 0 for at least one item.';
       errBox.style.display = 'block';
     }
     return;

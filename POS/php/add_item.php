@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('menu.manage');
 include("../api/add_item.php");
@@ -42,20 +43,20 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
       
     </div>
      <?php if ($view === 'active'): ?>
-     <button class="btn-msave" onclick="openAdd()">➕ Add Item</button>
+     <button class="btn-msave" onclick="openAdd()"><?= icon('plus', 14) ?> Add Item</button>
      <?php endif; ?>
   </div>
 
   <div class="page-body">
 
     <div class="view-tabs" style="padding:14px 32px 0;display:flex;gap:8px">
-      <a class="filter-pill <?= $view === 'active' ? 'active' : '' ?>" href="add_item.php">📦 Active</a>
-      <a class="filter-pill <?= $view === 'archived' ? 'active' : '' ?>" href="add_item.php?view=archived">🗄 Archived <?= $archived_count ? '(' . $archived_count . ')' : '' ?></a>
+      <a class="filter-pill <?= $view === 'active' ? 'active' : '' ?>" href="add_item.php"><?= icon('package', 14) ?> Active</a>
+      <a class="filter-pill <?= $view === 'archived' ? 'active' : '' ?>" href="add_item.php?view=archived"><?= icon('inbox', 14) ?> Archived <?= $archived_count ? '(' . $archived_count . ')' : '' ?></a>
     </div>
 
     <div class="filter-bar" style="align-items:center">
       <input class="filter-input" type="text" id="search-products"
-             placeholder="🔍 Search by item name…" oninput="applyFilters()"
+             placeholder="Search by item name…" oninput="applyFilters()"
              style="flex:1;min-width:220px"/>
 
       <select class="filter-select" id="filter-category" onchange="applyFilters()" style="width:auto">
@@ -87,14 +88,24 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
         </thead>
         <tbody id="menu-tbody">
           <?php if (empty($products)): ?>
-          <tr class="empty-row"><td colspan="5">🫙 No menu items yet — add drinks from the Inventory module first.</td></tr>
-          <?php else: ?>
-            <?php
-            $cat_icons = ['Ice Coffee'=>'🧊','Hot Coffee'=>'☕','Milk Tea'=>'🧋','Fruit Tea'=>'🍹'];
+          <tr class="empty-row"><td colspan="5">No menu items yet — add drinks from the Inventory module first.</td></tr>
+          <?php else:
+            $cat_default_images = [
+              'Ice Coffee' => '../assets/menu/772270600_832103566144869_8963503527710265697_n.jpg',
+              'Hot Coffee' => '../assets/menu/773290708_832103739478185_7101869818816560010_n.jpg',
+              'Milk Tea'   => '../assets/menu/772170060_832103852811507_1935741639019672621_n.jpg',
+              'Fruit Tea'  => '../assets/menu/772465737_832103816144844_1638209865611155353_n.jpg',
+            ];
+            $default_fallback_img = '../assets/milktea.png';
             foreach ($products as $p):
               $available = (int)$p['stock'] > 0;
               $cat_name  = $p['category_name'] ?? '—';
-              $icon      = $cat_icons[$cat_name] ?? '🥤';
+              $cleanedPath = !empty($p['image_path']) ? ltrim($p['image_path'], '/') : '';
+              if (!empty($cleanedPath)) {
+                $rowImgSrc = str_starts_with($cleanedPath, 'assets/') ? ('../' . $cleanedPath) : ('../assets/' . $cleanedPath);
+              } else {
+                $rowImgSrc = $cat_default_images[$cat_name] ?? $default_fallback_img;
+              }
               $edit_data = htmlspecialchars(json_encode([
                 'id'          => $p['id'],
                 'name'        => $p['name'],
@@ -111,17 +122,9 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
                 data-name="<?= htmlspecialchars(strtolower($p['name'])) ?>">
               <td>
                 <div style="display:flex;align-items:center;gap:12px">
-                  <?php if (!empty($p['image_path'])): 
-                    $cleanedPath = ltrim($p['image_path'], '/');
-                    $rowImgSrc = str_starts_with($cleanedPath, 'assets/') ? ('../' . $cleanedPath) : ('../assets/' . $cleanedPath);
-                  ?>
-                    <div style="width:42px;height:42px;border-radius:10px;overflow:hidden;border:1.5px solid #D8C7B5;background:#FAF5EE;flex-shrink:0;display:flex;align-items:center;justify-content:center">
-                      <img src="<?= htmlspecialchars($rowImgSrc) ?>" alt="<?= htmlspecialchars($p['name']) ?>" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-                      <span style="display:none;font-size:18px"><?= $icon ?></span>
-                    </div>
-                  <?php else: ?>
-                    <div style="width:42px;height:42px;border-radius:10px;background:#F8ECDC;border:1.5px solid #D8C7B5;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><?= $icon ?></div>
-                  <?php endif; ?>
+                  <div style="width:42px;height:42px;border-radius:10px;overflow:hidden;border:1.5px solid #D8C7B5;background:#FAF5EE;flex-shrink:0;display:flex;align-items:center;justify-content:center">
+                    <img src="<?= htmlspecialchars($rowImgSrc) ?>" alt="<?= htmlspecialchars($p['name']) ?>" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src='<?= $default_fallback_img ?>'"/>
+                  </div>
                   <div>
                     <div class="prod-name" style="font-weight:700;color:#1E1224;font-size:13.5px"><?= htmlspecialchars($p['name']) ?></div>
                     <?php if (!empty($p['description'])): ?>
@@ -134,7 +137,7 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
               <td class="prod-price">₱<?= number_format($p['price_small'], 2) ?> · ₱<?= number_format($p['price_large'], 2) ?></td>
               <td>
                 <span class="status-badge <?= $available ? 'status-active' : 'status-blocked' ?>" id="status-<?= $p['id'] ?>">
-                  <?= $available ? '✅ Available' : '❌ Unavailable' ?>
+                  <?= $available ? 'Available' : 'Unavailable' ?>
                 </span>
               </td>
               <td>
@@ -146,16 +149,16 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
                           onclick="toggleAvail(<?= $p['id'] ?>, this)">
                     <?= $available ? 'Mark Unavailable' : 'Mark Available' ?>
                   </button>
-                  <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'>✏️ Edit</button>
+                  <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'><?= icon('edit', 13) ?> Edit</button>
                   <?php endif; ?>
                   <?php if ($view === 'active' && has_permission('menu.delete')): ?>
-                  <button class="act-btn act-block" onclick='confirmDelete(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'>🗑️</button>
+                  <button class="act-btn act-block" onclick='confirmDelete(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'><?= icon('trash', 13) ?></button>
                   <?php endif; ?>
                   <?php if ($view === 'archived' && has_permission('menu.edit')): ?>
-                  <button class="act-btn act-activate" onclick='restoreProduct(<?= (int)$p['id'] ?>)'>↩️ Restore</button>
+                  <button class="act-btn act-activate" onclick='restoreProduct(<?= (int)$p['id'] ?>)'><?= icon('refresh', 13) ?> Restore</button>
                   <?php endif; ?>
                   <?php if ($view === 'archived' && has_permission('menu.delete')): ?>
-                  <button class="act-btn act-block" onclick='purgeProduct(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'>🗑️ Delete Forever</button>
+                  <button class="act-btn act-block" onclick='purgeProduct(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'><?= icon('trash', 13) ?> Delete Forever</button>
                   <?php endif; ?>
                 </div>
               </td>
@@ -180,14 +183,14 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
     <div class="prog-modal-header">
       <div class="prog-header-left">
         <div id="prog-modal-badge" class="prog-badge">
-          ✨
+          <?= icon('sparkles', 18) ?>
         </div>
         <div>
           <h3 id="prog-modal-title" class="prog-header-title">Add Menu Item &amp; Recipe</h3>
           <p id="prog-modal-subtitle" class="prog-header-subtitle">Step-by-step beverage identity, photo, and recipe composition</p>
         </div>
       </div>
-      <button type="button" onclick="requestCloseProgressiveModal()" class="prog-close-btn" title="Close (Esc)">✕</button>
+      <button type="button" onclick="requestCloseProgressiveModal()" class="prog-close-btn" title="Close (Esc)"><?= icon('x', 16) ?></button>
     </div>
 
     <!-- Responsive Visual Step Tracker -->
@@ -229,7 +232,7 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
 
       <!-- Inline Validation Banner -->
       <div id="prog-error-banner" class="prog-error-banner hidden">
-        <span>⚠️</span>
+        <span><?= icon('alert-triangle', 16) ?></span>
         <span id="prog-error-text">Please fill in all required fields before continuing.</span>
       </div>
 
@@ -261,16 +264,16 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
 
           <div class="prog-form-group">
             <label class="prog-label">
-              Quick Icon / Emoji
+              Quick Icon
             </label>
             <div class="prog-emoji-grid" id="icon-picker">
-              <?php foreach (['☕','🧊','🧋','🍵','🥤','🥐','🍰','🍹'] as $emoji): ?>
-              <button type="button" onclick="selectDrinkEmoji('<?= $emoji ?>', this)"
-                      class="emoji-btn <?= $emoji === '☕' ? 'selected' : '' ?>">
-                <?= $emoji ?>
+              <?php foreach (['coffee'=>'Coffee', 'ice-coffee'=>'Iced', 'cup-tea'=>'Tea', 'leaf'=>'Green Tea', 'fruit'=>'Fruit', 'pastry'=>'Pastry', 'cake'=>'Cake', 'citrus'=>'Citrus'] as $iKey => $iLbl): ?>
+              <button type="button" onclick="selectDrinkEmoji('<?= $iKey ?>', this)"
+                      class="emoji-btn <?= $iKey === 'coffee' ? 'selected' : '' ?>" title="<?= $iLbl ?>">
+                <?= icon($iKey, 18) ?>
               </button>
               <?php endforeach; ?>
-              <input type="hidden" id="prog-icon" value="☕"/>
+              <input type="hidden" id="prog-icon" value="coffee"/>
             </div>
           </div>
         </div>
@@ -291,7 +294,7 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
             <!-- Placeholder state -->
             <div id="prog-img-placeholder" style="display:flex;flex-direction:column;align-items:center;gap:4px">
               <div class="prog-dropzone-icon">
-                📷
+                <?= icon('camera', 32) ?>
               </div>
               <div class="prog-dropzone-text">
                 Click to browse or drag &amp; drop item photo
@@ -313,9 +316,9 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
                 </div>
               </div>
               <button type="button" onclick="event.stopPropagation(); clearProductImage();"
-                      class="prog-img-remove-btn"
-                      title="Remove photo">
-                <span>🗑️</span><span>Remove</span>
+                       class="prog-img-remove-btn"
+                       title="Remove photo">
+                <span><?= icon('trash', 14) ?></span><span>Remove</span>
               </button>
             </div>
           </div>
@@ -353,7 +356,7 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
               <p class="prog-recipe-sub">Ingredients automatically deducted when Regular size is ordered</p>
             </div>
             <button type="button" onclick="addRecipeRow('small')" class="prog-btn-secondary">
-              <span>➕</span><span>Add Ingredient</span>
+              <span><?= icon('plus', 14) ?></span><span>Add Ingredient</span>
             </button>
           </div>
 
@@ -387,10 +390,10 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <button type="button" onclick="copyRecipeFromRegular()" class="prog-btn-secondary">
-                <span>⚡</span><span>Copy from Regular</span>
+                <span><?= icon('zap', 14) ?></span><span>Copy from Regular</span>
               </button>
               <button type="button" onclick="addRecipeRow('large')" class="prog-btn-secondary">
-                <span>➕</span><span>Add</span>
+                <span><?= icon('plus', 14) ?></span><span>Add</span>
               </button>
             </div>
           </div>
@@ -411,16 +414,16 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
 
       <div style="display:flex;align-items:center;gap:10px">
         <button type="button" id="prog-btn-back" onclick="prevStep()" class="prog-btn-back" style="display:none">
-          <span>←</span><span>Back</span>
+          <span>&larr;</span><span>Back</span>
         </button>
 
         <button type="button" id="prog-btn-next" onclick="nextStep()" class="prog-btn-next">
-          <span>Next</span><span>→</span>
+          <span>Next</span><span>&rarr;</span>
         </button>
 
         <button type="button" id="prog-btn-save" onclick="submitProgressiveItem()" class="prog-btn-save" style="display:none">
-          <span id="save-spinner" style="display:none" class="animate-spin">⏳</span>
-          <span id="save-label">💾 Save Item</span>
+          <span id="save-spinner" style="display:none" class="animate-spin"><?= icon('refresh', 14) ?></span>
+          <span id="save-label"><?= icon('save', 14) ?> Save Item</span>
         </button>
       </div>
     </div>
@@ -433,7 +436,7 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
 <div class="modal-overlay" id="avail-modal">
   <div class="modal" style="max-width:360px">
     <div class="modal-body" style="text-align:center">
-      <div style="font-size:46px;margin-bottom:12px" id="avail-icon">❓</div>
+      <div style="display:flex;justify-content:center;margin-bottom:12px" id="avail-icon"><?= icon('help', 46) ?></div>
       <h3 style="font-size:17px;margin-bottom:8px" id="avail-title">Change Availability?</h3>
       <p id="avail-msg" style="font-size:13px;color:var(--text-muted)"></p>
     </div>
@@ -489,8 +492,8 @@ function openProgressiveModal(mode = 'add', itemData = null) {
     editingOriginalName = (itemData.name || '').trim();
     if (modalTitle) modalTitle.textContent = 'Edit Menu Item & Recipe';
     if (modalSubtitle) modalSubtitle.textContent = 'Update beverage details, photo, and recipe composition';
-    if (modalBadge) modalBadge.textContent = '✏️';
-    if (saveLabel) saveLabel.textContent = '💾 Save Changes';
+    if (modalBadge) modalBadge.innerHTML = '<?= icon('edit', 18) ?>';
+    if (saveLabel) saveLabel.innerHTML = 'Save Changes';
 
     // Populate Step 1 fields
     document.getElementById('prog-name').value = itemData.name || '';
@@ -513,10 +516,10 @@ function openProgressiveModal(mode = 'add', itemData = null) {
       if (previewImg) previewImg.src = '';
     }
 
-    // Choose appropriate emoji based on category or default
-    const catIcons = { '1': '🧊', '2': '☕', '3': '🧋', '4': '🍹' };
-    const matchedEmoji = catIcons[String(itemData.category_id)] || '☕';
-    selectDrinkEmoji(matchedEmoji);
+    // Choose appropriate icon based on category or default
+    const catIcons = { '1': 'ice-coffee', '2': 'coffee', '3': 'cup-tea', '4': 'fruit' };
+    const matchedIcon = catIcons[String(itemData.category_id)] || 'coffee';
+    selectDrinkEmoji(matchedIcon);
 
     // Populate Step 2 & 3 prices
     document.getElementById('prog-price-small').value = itemData.price_small ? parseFloat(itemData.price_small).toFixed(2) : '';
@@ -525,8 +528,8 @@ function openProgressiveModal(mode = 'add', itemData = null) {
     // Show loading state for recipe rows
     const smallContainer = document.getElementById('prog-recipe-small-rows');
     const largeContainer = document.getElementById('prog-recipe-large-rows');
-    if (smallContainer) smallContainer.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#52434F;font-weight:600">⏳ Loading recipe ingredients…</div>';
-    if (largeContainer) largeContainer.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#52434F;font-weight:600">⏳ Loading recipe ingredients…</div>';
+    if (smallContainer) smallContainer.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#52434F;font-weight:600">Loading recipe ingredients…</div>';
+    if (largeContainer) largeContainer.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#52434F;font-weight:600">Loading recipe ingredients…</div>';
 
     // Fetch existing recipe from api/recipe.php
     fetch(`../api/recipe.php?product_id=${itemData.id}`)
@@ -570,14 +573,14 @@ function openProgressiveModal(mode = 'add', itemData = null) {
     editingOriginalName = '';
     if (modalTitle) modalTitle.textContent = 'Add Menu Item & Recipe';
     if (modalSubtitle) modalSubtitle.textContent = 'Step-by-step beverage identity, photo, and recipe composition';
-    if (modalBadge) modalBadge.textContent = '✨';
-    if (saveLabel) saveLabel.textContent = '💾 Save Item';
+    if (modalBadge) modalBadge.innerHTML = '<?= icon('sparkles', 18) ?>';
+    if (saveLabel) saveLabel.innerHTML = 'Save Item';
 
     // Reset Step 1 fields
     document.getElementById('prog-name').value = '';
     document.getElementById('prog-category').value = '';
     document.getElementById('prog-desc').value = '';
-    selectDrinkEmoji('☕');
+    selectDrinkEmoji('coffee');
 
     // Reset image fields
     if (existingImgInput) existingImgInput.value = '';
@@ -744,11 +747,11 @@ function clearProductImage() {
   if (placeholderEl) placeholderEl.style.display = 'flex';
 }
 
-function selectDrinkEmoji(emoji, btn) {
+function selectDrinkEmoji(iconName, btn) {
   const iconInput = document.getElementById('prog-icon');
-  if (iconInput) iconInput.value = emoji;
+  if (iconInput) iconInput.value = iconName;
   document.querySelectorAll('#icon-picker .emoji-btn').forEach(b => {
-    const isSelected = btn ? (b === btn) : (b.textContent.trim() === emoji);
+    const isSelected = btn ? (b === btn) : (b.getAttribute('onclick')?.includes(iconName));
     b.classList.toggle('selected', isSelected);
   });
   if (btn) isDirty = true;
@@ -811,7 +814,7 @@ function goToStep(step) {
     if (s < currentStep) {
       // Completed
       ind.className = 'prog-step-circle done';
-      ind.textContent = '✓';
+      ind.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
       lbl.className = 'prog-step-label done';
     } else if (s === currentStep) {
       // Active
@@ -963,7 +966,7 @@ function addRecipeRow(size, defaultIngId = '', defaultQty = '', defaultUnit = ''
       ${defaultUnit || 'unit'}
     </span>
     <button type="button" onclick="removeRecipeRow(this)" class="recipe-del-btn" title="Remove ingredient">
-      🗑️
+      <?= icon('trash', 14) ?>
     </button>
   `;
 
@@ -1015,7 +1018,7 @@ function collectRecipeRows(size) {
 function copyRecipeFromRegular() {
   const smallRows = collectRecipeRows('small');
   if (!smallRows.length) {
-    showToast('⚠️ No ingredients found in Regular size to copy.', 'error');
+    showToast('No ingredients found in Regular size to copy.', 'error');
     return;
   }
 
@@ -1033,7 +1036,7 @@ function copyRecipeFromRegular() {
     upPriceInput.value = (regPrice + 20).toFixed(2);
   }
 
-  showToast('⚡ Recipe copied from Regular (scaled ~1.25x)!', 'success');
+  showToast('Recipe copied from Regular (scaled ~1.25x)!', 'success');
 }
 
 // ── Submit Progressive Item Payload to Backend (with Image Upload) ─
@@ -1087,7 +1090,7 @@ function submitProgressiveItem() {
   .then(res => {
     saveBtn.disabled = false;
     if (spinner) spinner.style.display = 'none';
-    label.textContent = isEdit ? '💾 Save Changes' : '💾 Save Item';
+    label.textContent = isEdit ? 'Save Changes' : 'Save Item';
 
     if (res.ok) {
       closeProgressiveAddModal();
@@ -1108,14 +1111,14 @@ function submitProgressiveItem() {
   .catch(err => {
     saveBtn.disabled = false;
     if (spinner) spinner.style.display = 'none';
-    label.textContent = isEdit ? '💾 Save Changes' : '💾 Save Item';
+    label.textContent = isEdit ? 'Save Changes' : 'Save Item';
     showProgError(err.message || 'Network error while saving item.');
   });
 }
 
 const SELF = window.location.pathname;
 
-const CAT_ICONS = { 'Ice Coffee':'🧊','Hot Coffee':'☕','Milk Tea':'🧋','Fruit Tea':'🍹' };
+const CAT_ICONS = { 'Ice Coffee':'ice-coffee','Hot Coffee':'coffee','Milk Tea':'cup-tea','Fruit Tea':'fruit' };
 
 // ── Toast ─────────────────────────────────────
 let toastTimer;
@@ -1164,7 +1167,7 @@ function toggleAvail(id, btn) {
   const row      = document.getElementById('prow-' + id);
   const itemName = row.querySelector('.prod-name').textContent;
 
-  document.getElementById('avail-icon').textContent  = makingAvailable ? '✅' : '❌';
+  document.getElementById('avail-icon').innerHTML  = makingAvailable ? '<?= icon('check-circle', 46) ?>' : '<?= icon('x-circle', 46) ?>';
   document.getElementById('avail-title').textContent = makingAvailable ? 'Mark as Available?' : 'Mark as Unavailable?';
   document.getElementById('avail-msg').textContent = makingAvailable
     ? `"${itemName}" will be visible and orderable again.`
@@ -1199,24 +1202,24 @@ function doToggleAvail() {
           btn.className        = 'act-btn act-hold';
           btn.dataset.state    = 'on';
           status.className     = 'status-badge status-active';
-          status.textContent   = '✅ Available';
+          status.textContent   = 'Available';
           row.dataset.status   = 'available';
-          showToast('✅ Item set to Available');
+          showToast('Item set to Available');
         } else {
           btn.textContent      = 'Mark Available';
           btn.className        = 'act-btn act-activate';
           btn.dataset.state    = 'off';
           status.className     = 'status-badge status-blocked';
-          status.textContent   = '❌ Unavailable';
+          status.textContent   = 'Unavailable';
           row.dataset.status   = 'unavailable';
-          showToast('❌ Item set to Unavailable', 'error');
+          showToast('Item set to Unavailable', 'error');
         }
         applyFilters();
       } else {
-        showToast('⚠️ ' + res.error, 'error');
+        showToast(res.error, 'error');
       }
     })
-    .catch(() => showToast('⚠️ Network error.', 'error'))
+    .catch(() => showToast('Network error.', 'error'))
     .finally(closeAvail);
 }
 

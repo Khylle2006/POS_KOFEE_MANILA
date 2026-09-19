@@ -20,13 +20,13 @@ function showToast(msg, type = 'success') {
 // ── Camera modal ────────────────────────────────
 async function openCamera(mode) {
   if (!window.HAS_EMPLOYEE) {
-    showToast('⚠️ Your account has no linked employee profile.', 'error');
+    showToast('Your account has no linked employee profile.', 'error');
     return;
   }
   cameraMode = mode;
   capturedDataUrl = null;
 
-  document.getElementById('camera-title').textContent = mode === 'clock_in' ? '📸 Clock In' : '📸 Clock Out';
+  document.getElementById('camera-title').textContent = mode === 'clock_in' ? 'Clock In' : 'Clock Out';
   document.getElementById('camera-error').style.display = 'none';
   document.getElementById('camera-hint').style.display = '';
   document.getElementById('camera-preview').style.display = 'none';
@@ -41,7 +41,7 @@ async function openCamera(mode) {
     cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
     document.getElementById('camera-video').srcObject = cameraStream;
   } catch (err) {
-    document.getElementById('camera-error').textContent = '⚠️ Could not access camera: ' + err.message;
+    document.getElementById('camera-error').textContent = 'Could not access camera: ' + err.message;
     document.getElementById('camera-error').style.display = 'block';
   }
 }
@@ -134,30 +134,32 @@ async function confirmCapture() {
     const data = await res.json();
 
     if (!data.ok) {
-      document.getElementById('camera-error').textContent = '⚠️ ' + data.error;
+      document.getElementById('camera-error').textContent = data.error;
       document.getElementById('camera-error').style.display = 'block';
       if (window.KofeeValidator) {
-        KofeeValidator.resetLoading(btn, '✔ Confirm & Submit');
+        KofeeValidator.resetLoading(btn, 'Confirm & Submit');
       } else {
         btn.disabled = false;
-        btn.textContent = '✔ Confirm & Submit';
+        btn.textContent = 'Confirm & Submit';
       }
       return;
     }
 
-    showToast(cameraMode === 'clock_in' ? '✅ Clocked in!' : '✅ Clocked out!');
+    showToast(cameraMode === 'clock_in' ? 'Clocked in!' : 'Clocked out!');
     stopCameraStream();
     document.getElementById('camera-modal').classList.remove('open');
     location.reload(); // simplest way to refresh stats/table/button states
   } catch (err) {
-    document.getElementById('camera-error').textContent = '⚠️ Network error: ' + err.message;
+    document.getElementById('camera-error').textContent = 'Network error: ' + err.message;
     document.getElementById('camera-error').style.display = 'block';
     if (window.KofeeValidator) {
-      KofeeValidator.resetLoading(btn, '✔ Confirm & Submit');
+      KofeeValidator.resetLoading(btn, 'Confirm & Submit');
     } else {
       btn.disabled = false;
-      btn.textContent = '✔ Confirm & Submit';
+      btn.textContent = 'Confirm & Submit';
     }
+  }
+}
   }
 }
 
@@ -173,7 +175,7 @@ function closePhotoPreview() {
 // ── Leave request modal ─────────────────────────
 function openLeaveModal() {
   if (!window.HAS_EMPLOYEE) {
-    showToast('⚠️ Your account has no linked employee profile.', 'error');
+    showToast('Your account has no linked employee profile.', 'error');
     return;
   }
   document.getElementById('lv-type').value   = 'Vacation';
@@ -195,12 +197,12 @@ async function submitLeave() {
   const errEl  = document.getElementById('leave-error');
 
   if (!start || !end) {
-    errEl.textContent = '⚠️ Start date and end date are required.';
+    errEl.textContent = 'Start date and end date are required.';
     errEl.style.display = 'block';
     return;
   }
   if (new Date(end) < new Date(start)) {
-    errEl.textContent = '⚠️ End date cannot be before start date.';
+    errEl.textContent = 'End date cannot be before start date.';
     errEl.style.display = 'block';
     return;
   }
@@ -223,28 +225,28 @@ async function submitLeave() {
     const data = await res.json();
 
     if (!data.ok) {
-      errEl.textContent = '⚠️ ' + data.error;
+      errEl.textContent = data.error;
       errEl.style.display = 'block';
       if (window.KofeeValidator) {
-        KofeeValidator.resetLoading(btn, '✔ Submit Request');
+        KofeeValidator.resetLoading(btn, 'Submit Request');
       } else {
         btn.disabled = false;
-        btn.textContent = '✔ Submit Request';
+        btn.textContent = 'Submit Request';
       }
       return;
     }
 
-    showToast('✅ Leave request submitted!');
+    showToast('Leave request submitted!');
     closeLeaveModal();
     location.reload();
   } catch (err) {
-    errEl.textContent = '⚠️ Network error: ' + err.message;
+    errEl.textContent = 'Network error: ' + err.message;
     errEl.style.display = 'block';
     if (window.KofeeValidator) {
-      KofeeValidator.resetLoading(btn, '✔ Submit Request');
+      KofeeValidator.resetLoading(btn, 'Submit Request');
     } else {
       btn.disabled = false;
-      btn.textContent = '✔ Submit Request';
+      btn.textContent = 'Submit Request';
     }
   }
 }

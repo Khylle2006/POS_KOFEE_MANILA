@@ -85,7 +85,7 @@ async function addMenuItem() {
     }
 
     btn.disabled = false;
-    btn.innerHTML = "➕ Add Item";
+    btn.innerHTML = "Add Item";
 }
 
 // Message Box

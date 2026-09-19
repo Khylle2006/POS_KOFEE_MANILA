@@ -9,17 +9,22 @@ $jobSlug = trim($_GET['job'] ?? 'barista');
 $jobId = (int)($_GET['id'] ?? 0);
 
 // Lookup job posting
+$is_filled = false;
 $job = null;
 if ($jobId > 0) {
-    $stmt = $pdo->prepare('SELECT * FROM job_postings WHERE id = :id AND is_active = 1 LIMIT 1');
+    $stmt = $pdo->prepare('SELECT * FROM job_postings WHERE id = :id LIMIT 1');
     $stmt->execute([':id' => $jobId]);
     $job = $stmt->fetch();
 }
 
 if (!$job && !empty($jobSlug)) {
-    $stmt = $pdo->prepare('SELECT * FROM job_postings WHERE slug = :slug AND is_active = 1 LIMIT 1');
+    $stmt = $pdo->prepare('SELECT * FROM job_postings WHERE slug = :slug LIMIT 1');
     $stmt->execute([':slug' => $jobSlug]);
     $job = $stmt->fetch();
+}
+
+if ($job && empty($job['is_active'])) {
+    $is_filled = true;
 }
 
 // Fallback to first active position if not found
@@ -114,15 +119,32 @@ if (!$job) {
 
       <!-- Apply Hero -->
       <div class="km-apply-hero">
-        <h1 class="km-apply-title">Apply for <?= htmlspecialchars($job['title']) ?></h1>
-        <p class="km-apply-subtitle">Tell us about yourself. We're glad you're here.</p>
+        <h1 class="km-apply-title"><?= $is_filled ? htmlspecialchars($job['title']) . ' (Vacancy Filled)' : 'Apply for ' . htmlspecialchars($job['title']) ?></h1>
+        <p class="km-apply-subtitle"><?= $is_filled ? 'This position has been filled. Thank you for your interest!' : "Tell us about yourself. We're glad you're here." ?></p>
       </div>
 
       <!-- Application Layout -->
       <div class="km-apply-layout">
 
-        <!-- LEFT COLUMN: APPLICATION FORM -->
+        <!-- LEFT COLUMN: APPLICATION FORM OR FILLED NOTICE -->
         <div class="km-form-card">
+          <?php if ($is_filled): ?>
+            <div style="text-align: center; padding: 24px 10px;">
+              <div style="width: 60px; height: 60px; border-radius: 50%; background: #FEF2F2; border: 2px solid #FCA5A5; color: #DC2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:26px;height:26px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <h3 style="font-family: var(--km-font-serif); font-size: 22px; font-weight: 700; color: #991B1B; margin-bottom: 8px;">
+                Vacancy Currently Filled
+              </h3>
+              <p style="font-size: 14.5px; color: var(--km-text-muted); max-width: 440px; margin: 0 auto 24px; line-height: 1.6;">
+                The vacancy for <strong><?= htmlspecialchars($job['title']) ?></strong> (<?= htmlspecialchars($job['location']) ?>) has been filled by our recruitment team and is no longer accepting new candidate submissions.
+              </p>
+              <div style="display: flex; justify-content: center; gap: 12px;">
+                <a href="careers.php" class="km-btn-filled" style="padding: 11px 24px;">Browse Other Open Vacancies</a>
+                <button type="button" class="km-btn-outline" onclick="openTrackModal()">Track Existing Application</button>
+              </div>
+            </div>
+          <?php else: ?>
           <form id="applicationForm" action="api/submit_application.php" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="job_id" value="<?= (int)$job['id'] ?>">
             <input type="hidden" name="job_slug" value="<?= htmlspecialchars($job['slug']) ?>">
@@ -242,6 +264,7 @@ if (!$job) {
             </div>
 
           </form>
+          <?php endif; ?>
         </div>
 
         <!-- RIGHT COLUMN: CONTEXT CARDS -->
@@ -442,7 +465,9 @@ if (!$job) {
   <!-- ── MODAL: TRACK APPLICATION ────────────────────────── -->
   <div class="km-modal-backdrop" id="trackModalBackdrop" onclick="handleBackdropClick(event, 'trackModalBackdrop')">
     <div class="km-modal" style="max-width: 500px;">
-      <button type="button" class="km-modal-close" onclick="closeTrackModal()">✕</button>
+      <button type="button" class="km-modal-close" onclick="closeTrackModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
       <div class="km-modal-header">
         <h3 class="km-modal-title">Track your application</h3>
         <p class="km-modal-subtitle">Enter your Application Code (e.g. KM-2026-BAR-XXXX) or registered email address.</p>
@@ -464,7 +489,9 @@ if (!$job) {
   <!-- ── MODAL: PRIVACY POLICY ────────────────────────────── -->
   <div class="km-modal-backdrop" id="privacyModalBackdrop" onclick="handleBackdropClick(event, 'privacyModalBackdrop')">
     <div class="km-modal" style="max-width: 520px;">
-      <button type="button" class="km-modal-close" onclick="closePrivacyModal()">✕</button>
+      <button type="button" class="km-modal-close" onclick="closePrivacyModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
       <div class="km-modal-header">
         <h3 class="km-modal-title">Privacy Notice for Applicants</h3>
         <p class="km-modal-subtitle">How Kofee Manila handles your candidate data</p>
@@ -483,7 +510,9 @@ if (!$job) {
   <!-- ── MODAL: CONTACT US ────────────────────────────────── -->
   <div class="km-modal-backdrop" id="contactModalBackdrop" onclick="handleBackdropClick(event, 'contactModalBackdrop')">
     <div class="km-modal" style="max-width: 460px;">
-      <button type="button" class="km-modal-close" onclick="closeContactModal()">✕</button>
+      <button type="button" class="km-modal-close" onclick="closeContactModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
       <div class="km-modal-header">
         <h3 class="km-modal-title">Contact Our Talent Team</h3>
         <p class="km-modal-subtitle">We are always happy to connect with great talent.</p>

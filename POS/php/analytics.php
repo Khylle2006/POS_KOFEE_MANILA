@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('analytics.view');
 
@@ -33,23 +34,23 @@ require_permission('analytics.view');
 
     <div class="analytics-top">
       <div class="stat-card">
-        <div class="stat-icon" style="background:#fff3e0">💰</div>
+        <div class="stat-icon" style="background:#fff3e0;color:#c47d3e"><?= icon('coin', 22) ?></div>
         <div class="stat-label">Weekly Sales</div>
         <div class="stat-value" id="s-weekly-sales">—</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="background:#e8f5e9">📦</div>
+        <div class="stat-icon" style="background:#e8f5e9;color:#2e7d32"><?= icon('package', 22) ?></div>
         <div class="stat-label">Weekly Orders</div>
         <div class="stat-value" id="s-weekly-orders">—</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="background:#e3f2fd">🥤</div>
+        <div class="stat-icon" style="background:#e3f2fd;color:#1976d2"><?= icon('cup-tea', 22) ?></div>
         <div class="stat-label">Cups Sold</div>
         <div class="stat-value" id="s-cups">—</div>
         <div class="stat-sub">This week</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="background:#fce4ec">⭐</div>
+        <div class="stat-icon" style="background:#fce4ec;color:#c2185b"><?= icon('star', 22) ?></div>
         <div class="stat-label">Best Category</div>
         <div class="stat-value" id="s-best-cat" style="font-size:16px">—</div>
       </div>
@@ -94,7 +95,7 @@ fetch('../api/get_analytics.php')
     const max      = Math.max(...vals, 1);
 
     if (vals.every(v => v === 0)) {
-      barChart.innerHTML = '<div class="bar-empty">🫙 No sales data this week</div>';
+      barChart.innerHTML = '<div class="bar-empty">No sales data this week</div>';
     } else {
       barChart.innerHTML = data.daily_sales.map(d => `
         <div class="bar-col">
@@ -147,16 +148,23 @@ fetch('../api/get_analytics.php')
 
     // ── Top items ───────────────────────────────
     const topEl   = document.getElementById('top-items-list');
-    const icons   = ['🧋','🍵','🧊','🍹','☕'];
+    const icons   = [
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12l-1.5 16a2 2 0 0 1-2 1.8H9.5A2 2 0 0 1 7.5 19L6 3z"/><line x1="10" y1="7" x2="14" y2="7"/><circle cx="10" cy="14" r="1.2" fill="currentColor"/><circle cx="14" cy="14" r="1.2" fill="currentColor"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></svg>',
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>',
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 2h10l1 18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L7 2z"/><line x1="5" y1="6" x2="19" y2="6"/><path d="M10 10h4"/><path d="M9 14h6"/><line x1="12" y1="12" x2="12" y2="4"/></svg>',
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="14" r="7"/><path d="M12 7V3"/><path d="M12 3c3 0 5 1.5 5 4"/><circle cx="10" cy="13" r="1"/><circle cx="14" cy="13" r="1"/></svg>',
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>'
+    ];
+    const defaultIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>';
     const topMax  = data.top_items[0]?.total_sold || 1;
 
     if (!data.top_items.length) {
-      topEl.innerHTML = '<div class="loading">🫙 No items sold yet</div>';
+      topEl.innerHTML = '<div class="loading">No items sold yet</div>';
     } else {
       topEl.innerHTML = data.top_items.map((t, i) => `
         <div class="top-item-row">
           <div class="ti-rank">${i+1}</div>
-          <div class="ti-icon">${icons[i] || '🥤'}</div>
+          <div class="ti-icon">${icons[i] || defaultIcon}</div>
           <div class="ti-info">
             <div class="ti-name">${t.name}</div>
             <div class="ti-count">${t.total_sold} cups sold</div>
@@ -170,7 +178,7 @@ fetch('../api/get_analytics.php')
   })
   .catch(err => {
     console.error('Analytics error:', err);
-    document.getElementById('bar-chart').innerHTML = '<div class="bar-empty">⚠️ Failed to load data</div>';
+    document.getElementById('bar-chart').innerHTML = '<div class="bar-empty">Failed to load data</div>';
   });
 </script>
 

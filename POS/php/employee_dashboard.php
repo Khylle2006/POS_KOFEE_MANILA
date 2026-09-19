@@ -121,13 +121,13 @@ $initials = strtoupper(substr($fname, 0, 1));
 
     <?php if ($clock_in_required): ?>
       <div class="notice-banner" style="background:var(--amber-lt);color:var(--amber);border-color:#f2ddb8">
-        ⚠️ Please clock in before accessing the POS system.
+        Please clock in before accessing the POS system.
       </div>
     <?php endif; ?>
 
     <?php if (!$my_employee): ?>
       <div class="notice-banner">
-        ⚠️ Your account isn't linked to an employee profile yet, so clock in/out and leave filing are disabled. Ask HR to link your account.
+        Your account isn't linked to an employee profile yet, so clock in/out and leave filing are disabled. Ask HR to link your account.
       </div>
     <?php endif; ?>
 
@@ -189,7 +189,7 @@ $initials = strtoupper(substr($fname, 0, 1));
         </button>
 
         <button type="button" class="shortcut-card" onclick="openCreate()">
-          <div class="shortcut-icon"><?= icon('requisition') ?></div>
+          <div class="shortcut-icon"><?= icon('rfq') ?></div>
           <div><h3>File Requisition</h3><p>Submit a new purchase requisition</p></div>
         </button>
 
@@ -208,7 +208,7 @@ $initials = strtoupper(substr($fname, 0, 1));
           </thead>
           <tbody id="attendance-tbody">
             <?php if (empty($att_rows)): ?>
-              <tr class="empty-row"><td colspan="5">🫙 No attendance records yet.</td></tr>
+              <tr class="empty-row"><td colspan="5">No attendance records yet.</td></tr>
             <?php else: foreach ($att_rows as $r): ?>
               <tr>
                 <td><?= date('M d, Y', strtotime($r['attendance_date'])) ?></td>
@@ -241,7 +241,7 @@ $initials = strtoupper(substr($fname, 0, 1));
           <thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th></tr></thead>
           <tbody id="leave-tbody">
             <?php if (empty($leaves)): ?>
-              <tr class="empty-row"><td colspan="5">🫙 No leave requests yet.</td></tr>
+              <tr class="empty-row"><td colspan="5">No leave requests yet.</td></tr>
             <?php else: foreach ($leaves as $l): ?>
               <tr>
                 <td style="font-weight:700"><?= htmlspecialchars($l['leave_type']) ?></td>
@@ -263,8 +263,8 @@ $initials = strtoupper(substr($fname, 0, 1));
 <div class="modal-overlay" id="camera-modal">
   <div class="modal camera-modal">
     <div class="modal-header">
-      <h3 id="camera-title">📸 Clock In</h3>
-      <button class="modal-close" onclick="closeCamera()">✕</button>
+      <h3 id="camera-title">Clock In</h3>
+      <button class="modal-close" onclick="closeCamera()"><?= icon('x', 14) ?></button>
     </div>
     <div class="modal-body">
       <div class="camera-frame">
@@ -277,9 +277,9 @@ $initials = strtoupper(substr($fname, 0, 1));
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-mcancel" onclick="closeCamera()">Cancel</button>
-      <button type="button" class="btn-msave" id="camera-capture-btn" onclick="capturePhoto()">📷 Capture</button>
-      <button type="button" class="btn-msave" id="camera-confirm-btn" style="display:none;background:var(--green)" onclick="confirmCapture()">✔ Confirm &amp; Submit</button>
-      <button type="button" class="btn-mcancel" id="camera-retake-btn" style="display:none" onclick="retakePhoto()">↺ Retake</button>
+      <button type="button" class="btn-msave" id="camera-capture-btn" onclick="capturePhoto()"><?= icon('camera', 14) ?> Capture</button>
+      <button type="button" class="btn-msave" id="camera-confirm-btn" style="display:none;background:var(--green)" onclick="confirmCapture()"><?= icon('check', 14) ?> Confirm &amp; Submit</button>
+      <button type="button" class="btn-mcancel" id="camera-retake-btn" style="display:none" onclick="retakePhoto()"><?= icon('refresh', 14) ?> Retake</button>
     </div>
   </div>
 </div>
@@ -289,7 +289,7 @@ $initials = strtoupper(substr($fname, 0, 1));
   <div class="modal" style="max-width:420px">
     <div class="modal-header">
       <h3>Attendance Proof</h3>
-      <button class="modal-close" onclick="closePhotoPreview()">✕</button>
+      <button class="modal-close" onclick="closePhotoPreview()"><?= icon('x', 14) ?></button>
     </div>
     <div class="modal-body" style="text-align:center">
       <img id="photo-preview-img" style="max-width:100%;border-radius:10px"/>
@@ -301,8 +301,8 @@ $initials = strtoupper(substr($fname, 0, 1));
 <div class="modal-overlay" id="create-modal">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
-      <h3>➕ File Purchase Requisition</h3>
-      <button class="modal-close" onclick="closeCreate()">✕</button>
+      <h3>File Purchase Requisition</h3>
+      <button class="modal-close" onclick="closeCreate()"><?= icon('x', 14) ?></button>
     </div>
     <form method="POST" action="../php/requisitions.php" id="create-form">
       <input type="hidden" name="action" value="create"/>
@@ -330,7 +330,7 @@ $initials = strtoupper(substr($fname, 0, 1));
         <div class="field-group">
           <label class="field-label">Items <span style="color:var(--red)">*</span></label>
           <div id="item-rows"></div>
-          <button type="button" class="act-btn" onclick="addItemRow()" style="margin-top:4px">➕ Add Item</button>
+          <button type="button" class="act-btn" onclick="addItemRow()" style="margin-top:4px"><?= icon('plus', 13) ?> Add Item</button>
         </div>
         <div style="text-align:right;font-weight:800;font-size:15px;color:var(--espresso);margin-top:10px">
           Estimated Total: <span id="running-total">₱0.00</span>
@@ -338,7 +338,7 @@ $initials = strtoupper(substr($fname, 0, 1));
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeCreate()">Cancel</button>
-        <button type="submit" class="btn-save">✔ Submit for Review</button>
+        <button type="submit" class="btn-save"><?= icon('check', 14) ?> Submit for Review</button>
       </div>
     </form>
   </div>
@@ -348,8 +348,8 @@ $initials = strtoupper(substr($fname, 0, 1));
 <div class="modal-overlay" id="leave-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3>🏖️ File Leave Request</h3>
-      <button class="modal-close" onclick="closeLeaveModal()">✕</button>
+      <h3>File Leave Request</h3>
+      <button class="modal-close" onclick="closeLeaveModal()"><?= icon('x', 14) ?></button>
     </div>
     <div class="modal-body">
       <div class="field-group">
@@ -376,7 +376,7 @@ $initials = strtoupper(substr($fname, 0, 1));
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-mcancel" onclick="closeLeaveModal()">Cancel</button>
-      <button type="button" class="btn-msave" id="leave-submit-btn" onclick="submitLeave()">✔ Submit Request</button>
+      <button type="button" class="btn-msave" id="leave-submit-btn" onclick="submitLeave()"><?= icon('check', 14) ?> Submit Request</button>
     </div>
   </div>
 </div>
@@ -395,12 +395,10 @@ fetch('../api/get_ingredients.php')
     return r.json();
   })
   .then(items => {
-    console.log('✅ Loaded inventory items:', items);
     window.INVENTORY_ITEMS = items || [];
-    console.log('Total items:', window.INVENTORY_ITEMS.length);
   })
   .catch(e => {
-    console.error('❌ Failed to load inventory:', e);
+    console.error('Failed to load inventory:', e);
     window.INVENTORY_ITEMS = [];
   });
 
@@ -425,7 +423,7 @@ function addItemRow(vals = {}) {
     <input type="number" class="field-input qty" placeholder="Qty" min="0.1" step="0.1" value="${esc(vals.qty ?? '')}" oninput="updateTotal()">
     <input type="text" class="field-input unit" placeholder="Unit" value="${esc(vals.unit ?? '')}" readonly style="background:#f5f5f5;cursor:not-allowed">
     <input type="number" class="field-input price" placeholder="Est. ₱/unit" min="0" step="0.01" value="${esc(vals.price ?? '')}" oninput="updateTotal()">
-    <button type="button" class="rm-item" onclick="this.closest('.item-row').remove(); updateTotal();">✕</button>
+    <button type="button" class="rm-item" onclick="this.closest('.item-row').remove(); updateTotal();" style="display:flex;align-items:center;justify-content:center"><?= icon('x', 14) ?></button>
   `;
   wrap.appendChild(row);
   
@@ -467,7 +465,6 @@ function esc(str) {
 }
 
 function openCreate() {
-  console.log('Opening requisition modal. Inventory items:', window.INVENTORY_ITEMS.length);
   document.getElementById('f-title').value = '';
   document.getElementById('item-rows').innerHTML = '';
   addItemRow();
@@ -498,7 +495,7 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
   const titleInput = document.getElementById('f-title');
   if (!titleInput.value.trim()) {
     if (errBox) {
-      errBox.textContent = '⚠️ Requisition title is required.';
+      errBox.textContent = 'Requisition title is required.';
       errBox.style.display = 'block';
     }
     titleInput.focus();
@@ -525,7 +522,7 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
   
   if (!items.length) {
     if (errBox) {
-      errBox.textContent = '⚠️ Please add at least one item to the requisition.';
+      errBox.textContent = 'Please add at least one item to the requisition.';
       errBox.style.display = 'block';
     }
     return;
@@ -533,7 +530,7 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
 
   if (invalidQty) {
     if (errBox) {
-      errBox.textContent = '⚠️ Each item must have a quantity greater than 0.';
+      errBox.textContent = 'Each item must have a quantity greater than 0.';
       errBox.style.display = 'block';
     }
     return;
@@ -564,7 +561,7 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
     }
     // Check if response contains success indicator
     if (html.includes('toast-success') || html.includes('Requisition submitted')) {
-      showToast('✅ Requisition submitted for review!', 'success');
+      showToast('Requisition submitted for review!', 'success');
       closeCreate();
       // Reset form
       document.getElementById('create-form').reset();
@@ -573,10 +570,10 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
       document.getElementById('running-total').textContent = '₱0.00';
     } else {
       if (errBox) {
-        errBox.textContent = '⚠️ Failed to submit requisition. Please check your inputs.';
+        errBox.textContent = 'Failed to submit requisition. Please check your inputs.';
         errBox.style.display = 'block';
       }
-      showToast('⚠️ Failed to submit requisition', 'error');
+      showToast('Failed to submit requisition', 'error');
     }
   })
   .catch(e => {
@@ -585,10 +582,10 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
     }
     console.error('Error:', e);
     if (errBox) {
-      errBox.textContent = '⚠️ Network error while submitting requisition.';
+      errBox.textContent = 'Network error while submitting requisition.';
       errBox.style.display = 'block';
     }
-    showToast('⚠️ Error submitting requisition', 'error');
+    showToast('Error submitting requisition', 'error');
   });
 });
 

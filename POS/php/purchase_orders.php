@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.view');
 
@@ -16,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'send') {
         require_permission('procurement.po.manage');
         $pdo->prepare("UPDATE purchase_orders SET status='sent' WHERE id=:id AND status='draft'")->execute([':id'=>$id]);
-        $toast = '📨 Purchase Order sent to supplier.';
+        $toast = 'Purchase Order sent to supplier.';
     }
 
 
@@ -24,10 +25,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_permission('procurement.invoice.match');
         $inv = trim($_POST['invoice_number'] ?? '');
         if (!$inv) {
-            $toast = '⚠️ Invoice number is required.'; $toast_type = 'error';
+            $toast = 'Invoice number is required.'; $toast_type = 'error';
         } else {
             $pdo->prepare('UPDATE purchase_orders SET invoice_number=:i WHERE id=:id')->execute([':i'=>$inv, ':id'=>$id]);
-            $toast = '✅ Invoice matched to PO, Goods Receipt confirmed.';
+            $toast = 'Invoice matched to PO, Goods Receipt confirmed.';
         }
     }
 
@@ -127,7 +128,7 @@ $pos = $list_stmt->fetchAll();
           <?php if ($po['status']==='closed'): ?>
             <p style="margin-top:12px">
               <span class="status-badge status-approved">Closed</span>
-              — rated <?= str_repeat('⭐', (int)$po['supplier_rating']) ?>
+              — rated <?= str_repeat(icon('star', 13, '', 'vertical-align:middle;color:var(--amber);fill:currentColor;'), max(1, min(5, (int)$po['supplier_rating']))) ?>
               <a href="supplier_performace.php?supplier_id=<?= $po['supplier_id'] ?>" style="margin-left:6px;font-size:12px;font-weight:700;color:var(--caramel)">View scorecard →</a>
             </p>
           <?php endif; ?>
@@ -137,48 +138,48 @@ $pos = $list_stmt->fetchAll();
           <h3 style="font-size:13.5px;margin-bottom:8px">Order Progress</h3>
 
           <div class="po-step">
-            <div class="po-step-dot <?= $po['status']!=='draft'?'done':'' ?>"><?= $po['status']!=='draft'?'✓':'' ?></div>
+            <div class="po-step-dot <?= $po['status']!=='draft'?'done':'' ?>"><?= $po['status']!=='draft'? icon('check', 11) : '' ?></div>
             <div class="po-step-label">PO Sent to Supplier</div>
             <?php if ($po['status']==='draft' && has_permission('procurement.po.manage')): ?>
               <form method="POST" class="po-step-action"><input type="hidden" name="action" value="send"/><input type="hidden" name="id" value="<?= $po['id'] ?>"/>
-                <button type="submit" class="act-btn act-activate">📨 Send PO</button></form>
+                <button type="submit" class="act-btn act-activate"><?= icon('send', 13) ?> Send PO</button></form>
             <?php endif; ?>
           </div>
 
           <div class="po-step">
-            <div class="po-step-dot <?= $po['shipped_at']?'done':'' ?>"><?= $po['shipped_at']?'✓':'' ?></div>
+            <div class="po-step-dot <?= $po['shipped_at']?'done':'' ?>"><?= $po['shipped_at']? icon('check', 11) : '' ?></div>
             <div class="po-step-label">Shipped by Supplier<?= $po['shipped_at'] ? ' (' . date('M d, Y', strtotime($po['shipped_at'])) . ')' : '' ?><?= $po['shipping_notes'] ? ' — ' . htmlspecialchars($po['shipping_notes']) : '' ?></div>
           </div>
 
           <div class="po-step">
-            <div class="po-step-dot <?= in_array($po['status'],['delivered','closed'])?'done':'' ?>"><?= in_array($po['status'],['delivered','closed'])?'✓':'' ?></div>
+            <div class="po-step-dot <?= in_array($po['status'],['delivered','closed'])?'done':'' ?>"><?= in_array($po['status'],['delivered','closed'])? icon('check', 11) : '' ?></div>
             <div class="po-step-label">Goods Received</div>
             <?php if (in_array($po['status'],['sent','acknowledged'],true) && has_permission('procurement.receiving')): ?>
-              <button type="button" class="act-btn act-activate" onclick="window.location.href='goods_receipts.php?po_id=<?= $po['id'] ?>'">📦 Record Receipt</button>
+              <button type="button" class="act-btn act-activate" onclick="window.location.href='goods_receipts.php?po_id=<?= $po['id'] ?>'"><?= icon('package', 13) ?> Record Receipt</button>
             <?php endif; ?>          </div>
 
           <div class="po-step">
-            <div class="po-step-dot <?= $po['invoice_number']?'done':'' ?>"><?= $po['invoice_number']?'✓':'' ?></div>
+            <div class="po-step-dot <?= $po['invoice_number']?'done':'' ?>"><?= $po['invoice_number']? icon('check', 11) : '' ?></div>
             <div class="po-step-label">Invoice Matched <?= $po['invoice_number'] ? '(#' . htmlspecialchars($po['invoice_number']) . ')' : '' ?></div>
             <?php if ($po['status']==='delivered' && !$po['invoice_number'] && has_permission('procurement.invoice.match')): ?>
               <form method="POST" class="po-step-action" style="display:flex;gap:6px">
                 <input type="hidden" name="action" value="record_invoice"/><input type="hidden" name="id" value="<?= $po['id'] ?>"/>
                 <input class="field-input" type="text" name="invoice_number" placeholder="Invoice #" style="width:120px;padding:6px 10px"/>
-                <button type="submit" class="act-btn act-activate">✔ Match</button></form>
+                <button type="submit" class="act-btn act-activate"><?= icon('check', 13) ?> Match</button></form>
             <?php endif; ?>
           </div>
 
           <div class="po-step">
-            <div class="po-step-dot <?= $po['paid_at']?'done':'' ?>"><?= $po['paid_at']?'✓':'' ?></div>
+            <div class="po-step-dot <?= $po['paid_at']?'done':'' ?>"><?= $po['paid_at']? icon('check', 11) : '' ?></div>
             <div class="po-step-label">Payment Sent <?= $po['paid_at'] ? '(' . date('M d, Y', strtotime($po['paid_at'])) . ')' : '' ?></div>
             <?php if ($po['invoice_number'] && !$po['paid_at'] && has_permission('procurement.payment.process')): ?>
-              <button type="button" class="act-btn act-activate" onclick="window.location.href='payments.php?po_id=<?= $po['id'] ?>'">💸 Go to Payments</button>
+              <button type="button" class="act-btn act-activate" onclick="window.location.href='payments.php?po_id=<?= $po['id'] ?>'"><?= icon('dollar', 13) ?> Go to Payments</button>
             <?php endif; ?>
           </div>
 
           <?php if ($po['paid_at'] && $po['status'] !== 'closed' && has_permission('procurement.performance.rate')): ?>
             <div style="margin-top:16px;padding-top:14px;border-top:1.5px solid var(--border)">
-              <button class="btn-save" style="width:100%" onclick="window.location.href='supplier_performace.php'">🏁 Close Order &amp; Rate Supplier</button>
+              <button class="btn-save" style="width:100%" onclick="window.location.href='supplier_performace.php'"><?= icon('flag', 14) ?> Close Order &amp; Rate Supplier</button>
             </div>
           <?php endif; ?>
         </div>
@@ -194,10 +195,10 @@ $pos = $list_stmt->fetchAll();
       </div>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>PO #</th><th>Requisition</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th></th></tr></thead>
+          <thead><tr><th>PO #</th><th>Requisition</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($pos)): ?>
-            <tr class="empty-row"><td colspan="7">🫙 No purchase orders yet — award a bid from an RFQ first.</td></tr>
+            <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No purchase orders yet — award a bid from an RFQ first.</td></tr>
           <?php else: foreach ($pos as $p): ?>
             <tr>
               <td style="font-weight:700">#<?= str_pad($p['id'],5,'0',STR_PAD_LEFT) ?></td>
@@ -206,7 +207,7 @@ $pos = $list_stmt->fetchAll();
               <td style="font-weight:700">₱<?= number_format($p['total_amount'],2) ?></td>
               <td><span class="status-badge status-<?= $p['status']==='closed'?'approved':($p['status']==='cancelled'?'rejected':'pending') ?>"><?= ucfirst($p['status']) ?></span></td>
               <td class="muted-cell"><?= date('M d, Y', strtotime($p['created_at'])) ?></td>
-              <td><button class="act-btn" onclick="window.location.href='purchase_orders.php?id=<?= $p['id'] ?>'">👁 View</button></td>
+              <td style="text-align:center"><button class="act-btn" onclick="window.location.href='purchase_orders.php?id=<?= $p['id'] ?>'"><?= icon('eye', 13) ?> View</button></td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>

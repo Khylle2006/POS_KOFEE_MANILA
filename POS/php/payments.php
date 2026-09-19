@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.view');
 
@@ -26,9 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $inv = $pdo->prepare('SELECT * FROM invoices WHERE id = :id'); $inv->execute([':id' => $invoice_id]); $invoice = $inv->fetch();
 
         if (!$invoice || $invoice['status'] !== 'approved') {
-            $toast = '⚠️ Only approved invoices can be scheduled for payment.'; $toast_type = 'error';
+            $toast = 'Only approved invoices can be scheduled for payment.'; $toast_type = 'error';
         } elseif ($amount <= 0) {
-            $toast = '⚠️ Enter a valid payment amount.'; $toast_type = 'error';
+            $toast = 'Enter a valid payment amount.'; $toast_type = 'error';
         } else {
             $pdo->prepare(
                 'INSERT INTO payments (invoice_id, po_id, amount, payment_method, reference_no, notes, paid_by)
@@ -39,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $payment_id = (int)$pdo->lastInsertId();
             audit_log('payment', $payment_id, 'scheduled', "Invoice {$invoice['invoice_number']} — " . php_currency($amount));
-            $toast = '🗓️ Payment scheduled.';
+            $toast = 'Payment scheduled.';
             header('Location: payments.php?id=' . $payment_id . '&toast=' . urlencode($toast) . '&type=success');
             exit;
         }
@@ -69,16 +70,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $sup = $sup_stmt->fetch();
                 if ($sup && $sup['user_id']) {
                     notify_user(
-                        (int)$sup['user_id'], 'payment_advice', '💸 Payment sent',
+                        (int)$sup['user_id'], 'payment_advice', 'Payment sent',
                         'Payment of ' . php_currency($payment['amount']) . ' for Invoice ' . $sup['invoice_number'] . ' has been completed.',
                         'supplier_portal.php'
                     );
                 }
 
-                $toast = '💸 Payment completed — invoice marked paid.';
+                $toast = 'Payment completed — invoice marked paid.';
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
+                $toast = $e->getMessage(); $toast_type = 'error';
             }
         }
     }
@@ -90,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE payments SET status='failed', notes = CONCAT(COALESCE(notes,''), ' | Failed: ', :r) WHERE id=:id AND status='scheduled'")
             ->execute([':r' => $reason ?: 'No reason given', ':id' => $id]);
         audit_log('payment', $id, 'failed', $reason);
-        $toast = '❌ Payment marked failed. You can schedule a new attempt from the invoice.'; $toast_type = 'error';
+        $toast = 'Payment marked failed. You can schedule a new attempt from the invoice.'; $toast_type = 'error';
     }
 
     if ($action === 'cancel') {
@@ -98,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['id'] ?? 0);
         $pdo->prepare("UPDATE payments SET status='cancelled' WHERE id=:id AND status='scheduled'")->execute([':id' => $id]);
         audit_log('payment', $id, 'cancelled');
-        $toast = '🚫 Scheduled payment cancelled.';
+        $toast = 'Scheduled payment cancelled.';
     }
 
     $id_for_redirect = (int)($_POST['id'] ?? $_POST['invoice_id'] ?? 0);
@@ -138,7 +139,7 @@ if ($po_id_param && !$new_invoice_id) {
             header('Location: payments.php?id=' . $existing_payment_id);
             exit;
         }
-        $po_id_toast = '⚠️ No approved invoice awaiting payment for this Purchase Order.';
+        $po_id_toast = 'No approved invoice awaiting payment for this Purchase Order.';
     }
 }
 
@@ -247,7 +248,7 @@ $payments = $list_stmt->fetchAll();
 
           <div style="text-align:right;display:flex;gap:10px;justify-content:flex-end">
             <a href="payments.php" class="btn-cancel">Cancel</a>
-            <button type="submit" class="btn-save" id="schedule-pay-btn">🗓️ Schedule Payment</button>
+            <button type="submit" class="btn-save" id="schedule-pay-btn"><?= icon('calendar', 14) ?> Schedule Payment</button>
           </div>
         </form>
       </div>
@@ -271,14 +272,14 @@ $payments = $list_stmt->fetchAll();
         <?php if ($payment['status'] === 'scheduled' && has_permission('procurement.payment.process')): ?>
         <div style="margin-top:18px;display:flex;gap:10px">
           <form method="POST"><input type="hidden" name="action" value="complete"/><input type="hidden" name="id" value="<?= $payment['id'] ?>"/>
-            <button type="submit" class="btn-save">💸 Mark Completed</button></form>
+            <button type="submit" class="btn-save"><?= icon('dollar', 14) ?> Mark Completed</button></form>
           <form method="POST" onsubmit="return confirm('Cancel this scheduled payment?')"><input type="hidden" name="action" value="cancel"/><input type="hidden" name="id" value="<?= $payment['id'] ?>"/>
             <button type="submit" class="btn-cancel">Cancel</button></form>
         </div>
         <form method="POST" style="margin-top:10px;display:flex;gap:8px">
           <input type="hidden" name="action" value="fail"/><input type="hidden" name="id" value="<?= $payment['id'] ?>"/>
           <input class="field-input" type="text" name="fail_reason" placeholder="Reason payment failed (optional)" style="flex:1;padding:7px 10px"/>
-          <button type="submit" class="act-btn">❌ Mark Failed</button>
+          <button type="submit" class="act-btn"><?= icon('x', 13) ?> Mark Failed</button>
         </form>
         <?php endif; ?>
       </div>
@@ -290,7 +291,7 @@ $payments = $list_stmt->fetchAll();
       <div class="table-card" style="padding:0;margin-bottom:18px;overflow:hidden">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1.5px solid var(--border)">
     <h3 style="font-size:13.5px;font-weight:700;color:var(--espresso);display:flex;align-items:center;gap:6px;margin:0">
-      💸 Approved Invoices Awaiting Payment
+      <?= icon('invoice', 16, '', 'color:var(--caramel)') ?> Approved Invoices Awaiting Payment
     </h3>
     <?php if (!empty($awaiting)): ?>
       <span class="count-badge" style="background:var(--amber-lt);color:var(--amber)"><?= count($awaiting) ?></span>
@@ -299,13 +300,13 @@ $payments = $list_stmt->fetchAll();
 
   <?php if (empty($awaiting)): ?>
     <div style="padding:30px 18px;text-align:center;color:var(--text-muted);font-size:13px">
-      ✅ Nothing awaiting payment right now.
+      <?= icon('check', 16, '', 'color:var(--green);vertical-align:middle;margin-right:4px') ?> Nothing awaiting payment right now.
     </div>
   <?php else: ?>
     <div>
       <?php foreach ($awaiting as $a): ?>
         <div class="kf-invoice-row" onclick="window.location.href='payments.php?new_for_invoice=<?= $a['id'] ?>'">
-          <div class="kf-invoice-icon">🧾</div>
+          <div class="kf-invoice-icon"><?= icon('invoice', 18, '', 'color:var(--espresso)') ?></div>
           <div class="kf-invoice-info">
             <div class="kf-invoice-num">
               <?= htmlspecialchars($a['invoice_number']) ?>
@@ -376,10 +377,10 @@ $payments = $list_stmt->fetchAll();
       </div>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>Invoice</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th></th></tr></thead>
+          <thead><tr><th>Invoice</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($payments)): ?>
-            <tr class="empty-row"><td colspan="7">🫙 No payments recorded yet.</td></tr>
+            <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No payments recorded yet.</td></tr>
           <?php else: foreach ($payments as $p): ?>
             <tr>
               <td style="font-weight:700"><?= htmlspecialchars($p['invoice_number']) ?></td>
@@ -388,7 +389,7 @@ $payments = $list_stmt->fetchAll();
               <td><?= ucwords(str_replace('_',' ',$p['payment_method'])) ?></td>
               <td><span class="status-badge status-<?= $p['status']==='completed'?'approved':($p['status']==='failed'?'rejected':'pending') ?>"><?= status_badge($p['status']) ?></span></td>
               <td class="muted-cell"><?= date('M d, Y', strtotime($p['scheduled_at'])) ?></td>
-              <td><button class="act-btn" onclick="window.location.href='payments.php?id=<?= $p['id'] ?>'">👁 View</button></td>
+              <td style="text-align:center"><button class="act-btn" onclick="window.location.href='payments.php?id=<?= $p['id'] ?>'"><?= icon('eye', 13) ?> View</button></td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>

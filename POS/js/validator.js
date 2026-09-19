@@ -41,7 +41,7 @@ const KofeeValidator = (() => {
     input.setAttribute('aria-invalid', 'true');
 
     const err = getOrCreateErrorElement(input);
-    err.innerHTML = `<span aria-hidden="true" style="font-size:13px">⚠️</span> <span>${message}</span>`;
+    err.innerHTML = `<span aria-hidden="true" style="display:inline-flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> <span>${message}</span>`;
     err.style.display = 'flex';
     input.setAttribute('aria-describedby', err.id || '');
 
@@ -85,7 +85,7 @@ const KofeeValidator = (() => {
 
     const val = input.value !== undefined ? input.value.trim() : '';
     const label = input.dataset.label ||
-                  (input.closest('.field-group') || input.closest('.mfield'))?.querySelector('.field-label, label')?.textContent?.replace(/[*⚠️]/g, '').trim() ||
+                  (input.closest('.field-group') || input.closest('.mfield'))?.querySelector('.field-label, label')?.textContent?.replace(/[*]/g, '').trim() ||
                   input.placeholder ||
                   input.name ||
                   'This field';

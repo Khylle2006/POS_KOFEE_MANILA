@@ -45,7 +45,7 @@ function login_user(string $username, string $password): array {
             return ['ok' => false, 'error' => 'Invalid username or password'];
         }
         
-        // 🔥 CRITICAL: Set session data
+        // CRITICAL: Set session data
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['firstname'] = $user['firstname'] ?? '';

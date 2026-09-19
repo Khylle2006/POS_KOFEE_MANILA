@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('orders.history');
 ?>
@@ -25,14 +26,14 @@ require_permission('orders.history');
       <h1>Order History</h1>
       <p>All past transactions</p>
     </div>
-    <button class="btn btn-outline" onclick="exportHistory()">⬇ Export</button>
+    <button class="btn btn-outline" onclick="exportHistory()"><?= icon('download', 14) ?> Export</button>
   </div>
 
   <div class="page-body">
 
     <div class="filter-bar" style="align-items:center">
       <input class="filter-input" type="text" id="history-search"
-             placeholder="🔍 Search by order # or item…"
+             placeholder="Search by order # or item…"
              oninput="filterHistory(this.value)"
              style="flex:1;min-width:220px"/>
 
@@ -85,7 +86,7 @@ require_permission('orders.history');
   <div class="receipt-modal">
 
     <div class="receipt-head">
-      <div class="receipt-check">🧾</div>
+      <div class="receipt-check"><?= icon('invoice', 24) ?></div>
       <h2>Kofee Manila</h2>
       <p>Official Order Receipt</p>
       <span class="receipt-order-num" id="r-order-num">#0001</span>
@@ -93,7 +94,7 @@ require_permission('orders.history');
 
     <div class="receipt-body">
       <div class="receipt-meta">
-        <span id="r-type">🍽️ Dine In</span>
+        <span id="r-type">Dine In</span>
         <span id="r-date"></span>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
@@ -110,8 +111,8 @@ require_permission('orders.history');
     </div>
 
     <div class="receipt-footer">
-      <button class="btn-print" onclick="printReceipt()">🖨️ Print</button>
-      <button class="btn-new-order" onclick="closeReceipt()">✕ Close</button>
+      <button class="btn-print" onclick="printReceipt()"><?= icon('printer', 14) ?> Print</button>
+      <button class="btn-new-order" onclick="closeReceipt()"><?= icon('x', 14) ?> Close</button>
     </div>
 
   </div>

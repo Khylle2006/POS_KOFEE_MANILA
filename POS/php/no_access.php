@@ -25,13 +25,16 @@ $user = current_user();
     .btn-logout {
       margin-top: 8px; padding: 11px 24px; background: #c47d3e; color: #fff;
       border: none; border-radius: 12px; font-family: 'Poppins', sans-serif;
-      font-size: 13px; font-weight: 700; cursor: pointer;
-    }
     .btn-logout:hover { background: #7a4e2e; }
   </style>
 </head>
 <body>
-  <div class="icon">🔒</div>
+  <div class="icon">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#c47d3e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+    </svg>
+  </div>
   <h1>No access yet, <?= htmlspecialchars($user['firstname'] ?: $user['username']) ?></h1>
   <p>
     Your account (<?= htmlspecialchars($user['role']) ?>) doesn't have any

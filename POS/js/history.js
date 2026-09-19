@@ -25,7 +25,7 @@ function renderHistory(orders) {
   const tbody = document.getElementById('history-tbody');
 
   if (!orders.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">🫙 No orders found</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No orders found</td></tr>`;
     return;
   }
 
@@ -45,7 +45,7 @@ function renderHistory(orders) {
       <td><span class="badge ${pmClass}">${pm}</span></td>
       <td class="strong-cell">₱${Number(o.total_amount).toLocaleString()}</td>
       <td>
-        <button class="act-btn" onclick='openReceipt(${JSON.stringify(o)})'>🧾 View</button>
+        <button class="act-btn" onclick='openReceipt(${JSON.stringify(o)})'><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg> View</button>
       </td>
       <td>
         <span class="status-badge ${sm.cls}">${sm.label}</span>
@@ -122,10 +122,6 @@ function exportHistory() {
 // ── Receipt modal ─────────────────────────────
 function openReceipt(order) {
   const pm       = order.payment_method || 'Dine In';
-  const pmIcon   = pm.toLowerCase().includes('dine')     ? '🍽️'
-                 : pm.toLowerCase().includes('take')     ? '🛍️'
-                 : pm.toLowerCase().includes('delivery') ? '🚗' : '🍽️';
-
   const itemsArr = (order.items_detail || '').split(';;').filter(Boolean);
 
   const itemRows = itemsArr.map(item => {
@@ -137,14 +133,14 @@ function openReceipt(order) {
 
   document.getElementById('r-order-num').textContent = '#' + String(order.id).padStart(4,'0');
   document.getElementById('r-date').textContent      = order.created_at;
-  document.getElementById('r-type').textContent      = pmIcon + ' ' + pm;
+  document.getElementById('r-type').textContent      = pm;
   document.getElementById('r-status').textContent    = sm.label;
   document.getElementById('r-status').className      = 'status-badge ' + sm.cls;
 
   // Items list — same markup/classes as the New Order receipt
   document.getElementById('r-items').innerHTML = itemRows.map(i => `
     <div class="receipt-item">
-      <div class="ri-icon">🧋</div>
+      <div class="ri-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12l-1.5 16a2 2 0 0 1-2 1.8H9.5A2 2 0 0 1 7.5 19L6 3z"/><line x1="10" y1="7" x2="14" y2="7"/><circle cx="10" cy="14" r="1.2" fill="currentColor"/><circle cx="14" cy="14" r="1.2" fill="currentColor"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></svg></div>
       <div class="ri-info">
         <div class="ri-name">${i.name}</div>
         <div class="ri-qty">×${i.qty}</div>

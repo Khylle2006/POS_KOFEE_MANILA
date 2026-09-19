@@ -12,7 +12,10 @@ function showToast(msg, type = 'success') {
   const t = document.createElement('div');
   t.id = 'rbac-toast';
   t.className = 'toast toast-' + type;
-  t.textContent = msg;
+  const iconSvg = type === 'error'
+    ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+  t.innerHTML = iconSvg + escapeHtml(msg);
   document.body.appendChild(t);
   setTimeout(() => {
     t.style.opacity = '0';
@@ -177,7 +180,19 @@ function saveChanges() {
   const changed = rows.filter(el => (el.classList.contains('on') ? '1' : '0') !== el.dataset.original);
 
   if (!changed.length) {
-    showToast('No permission changes to save.');
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: 'No Changes to Save',
+        text: 'You haven\'t made any changes to the current permissions yet.',
+        icon: 'info',
+        confirmButtonColor: 'var(--caramel, #8B5E3C)',
+        confirmButtonText: 'OK',
+        timer: 2200,
+        timerProgressBar: true
+      });
+    } else {
+      showToast('No permission changes to save.');
+    }
     return;
   }
 
@@ -185,7 +200,16 @@ function saveChanges() {
   const role = roleSelect ? roleSelect.value : (window.CONFIG?.role || '');
 
   if (!role) {
-    showToast('⚠️ No role selected.', 'error');
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: 'No Role Selected',
+        text: 'Please select a role before saving changes.',
+        icon: 'warning',
+        confirmButtonColor: 'var(--caramel, #8B5E3C)'
+      });
+    } else {
+      showToast('No role selected.', 'error');
+    }
     return;
   }
 
@@ -199,7 +223,7 @@ function saveChanges() {
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;font-size:12.5px;border-bottom:1px solid #F6EDE2">
       <span style="font-weight:600;color:var(--espresso)">${escapeHtml(label)}</span>
       <span style="font-weight:700;padding:2px 8px;border-radius:6px;font-size:11px;background:${granted ? 'rgba(46,125,50,0.1)' : 'rgba(198,40,40,0.1)'};color:${granted ? 'var(--green,#2e7d32)' : 'var(--red,#c62828)'}">
-        ${granted ? '✅ Grant' : '❌ Revoke'}
+        ${granted ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><polyline points="20 6 9 17 4 12"/></svg> Grant' : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Revoke'}
       </span>
     </div>`;
   }).join('');
@@ -212,10 +236,39 @@ function closeSaveConfirm() {
   if (modal) modal.classList.remove('open');
 }
 
+// ── Handle Role Picker Change with Unsaved Changes Guard ─────
+function handleRoleChange(select) {
+  const rows = [...document.querySelectorAll('.perm-toggle')];
+  const changed = rows.filter(el => (el.classList.contains('on') ? '1' : '0') !== el.dataset.original);
+
+  if (changed.length > 0 && typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Unsaved Changes!',
+      text: `You have ${changed.length} unsaved permission change(s). Switching roles will discard these changes.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Discard & Switch',
+      cancelButtonText: 'Keep Editing',
+      confirmButtonColor: 'var(--red, #C62828)',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    }).then(result => {
+      if (result.isConfirmed) {
+        document.getElementById('role-picker-form').submit();
+      } else {
+        select.value = window.CONFIG?.role || select.value;
+      }
+    });
+  } else {
+    document.getElementById('role-picker-form').submit();
+  }
+}
+
 // ── Save Changes: Commit to Server ───────────────────────────
 function doSaveChanges() {
   const roleSelect = document.getElementById('role-picker');
   const role = roleSelect ? roleSelect.value : (window.CONFIG?.role || '');
+  const roleLabel = roleSelect ? roleSelect.options[roleSelect.selectedIndex].text.split('—')[0].trim() : role;
 
   const rows = [...document.querySelectorAll('.perm-toggle')];
   const changed = rows.filter(el => (el.classList.contains('on') ? '1' : '0') !== el.dataset.original);
@@ -223,15 +276,32 @@ function doSaveChanges() {
   closeSaveConfirm();
 
   if (!changed.length) {
-    showToast('No changes to save.');
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: 'No Changes',
+        text: 'No changes were detected to save.',
+        icon: 'info',
+        confirmButtonColor: 'var(--caramel, #8B5E3C)'
+      });
+    } else {
+      showToast('No changes to save.');
+    }
     return;
   }
   if (!role) {
-    showToast('⚠️ No role selected.', 'error');
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: 'No Role Selected',
+        text: 'Please select a role first.',
+        icon: 'warning',
+        confirmButtonColor: 'var(--caramel, #8B5E3C)'
+      });
+    } else {
+      showToast('No role selected.', 'error');
+    }
     return;
   }
 
-  const confirmBtn = document.getElementById('save-confirm-btn');
   const saveBtn = document.getElementById('save-btn');
 
   if (saveBtn) {
@@ -261,7 +331,7 @@ function doSaveChanges() {
   .then(res => {
     if (saveBtn) {
       saveBtn.disabled = false;
-      saveBtn.textContent = '💾 Save Changes';
+      saveBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes';
     }
 
     if (res.ok) {
@@ -270,17 +340,45 @@ function doSaveChanges() {
         el.dataset.original = el.classList.contains('on') ? '1' : '0';
       });
       updateUIStats();
-      showToast('✅ Permissions updated successfully!');
+      showToast('Permissions updated successfully!');
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Permissions Saved!',
+          text: `Permissions for "${roleLabel}" were updated successfully.`,
+          icon: 'success',
+          confirmButtonColor: 'var(--caramel, #8B5E3C)',
+          confirmButtonText: 'Done',
+          timer: 2500,
+          timerProgressBar: true
+        });
+      }
     } else {
-      showToast('⚠️ ' + (res.error || 'Failed to update permissions.'), 'error');
+      showToast(res.error || 'Failed to update permissions.', 'error');
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Save Failed',
+          text: res.error || 'Failed to update permissions.',
+          icon: 'error',
+          confirmButtonColor: 'var(--red, #C62828)'
+        });
+      }
     }
   })
   .catch(err => {
     if (saveBtn) {
       saveBtn.disabled = false;
-      saveBtn.textContent = '💾 Save Changes';
+      saveBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Changes';
     }
-    showToast('⚠️ ' + err.message, 'error');
+    showToast(err.message, 'error');
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: 'Connection Error',
+        text: err.message || 'An error occurred while saving permissions.',
+        icon: 'error',
+        confirmButtonColor: 'var(--red, #C62828)'
+      });
+    }
   });
 }
 
@@ -315,13 +413,13 @@ function addRole() {
   msg.className = 'ar-msg';
 
   if (!key || !label) {
-    msg.textContent = '⚠️ Role key and display label are required.';
+    msg.textContent = 'Role key and display label are required.';
     msg.className = 'ar-msg error';
     return;
   }
 
   if (!/^[a-z0-9_]{2,30}$/.test(key)) {
-    msg.textContent = '⚠️ Role key must be lowercase letters, numbers, or underscores (2-30 chars).';
+    msg.textContent = 'Role key must be lowercase letters, numbers, or underscores (2-30 chars).';
     msg.className = 'ar-msg error';
     return;
   }
@@ -337,34 +435,70 @@ function addRole() {
   .then(r => r.json())
   .then(res => {
     btn.disabled = false;
-    btn.textContent = '➕ Create Role';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Role';
     if (res.ok) {
       closeAddRole();
-      showToast('🎉 Role "' + label + '" created!');
-      window.location.href = 'manage_permissions.php?role=' + encodeURIComponent(key);
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Role Created!',
+          text: `Role "${label}" (${key}) was created successfully.`,
+          icon: 'success',
+          confirmButtonColor: 'var(--caramel, #8B5E3C)',
+          timer: 1800,
+          timerProgressBar: true
+        }).then(() => {
+          window.location.href = 'manage_permissions.php?role=' + encodeURIComponent(key);
+        });
+      } else {
+        showToast('Role "' + label + '" created!');
+        window.location.href = 'manage_permissions.php?role=' + encodeURIComponent(key);
+      }
     } else {
-      msg.textContent = '⚠️ ' + (res.error || 'Failed to create role.');
+      msg.textContent = res.error || 'Failed to create role.';
       msg.className = 'ar-msg error';
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Role Creation Failed',
+          text: res.error || 'Failed to create role.',
+          icon: 'error',
+          confirmButtonColor: 'var(--red, #C62828)'
+        });
+      }
     }
   })
   .catch(() => {
     btn.disabled = false;
-    btn.textContent = '➕ Create Role';
-    msg.textContent = '⚠️ Network error creating role.';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Role';
+    msg.textContent = 'Network error creating role.';
     msg.className = 'ar-msg error';
   });
 }
 
 // ── Remove Selected Role ─────────────────────────────────────
-function removeRole() {
+async function removeRole() {
   const select = document.getElementById('role-picker');
   if (!select) return;
 
   const key   = select.value;
   const label = select.options[select.selectedIndex].text.split('—')[0].trim();
 
-  if (!confirm(`Are you sure you want to remove the role "${label}"?\n\nThis action cannot be undone and is only allowed if no staff accounts are currently assigned to this role.`)) {
-    return;
+  if (typeof Swal !== 'undefined') {
+    const result = await Swal.fire({
+      title: `Delete Role "${label}"?`,
+      text: 'This action cannot be undone and is only allowed if no staff accounts are currently assigned to this role.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Delete Role',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: 'var(--red, #C62828)',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    });
+    if (!result.isConfirmed) return;
+  } else {
+    if (!confirm(`Are you sure you want to remove the role "${label}"?\n\nThis action cannot be undone and is only allowed if no staff accounts are currently assigned to this role.`)) {
+      return;
+    }
   }
 
   fetch('../api/manage_roles.php', {
@@ -375,16 +509,47 @@ function removeRole() {
   .then(r => r.json())
   .then(res => {
     if (res.ok) {
-      showToast(`🗑️ Role "${label}" removed.`);
-      setTimeout(() => {
-        window.location.href = 'manage_permissions.php';
-      }, 500);
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Role Deleted',
+          text: `Role "${label}" has been successfully removed.`,
+          icon: 'success',
+          confirmButtonColor: 'var(--caramel, #8B5E3C)',
+          timer: 1800,
+          timerProgressBar: true
+        }).then(() => {
+          window.location.href = 'manage_permissions.php';
+        });
+      } else {
+        showToast(`Role "${label}" removed.`);
+        setTimeout(() => {
+          window.location.href = 'manage_permissions.php';
+        }, 500);
+      }
     } else {
-      showToast('⚠️ ' + (res.error || 'Failed to remove role.'), 'error');
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Cannot Delete Role',
+          text: res.error || 'Failed to remove role.',
+          icon: 'error',
+          confirmButtonColor: 'var(--red, #C62828)'
+        });
+      } else {
+        showToast(res.error || 'Failed to remove role.', 'error');
+      }
     }
   })
   .catch(() => {
-    showToast('⚠️ Network error deleting role.', 'error');
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: 'Error',
+        text: 'Network error deleting role.',
+        icon: 'error',
+        confirmButtonColor: 'var(--red, #C62828)'
+      });
+    } else {
+      showToast('Network error deleting role.', 'error');
+    }
   });
 }
 

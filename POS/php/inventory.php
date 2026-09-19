@@ -17,9 +17,9 @@ $toast_type = 'success';
 sync_expired_batches();
 
 // ── POST actions ──────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     if (!has_active_shift()) {
-        header('Location: inventory.php?toast=' . urlencode('⛔ Clock in before making inventory changes.') . '&type=error');
+        header('Location: inventory.php?toast=' . urlencode('Clock in before making inventory changes.') . '&type=error');
         exit;
     }
     require_permission('inventory.manage');
@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $auto     = isset($_POST['auto_reorder']) ? 1 : 0;
 
         if (!$cat_id || !$name) {
-            $toast = '⚠️ Name and category are required.'; $toast_type = 'error';
+            $toast = 'Name and category are required.'; $toast_type = 'error';
         } else {
             $pdo->prepare(
                 'INSERT INTO ingredients
@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'recorded_by' => (int)$user['id'],
                 ]);
             }
-            $toast = '✅ "' . htmlspecialchars($name) . '" added!';
+            $toast = '"' . htmlspecialchars($name) . '" added!';
         }
     }
 
@@ -90,9 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'notes'       => 'Manual restock',
                 'recorded_by' => (int)$user['id'],
             ]);
-            $toast = '✅ Restocked — batch recorded.';
+            $toast = 'Restocked — batch recorded.';
         } else {
-            $toast = '⚠️ Enter a valid quantity.'; $toast_type = 'error';
+            $toast = 'Enter a valid quantity.'; $toast_type = 'error';
         }
     }
 
@@ -117,9 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 consume_ingredient_batches($id, $old - $qty);
             }
             check_and_trigger_reorder($id, (int)$user['id']);
-            $toast = '✅ Stock set to ' . $qty . '.';
+            $toast = 'Stock set to ' . $qty . '.';
         } else {
-            $toast = '⚠️ Enter a valid quantity (0 or more).'; $toast_type = 'error';
+            $toast = 'Enter a valid quantity (0 or more).'; $toast_type = 'error';
         }
     }
 
@@ -146,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':rq'=>$reorder_qty, ':s'=>$supplier, ':a'=>$auto, ':id'=>$id,
             ]);
             check_and_trigger_reorder($id, (int)$user['id']);
-            $toast = '✅ Item updated!';
+            $toast = 'Item updated!';
         }
     }
 
@@ -154,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['ingredient_id'] ?? 0);
         if ($id) {
             $pdo->prepare('UPDATE ingredients SET archived_at = NOW() WHERE id = :id')->execute([':id'=>$id]);
-            $toast = '🗄 Item archived.';
+            $toast = 'Item archived.';
         }
     }
 
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['ingredient_id'] ?? 0);
         if ($id) {
             $pdo->prepare('UPDATE ingredients SET archived_at = NULL WHERE id = :id')->execute([':id'=>$id]);
-            $toast = '↩️ Item restored.';
+            $toast = 'Item restored.';
         }
     }
 
@@ -170,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['ingredient_id'] ?? 0);
         if ($id) {
             $pdo->prepare('DELETE FROM ingredients WHERE id = :id AND archived_at IS NOT NULL')->execute([':id'=>$id]);
-            $toast = '🗑️ Item permanently deleted.';
+            $toast = 'Item permanently deleted.';
         }
     }
 
@@ -178,8 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'run_sweep') {
         $created = run_reorder_sweep((int)$user['id']);
         $toast = $created
-            ? '🤖 ' . count($created) . ' auto-reorder request(s) filed.'
-            : '✅ Nothing below threshold — no reorders needed.';
+            ? count($created) . ' auto-reorder request(s) filed.'
+            : 'Nothing below threshold — no reorders needed.';
     }
 
     $qs = [];
@@ -326,11 +326,11 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
       <form method="POST" onsubmit="return confirm('Run the reorder check across all items now?')">
         <input type="hidden" name="action" value="run_sweep">
         <button class="px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--latte,#efe0cc)]
-                       bg-white hover:bg-[var(--accent-lt,#fcefe1)]">🤖 Run reorder check</button>
+                       bg-white hover:bg-[var(--accent-lt,#fcefe1)] flex items-center gap-1.5"><?= icon('bot', 14) ?> Run reorder check</button>
       </form>
       <button onclick="openModal('modal-add')"
               class="px-4 py-2.5 rounded-lg text-[13px] font-bold text-white
-                     bg-[var(--caramel,#c47d3e)] hover:opacity-90 shadow-sm">+ Add Item</button>
+                     bg-[var(--caramel,#c47d3e)] hover:opacity-90 shadow-sm flex items-center gap-1.5"><?= icon('plus', 14) ?> Add Item</button>
     </div>
     <?php endif; ?>
   </div>
@@ -384,7 +384,7 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
                placeholder="Search name or brand…" autocomplete="off"
                class="w-full pl-9 pr-3 py-2 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]
                       focus:outline-none focus:border-[var(--caramel,#c47d3e)]">
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--text-muted,#8b7c88)]">🔍</span>
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--text-muted,#8b7c88)] flex items-center"><?= icon('search', 14) ?></span>
       </div>
 
       <select name="cat" onchange="this.form.submit()"

@@ -37,6 +37,12 @@
 .receipt-meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
 .receipt-items { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; margin-bottom: 4px; }
 .receipt-item { display: flex; align-items: center; gap: 10px; }
+.ri-thumb {
+  width: 32px; height: 32px; border-radius: 6px; overflow: hidden;
+  background: #FAF5EE; border: 1px solid var(--border);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+}
+.ri-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ri-icon { font-size: 19px; width: 28px; text-align: center; flex-shrink: 0; }
 .ri-info { flex: 1; min-width: 0; }
 .ri-name { font-size: 12.5px; font-weight: 700; color: var(--espresso); }

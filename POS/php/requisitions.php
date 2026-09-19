@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 if (!has_permission('procurement.requisitions')
   && !has_permission('procurement.requisition.create')
@@ -35,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $items = json_decode($_POST['items'] ?? '[]', true) ?: [];
 
         if (!$title || empty($items)) {
-            $toast = '⚠️ Title and at least one item are required.'; $toast_type = 'error';
+            $toast = 'Title and at least one item are required.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -67,15 +68,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 notify_role_by_permission(
                     'procurement.requisition.review', 'requisition_filed',
-                    '📋 New requisition awaiting review',
+                    'New requisition awaiting review',
                     htmlspecialchars($title) . ' — ' . php_currency($total),
                     'requisitions.php', $user['id']
                 );
 
-                $toast = '✅ Requisition submitted for review!';
+                $toast = 'Requisition submitted for review!';
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
+                $toast = $e->getMessage(); $toast_type = 'error';
             }
         }
     }
@@ -100,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $budget_check = check_budget_availability($req['department'], (float)$req['estimated_total'], $period_label);
 
                     if (!$budget_check['ok'] && !$override_note) {
-                        $toast = '⚠️ This exceeds the department\'s remaining budget ('
+                        $toast = 'This exceeds the department\'s remaining budget ('
                                . php_currency($budget_check['remaining']) . ' left). '
                                . 'Add an override note to approve anyway, or reject / ask for reallocation.';
                         $toast_type = 'error';
@@ -124,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $toast = $status === 'approved' ? '✅ Requisition approved.' : '❌ Requisition rejected.';
+                $toast = $status === 'approved' ? 'Requisition approved.' : 'Requisition rejected.';
             }
         }
     }
@@ -221,7 +222,7 @@ unset($r);
       <p>Request supplies and review budget-checked requests</p>
     </div>
     <?php if (has_permission('procurement.requisition.create')): ?>
-      <button class="btn-add" onclick="openCreate()">➕ New Requisition</button>
+      <button class="btn-add" onclick="openCreate()"><?= icon('plus', 14) ?> New Requisition</button>
     <?php endif; ?>
   </div>
 
@@ -230,7 +231,7 @@ unset($r);
     <!-- Budget strip -->
     <div class="stat-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
       <?php if (empty($budgets)): ?>
-        <div class="mini-stat"><div class="mini-stat-icon" style="background:#fdf3ea">💰</div><div><div class="mini-stat-val">—</div><div class="mini-stat-lbl">No budget set for <?= htmlspecialchars($period_label) ?></div></div></div>
+        <div class="mini-stat"><div class="mini-stat-icon" style="background:#fdf3ea"><?= icon('coin', 18) ?></div><div><div class="mini-stat-val">—</div><div class="mini-stat-lbl">No budget set for <?= htmlspecialchars($period_label) ?></div></div></div>
       <?php else: foreach ($budgets as $b):
         $remaining = $b['allocated_amount'] - $b['used_amount'];
         $pct = $b['allocated_amount'] > 0 ? min(100, ($b['used_amount'] / $b['allocated_amount']) * 100) : 0;
@@ -262,7 +263,7 @@ unset($r);
         </thead>
         <tbody>
         <?php if (empty($requisitions)): ?>
-          <tr class="empty-row"><td colspan="7">🫙 No requisitions found.</td></tr>
+          <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No requisitions found.</td></tr>
         <?php else: foreach ($requisitions as $r): ?>
           <tr>
             <td style="font-weight:700"><?= htmlspecialchars($r['title']) ?></td>
@@ -273,9 +274,9 @@ unset($r);
             <td class="muted-cell"><?= date('M d, Y', strtotime($r['created_at'])) ?></td>
             <td>
               <div class="act-group">
-                <button class="act-btn" onclick='openView(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)'>👁 View</button>
+                <button class="act-btn" onclick='openView(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)'><?= icon('eye', 13) ?> View</button>
                 <?php if ($r['status'] === 'approved' && has_permission('procurement.rfq.manage')): ?>
-                  <button class="act-btn act-activate" onclick="window.location.href='rfq.php?requisition_id=<?= $r['id'] ?>'">📨 Start RFQ</button>
+                  <button class="act-btn act-activate" onclick="window.location.href='rfq.php?requisition_id=<?= $r['id'] ?>'"><?= icon('send', 13) ?> Start RFQ</button>
                 <?php endif; ?>
               </div>
             </td>
@@ -291,8 +292,8 @@ unset($r);
 <div class="modal-overlay" id="create-modal">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
-      <h3>➕ File Purchase Requisition</h3>
-      <button class="modal-close" onclick="closeCreate()">✕</button>
+      <h3><?= icon('plus', 16) ?> File Purchase Requisition</h3>
+      <button class="modal-close" onclick="closeCreate()"><?= icon('x', 14) ?></button>
     </div>
     <form method="POST" id="create-form">
       <input type="hidden" name="action" value="create"/>
@@ -318,7 +319,7 @@ unset($r);
         <div class="field-group">
           <label class="field-label">Items <span style="color:var(--red)">*</span></label>
           <div id="item-rows"></div>
-          <button type="button" class="act-btn" onclick="addItemRow()" style="margin-top:4px">➕ Add Item</button>
+          <button type="button" class="act-btn" onclick="addItemRow()" style="margin-top:4px"><?= icon('plus', 13) ?> Add Item</button>
         </div>
         <div style="text-align:right;font-weight:800;font-size:15px;color:var(--espresso);margin-top:10px">
           Estimated Total: <span id="running-total">₱0.00</span>
@@ -326,7 +327,7 @@ unset($r);
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeCreate()">Cancel</button>
-        <button type="submit" class="btn-save" id="create-submit-btn">✔ Submit for Review</button>
+        <button type="submit" class="btn-save" id="create-submit-btn"><?= icon('check', 14) ?> Submit for Review</button>
       </div>
     </form>
   </div>
@@ -337,7 +338,7 @@ unset($r);
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
       <h3 id="v-title">Requisition</h3>
-      <button class="modal-close" onclick="closeView()">✕</button>
+      <button class="modal-close" onclick="closeView()"><?= icon('x', 14) ?></button>
     </div>
     <div class="modal-body">
       <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px" id="v-meta"></p>
@@ -389,7 +390,7 @@ function addItemRow(vals = {}) {
     <input type="number" class="field-input qty" placeholder="Qty" min="0.1" step="0.1" value="${qty}" oninput="updateTotal()">
     <input type="text" class="field-input unit" placeholder="Unit" value="${unit}">
     <input type="number" class="field-input price" placeholder="Est. ₱/unit" min="0" step="0.01" value="${price}" oninput="updateTotal()">
-    <button type="button" class="rm-item" onclick="this.closest('.item-row').remove(); updateTotal();">✕</button>
+    <button type="button" class="rm-item" onclick="this.closest('.item-row').remove(); updateTotal();"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   `;
   wrap.appendChild(row);
   updateTotal();
@@ -454,8 +455,8 @@ function openView(r) {
 
     actions.innerHTML = `
       <button type="button" class="btn-cancel" onclick="closeView()">Close</button>
-      <button type="button" class="btn-save" style="background:var(--red)" onclick="submitReview(${r.id}, 'rejected')">❌ Reject</button>
-      <button type="button" class="btn-save" onclick="submitReview(${r.id}, 'approved')">✅ Approve</button>
+      <button type="button" class="btn-save" style="background:var(--red)" onclick="submitReview(${r.id}, 'rejected')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:3px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Reject</button>
+      <button type="button" class="btn-save" onclick="submitReview(${r.id}, 'approved')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:3px"><polyline points="20 6 9 17 4 12"/></svg> Approve</button>
     `;
   } else if (r.reviewed_at) {
     reviewedBlock.style.display = '';
@@ -518,7 +519,7 @@ document.getElementById('create-form')?.addEventListener('submit', function(e) {
   if (!items.length) {
     e.preventDefault();
     if (errBox) {
-      errBox.textContent = '⚠️ Add at least one item with a name to file this requisition.';
+      errBox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Add at least one item with a name to file this requisition.';
       errBox.style.display = 'block';
     }
     return;
@@ -527,7 +528,7 @@ document.getElementById('create-form')?.addEventListener('submit', function(e) {
   if (invalidQty) {
     e.preventDefault();
     if (errBox) {
-      errBox.textContent = '⚠️ All items must have a quantity greater than 0.';
+      errBox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> All items must have a quantity greater than 0.';
       errBox.style.display = 'block';
     }
     return;

@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('attendance.view');
 
@@ -9,7 +10,7 @@ $toast = '';
 $toast_type = 'success';
 
 // ── POST actions ──────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $action = $_POST['action'] ?? '';
 
     // Mark / upsert attendance for an employee on a date
@@ -23,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $allowed = ['present','late','absent','on_leave','half_day'];
         if (!$emp_id || !in_array($status, $allowed)) {
-            $toast = '⚠️ Select an employee and a valid status.'; $toast_type = 'error';
+            $toast = 'Select an employee and a valid status.'; $toast_type = 'error';
         } else {
             $pdo->prepare("
                 INSERT INTO attendance (employee_id, attendance_date, time_in, time_out, status, notes)
@@ -33,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':e'=>$emp_id, ':d'=>$date, ':ti'=>$tin, ':to_'=>$tout, ':s'=>$status, ':n'=>$notes,
                 ':ti2'=>$tin, ':to2'=>$tout, ':s2'=>$status, ':n2'=>$notes,
             ]);
-            $toast = '✅ Attendance recorded.';
+            $toast = 'Attendance recorded.';
         }
     }
 
@@ -42,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['record_id'] ?? 0);
         if ($id) {
             $pdo->prepare('UPDATE attendance SET time_out = CURTIME() WHERE id = :id')->execute([':id'=>$id]);
-            $toast = '✅ Clocked out.';
+            $toast = 'Clocked out.';
         }
     }
 
@@ -50,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['record_id'] ?? 0);
         if ($id) {
             $pdo->prepare('DELETE FROM attendance WHERE id = :id')->execute([':id'=>$id]);
-            $toast = '🗑️ Record deleted.';
+            $toast = 'Record deleted.';
         }
     }
 
@@ -84,12 +85,12 @@ $records = $stmt->fetchAll();
 $marked_ids = array_column($records, 'employee_id');
 $unmarked   = array_filter($employees, fn($e) => !in_array($e['id'], $marked_ids));
 
-// ── Stats derived from ALL active employees, not just marked ones ──
-$present    = count(array_filter($rows, fn($r) => $r['status'] === 'present'));
-$late       = count(array_filter($rows, fn($r) => $r['status'] === 'late'));
-$absent     = count(array_filter($rows, fn($r) => $r['status'] === 'absent'));
-$leave_c    = count(array_filter($rows, fn($r) => $r['status'] === 'on_leave'));
-$not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null));
+// ── Stats ─────────────────────────────────────
+$present    = count(array_filter($records, fn($r) => $r['status'] === 'present'));
+$late       = count(array_filter($records, fn($r) => $r['status'] === 'late'));
+$absent     = count(array_filter($records, fn($r) => $r['status'] === 'absent'));
+$leave_c    = count(array_filter($records, fn($r) => in_array($r['status'], ['on_leave', 'leave'], true)));
+$not_marked = count($unmarked);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -112,16 +113,16 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
       <h1>Attendance</h1>
       <p>Daily time-in / time-out records</p>
     </div>
-    <button class="btn-add" onclick="openMark()">➕ Mark Attendance</button>
+    <button class="btn-add" onclick="openMark()"><?= icon('plus', 16) ?> <span>Mark Attendance</span></button>
   </div>
 
   <div class="page-body">
 
     <div class="stat-row">
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e8f5e9">✅</div><div><div class="mini-stat-val"><?= $present ?></div><div class="mini-stat-lbl">Present</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0">⏰</div><div><div class="mini-stat-val"><?= $late ?></div><div class="mini-stat-lbl">Late</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#ffebee">❌</div><div><div class="mini-stat-val"><?= $absent ?></div><div class="mini-stat-lbl">Absent</div></div></div>
-      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e3f2fd">🏖️</div><div><div class="mini-stat-val"><?= $leave_c ?></div><div class="mini-stat-lbl">On Leave</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e8f5e9;color:#27ae60"><?= icon('check-circle', 18) ?></div><div><div class="mini-stat-val"><?= $present ?></div><div class="mini-stat-lbl">Present</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#fff3e0;color:#e67e22"><?= icon('clock', 18) ?></div><div><div class="mini-stat-val"><?= $late ?></div><div class="mini-stat-lbl">Late</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#ffebee;color:#c0392b"><?= icon('x-circle', 18) ?></div><div><div class="mini-stat-val"><?= $absent ?></div><div class="mini-stat-lbl">Absent</div></div></div>
+      <div class="mini-stat"><div class="mini-stat-icon" style="background:#e3f2fd;color:#2980b9"><?= icon('calendar', 18) ?></div><div><div class="mini-stat-val"><?= $leave_c ?></div><div class="mini-stat-lbl">On Leave</div></div></div>
     </div>
 
     <div class="date-bar">
@@ -142,7 +143,7 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
           </thead>
           <tbody>
           <?php if (empty($records)): ?>
-            <tr class="empty-row"><td colspan="7">🫙 No attendance recorded for this date yet.</td></tr>
+            <tr class="empty-row"><td colspan="7"><?= icon('attendance', 16) ?> No attendance recorded for this date yet.</td></tr>
           <?php else: foreach ($records as $r): ?>
             <tr>
               <td style="font-weight:700"><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
@@ -158,14 +159,14 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
                     <input type="hidden" name="action" value="clock_out"/>
                     <input type="hidden" name="record_id" value="<?= $r['id'] ?>"/>
                     <input type="hidden" name="redirect_date" value="<?= htmlspecialchars($view_date) ?>"/>
-                    <button type="submit" class="act-btn act-activate">⏱️ Clock Out</button>
+                    <button type="submit" class="act-btn act-activate"><?= icon('clock', 13) ?> Clock Out</button>
                   </form>
                   <?php endif; ?>
                   <form method="POST" style="display:inline" onsubmit="return confirm('Delete this attendance record?')">
                     <input type="hidden" name="action" value="delete"/>
                     <input type="hidden" name="record_id" value="<?= $r['id'] ?>"/>
                     <input type="hidden" name="redirect_date" value="<?= htmlspecialchars($view_date) ?>"/>
-                    <button type="submit" class="act-btn act-block">🗑️</button>
+                    <button type="submit" class="act-btn act-block" title="Delete record"><?= icon('trash', 14) ?></button>
                   </form>
                 </div>
               </td>
@@ -182,8 +183,8 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
 <div class="modal-bg" id="mark-modal" onclick="if(event.target===this) closeMark()">
   <div class="modal">
     <div class="modal-header">
-      <h3>➕ Mark Attendance</h3>
-      <button class="modal-close" onclick="closeMark()">✕</button>
+      <h3><?= icon('plus', 18) ?> Mark Attendance</h3>
+      <button class="modal-close" onclick="closeMark()"><?= icon('x', 16) ?></button>
     </div>
     <form method="POST">
       <input type="hidden" name="action" value="mark"/>
@@ -225,14 +226,14 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
           <option value="half_day">Half Day</option>
         </select>
       </div>
-      <div class="review-footer-primary">
-        <button type="button" class="btn-cancel" onclick="closeReview()">Cancel</button>
-        <button type="submit" form="review-form" class="btn-save" id="review-save-btn">✔ Save changes</button>
+      <div class="field-group mg-b">
+        <label class="field-label">Notes</label>
+        <input class="field-input" type="text" name="notes" placeholder="Optional"/>
       </div>
 
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeMark()">Cancel</button>
-        <button type="submit" class="btn-save">✔ Save Record</button>
+        <button type="submit" class="btn-save"><?= icon('check', 14) ?> Save Record</button>
       </div>
     </form>
   </div>
@@ -246,178 +247,7 @@ $not_marked = count(array_filter($rows, fn($r) => $r['attendance_id'] === null))
 <script>
 function openMark()  { document.getElementById('mark-modal').classList.add('open'); }
 function closeMark() { document.getElementById('mark-modal').classList.remove('open'); }
-
-function openReview(btn) {
-  const d = btn.dataset;
-
-  document.getElementById('review-avatar').textContent = initials(d.name);
-  document.getElementById('review-emp-name').textContent = d.name;
-  document.getElementById('review-emp-meta').textContent =
-    '#' + d.code + ' · ' + (d.department || '—') + ' · ' + formatDisplayDate('<?= htmlspecialchars($view_date) ?>');
-
-  const hasRecord = d.hasRecord === '1';
-  const currentStatusKey   = hasRecord ? d.status : 'not_marked';
-  const currentStatusLabel = hasRecord ? statusLabel(d.status) : 'Not Marked';
-  const badge = document.getElementById('review-current-badge');
-  badge.textContent = currentStatusLabel;
-  badge.className = 'status-badge status-' + currentStatusKey;
-
-  document.getElementById('review-employee-id').value = d.employeeId;
-  document.getElementById('review-time-in').value  = d.timeIn  || '';
-  document.getElementById('review-time-out').value = d.timeOut || '';
-  document.getElementById('review-status').value   = d.status || 'present';
-  document.getElementById('review-notes').value    = d.notes  || '';
-
-  const clockoutBtn = document.getElementById('review-clockout-btn');
-  const deleteBtn   = document.getElementById('review-delete-btn');
-
-  clockoutBtn.style.display = (hasRecord && !d.timeOut && d.status !== 'absent') ? 'inline-block' : 'none';
-  deleteBtn.style.display   = hasRecord ? 'inline-block' : 'none';
-
-  document.getElementById('clockout-record-id').value = d.attendanceId || '';
-  document.getElementById('delete-record-id').value   = d.attendanceId || '';
-
-  // Proof photos, captured via the employee self-clock-in flow (if any)
-  const photoInWrap  = document.getElementById('review-photo-in-wrap');
-  const photoOutWrap = document.getElementById('review-photo-out-wrap');
-  const noPhotos     = document.getElementById('review-no-photos');
-
-  if (d.timeInPhoto) {
-    document.getElementById('review-photo-in').src = d.timeInPhoto;
-    photoInWrap.style.display = 'flex';
-  } else {
-    photoInWrap.style.display = 'none';
-  }
-  if (d.timeOutPhoto) {
-    document.getElementById('review-photo-out').src = d.timeOutPhoto;
-    photoOutWrap.style.display = 'flex';
-  } else {
-    photoOutWrap.style.display = 'none';
-  }
-  noPhotos.style.display = (d.timeInPhoto || d.timeOutPhoto) ? 'none' : '';
-
-  updateTotalHours();
-  document.getElementById('review-modal').classList.add('open');
-}
-
-function initials(name) {
-  return (name || '')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(p => p[0].toUpperCase())
-    .join('');
-}
-
-function statusLabel(status) {
-  return (status || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-}
-
-function closeReview() {
-  document.getElementById('review-modal').classList.remove('open');
-  if (window.KofeeValidator) {
-    document.querySelectorAll('#review-form input, #review-form select, #review-form textarea').forEach(el => {
-      KofeeValidator.clearError(el);
-    });
-  }
-}
-
-function openReviewPhoto(url) {
-  document.getElementById('photo-preview-img').src = url;
-  document.getElementById('photo-preview-modal').classList.add('open');
-}
-function closeReviewPhoto() { document.getElementById('photo-preview-modal').classList.remove('open'); }
-
-function submitClockOut() {
-  const btn = document.getElementById('review-clockout-btn');
-  if (btn && window.KofeeValidator) KofeeValidator.setLoading(btn, 'Clocking out…');
-  document.getElementById('clockout-form').submit();
-}
-
-function submitDelete() {
-  if (confirm('Are you sure you want to delete this attendance record?')) {
-    const btn = document.getElementById('review-delete-btn');
-    if (btn && window.KofeeValidator) KofeeValidator.setLoading(btn, 'Deleting…');
-    document.getElementById('delete-form').submit();
-  }
-}
-
-function updateTotalHours() {
-  const tinInput  = document.getElementById('review-time-in');
-  const toutInput = document.getElementById('review-time-out');
-  const tin  = tinInput ? tinInput.value : '';
-  const tout = toutInput ? toutInput.value : '';
-  const out  = document.getElementById('review-total-hours');
-  if (!tin || !tout) {
-    if (out) out.textContent = '—';
-    if (window.KofeeValidator && toutInput) KofeeValidator.clearError(toutInput);
-    return;
-  }
-
-  const [inH, inM]   = tin.split(':').map(Number);
-  const [outH, outM] = tout.split(':').map(Number);
-  const startMin = inH * 60 + inM;
-  const endMin   = outH * 60 + outM;
-  const diff     = endMin - startMin;
-
-  if (diff < 0) {
-    if (out) out.textContent = 'Invalid time';
-    if (window.KofeeValidator && toutInput) {
-      KofeeValidator.showError(toutInput, 'Time out cannot be earlier than Time in.');
-    }
-    return;
-  }
-
-  if (window.KofeeValidator && toutInput) {
-    KofeeValidator.clearError(toutInput);
-  }
-
-  const h = Math.floor(diff / 60);
-  const m = diff % 60;
-  if (out) out.textContent = h + 'h ' + String(m).padStart(2, '0') + 'm';
-}
-
-function formatDisplayDate(isoDate) {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-function filterTable() {
-  const q = document.getElementById('emp-search').value.trim().toLowerCase();
-  const statusVal = document.getElementById('status-filter').value;
-  const rowsEls = document.querySelectorAll('#attendance-tbody tr.emp-row');
-  let visibleCount = 0;
-
-  rowsEls.forEach(function (tr) {
-    const matchesSearch = !q || (tr.dataset.search || '').includes(q);
-    const matchesStatus = statusVal === 'all' || tr.dataset.status === statusVal;
-    const show = matchesSearch && matchesStatus;
-    tr.style.display = show ? '' : 'none';
-    if (show) visibleCount++;
-  });
-
-  document.getElementById('no-results-row').style.display = (visibleCount === 0 && rowsEls.length > 0) ? 'block' : 'none';
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeMark(); closeReview(); closeReviewPhoto(); }
-});
-
-const reviewForm = document.getElementById('review-form');
-if (reviewForm && window.KofeeValidator) {
-  KofeeValidator.attach(reviewForm, {
-    customValidate: function(form) {
-      const tin = form.querySelector('[name="time_in"]').value;
-      const tout = form.querySelector('[name="time_out"]').value;
-      if (tin && tout && tout < tin) {
-        return { field: form.querySelector('[name="time_out"]'), message: 'Time out cannot be earlier than Time in.' };
-      }
-      return true;
-    },
-    loadingText: 'Saving…'
-  });
-}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMark(); });
 </script>
 <script src="../js/validator.js"></script>
 </body>

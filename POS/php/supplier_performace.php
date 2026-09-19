@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.view');
 
@@ -28,9 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $po = $pdo->prepare('SELECT * FROM purchase_orders WHERE id = :id'); $po->execute([':id' => $po_id]); $po = $po->fetch();
 
         if (!$po) {
-            $toast = '⚠️ Purchase Order not found.'; $toast_type = 'error';
+            $toast = 'Purchase Order not found.'; $toast_type = 'error';
         } elseif ($po['status'] === 'closed') {
-            $toast = '⚠️ This order is already closed.'; $toast_type = 'error';
+            $toast = 'This order is already closed.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -66,11 +67,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 audit_log('supplier', $po['supplier_id'], 'performance_rated', "PO #$po_id — overall {$overall}/5");
                 audit_log('po', $po_id, 'closed', "Procurement cycle complete, overall rating {$overall}/5");
 
-                $toast = "✅ Order closed — supplier rated {$overall}/5.";
+                $toast = "Order closed — supplier rated {$overall}/5.";
                 $closed_successfully = true;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = '⚠️ ' . $e->getMessage(); $toast_type = 'error';
+                $toast = $e->getMessage(); $toast_type = 'error';
             }
         }
     }
@@ -144,7 +145,8 @@ $suppliers = $suppliers_stmt->fetchAll();
     .score-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px dashed var(--border); }
     .score-row:last-child { border-bottom:none; }
     .star-picker { display:flex; gap:4px; }
-    .star-picker .star { font-size:22px; cursor:pointer; color:var(--border); }
+    .star-picker .star { font-size:22px; cursor:pointer; color:var(--border); display:inline-flex; align-items:center; }
+    .star-picker .star svg { fill: currentColor; }
     .close-card { border:1.5px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; }
     .breakdown-bar-wrap { background:#f2e6d6; border-radius:999px; height:8px; overflow:hidden; flex:1; margin:0 10px; }
     .breakdown-bar-fill { height:100%; background:var(--caramel, #c47d3e); }
@@ -190,7 +192,7 @@ $suppliers = $suppliers_stmt->fetchAll();
           <thead><tr><th>PO #</th><th>Quality</th><th>Timeliness</th><th>Price</th><th>Comm.</th><th>Rated By</th><th>Date</th></tr></thead>
           <tbody>
           <?php if (empty($ratings)): ?>
-            <tr class="empty-row"><td colspan="7">🫙 No ratings yet for this supplier.</td></tr>
+            <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No ratings yet for this supplier.</td></tr>
           <?php else: foreach ($ratings as $r): ?>
             <tr>
               <td style="font-weight:700">#<?= str_pad($r['po_id'],5,'0',STR_PAD_LEFT) ?></td>
@@ -210,7 +212,7 @@ $suppliers = $suppliers_stmt->fetchAll();
     <?php else: ?>
 
       <?php if (has_permission('procurement.performance.rate')): ?>
-      <h3 style="font-size:13.5px;margin-bottom:10px">🏁 Ready to Close &amp; Rate</h3>
+      <h3 style="font-size:13.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px"><?= icon('check-circle', 16, '', 'color:var(--caramel)') ?> Ready to Close &amp; Rate</h3>
       <?php if (empty($ready_pos)): ?>
         <p class="muted-cell" style="margin-bottom:22px">No delivered-and-paid orders awaiting closure right now.</p>
       <?php else: foreach ($ready_pos as $p): ?>
@@ -229,33 +231,33 @@ $suppliers = $suppliers_stmt->fetchAll();
                 <div>
                   <span style="font-size:12px;font-weight:600;display:block;margin-bottom:4px"><?= $label ?></span>
                   <div class="star-picker" data-field="<?= $field ?>">
-                    <?php for ($i=1;$i<=5;$i++): ?><span class="star" data-val="<?= $i ?>">★</span><?php endfor; ?>
+                    <?php for ($i=1;$i<=5;$i++): ?><span class="star" data-val="<?= $i ?>"><?= icon('star', 20) ?></span><?php endfor; ?>
                   </div>
                   <input type="hidden" name="<?= $field ?>" value="5"/>
                 </div>
               <?php endforeach; ?>
             </div>
             <textarea class="field-input" name="comments" placeholder="Comments (optional)" style="width:100%;min-height:50px;margin-bottom:10px"></textarea>
-            <div style="text-align:right"><button type="submit" class="btn-save">✔ Close &amp; Submit Rating</button></div>
+            <div style="text-align:right"><button type="submit" class="btn-save"><?= icon('check', 14) ?> Close &amp; Submit Rating</button></div>
           </form>
         </div>
       <?php endforeach; endif; ?>
       <?php endif; ?>
 
-      <h3 style="font-size:13.5px;margin:22px 0 10px">📊 Supplier Leaderboard</h3>
+      <h3 style="font-size:13.5px;margin:22px 0 10px;display:flex;align-items:center;gap:6px"><?= icon('bar-chart', 16, '', 'color:var(--caramel)') ?> Supplier Leaderboard</h3>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>Supplier</th><th>Overall</th><th>Ratings</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Supplier</th><th>Overall</th><th>Ratings</th><th>Status</th><th style="text-align:center;width:115px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($suppliers)): ?>
-            <tr class="empty-row"><td colspan="5">🫙 No suppliers yet.</td></tr>
+            <tr class="empty-row"><td colspan="5"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No suppliers yet.</td></tr>
           <?php else: foreach ($suppliers as $s): ?>
             <tr>
               <td style="font-weight:700"><?= htmlspecialchars($s['name']) ?></td>
               <td><?= $s['rating_avg'] ? number_format($s['rating_avg'],2) . '/5' : '—' ?></td>
               <td><?= $s['rating_count'] ?></td>
               <td><span class="status-badge status-<?= $s['status']==='active'?'approved':'rejected' ?>"><?= ucfirst($s['status']) ?></span></td>
-              <td><button class="act-btn" onclick="window.location.href='supplier_performace.php?supplier_id=<?= $s['id'] ?>'">📊 Scorecard</button></td>
+              <td style="text-align:center"><button class="act-btn" onclick="window.location.href='supplier_performace.php?supplier_id=<?= $s['id'] ?>'"><?= icon('bar-chart', 13) ?> Scorecard</button></td>
             </tr>
           <?php endforeach; endif; ?>
           </tbody>

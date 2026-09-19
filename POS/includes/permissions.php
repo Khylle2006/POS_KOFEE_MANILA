@@ -164,6 +164,7 @@ function get_permission_aliases(string $perm_key): array {
         'inventory.view'           => ['can_view_inventory', 'inventory.view'],
         'can_manage_inventory'     => ['inventory.manage', 'can_manage_inventory'],
         'inventory.manage'         => ['can_manage_inventory', 'inventory.manage'],
+        'inventory.expiry.manage'  => ['inventory.expiry.manage', 'inventory.manage', 'can_manage_inventory'],
 
         // Menu & Items
         'can_add_item'             => ['menu.manage', 'menu.edit', 'can_add_item'],
@@ -194,6 +195,8 @@ function get_permission_aliases(string $perm_key): array {
         // Users & HR
         'can_manage_users'         => ['users.manage', 'can_manage_users'],
         'users.manage'             => ['can_manage_users', 'users.manage'],
+        'can_manage_recruitment'   => ['recruitment.manage', 'can_manage_recruitment'],
+        'recruitment.manage'       => ['can_manage_recruitment', 'recruitment.manage'],
         'can_manage_attendance'    => ['attendance.view', 'attendance.manage', 'can_manage_attendance'],
         'attendance.view'          => ['can_manage_attendance', 'attendance.view'],
         'can_manage_leave'         => ['leave.view', 'leave.manage', 'hr_leave', 'can_manage_leave'],
@@ -437,6 +440,7 @@ function install_default_permissions(): void {
             ['menu.delete', 'Delete & Archive Items', 'menu', 'Archive or permanently delete menu products'],
             ['analytics.view', 'Financial Analytics & Reports', 'reports', 'View sales reports, P&L, bestsellers, and cashier summaries'],
             ['users.manage', 'Staff & User Management', 'users', 'Create and modify employee accounts and system roles'],
+            ['recruitment.manage', 'Recruitment & Job Vacancies', 'hr', 'Manage job postings, candidate applications, interview stages, and careers portal'],
             ['attendance.view', 'Attendance & Time-Clock', 'hr', 'Review staff clock-in/out records and calculate working hours'],
             ['leave.view', 'Leave & PTO Management', 'hr', 'Review, approve, and reject employee leave requests'],
             ['permissions.manage', 'Manage Role Permissions', 'settings', 'Configure dynamic RBAC permissions matrix for system roles'],

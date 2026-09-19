@@ -148,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             notify_event(
                 action_type: 'MENU_ITEM_ARCHIVED',
                 perm_key:    'menu.manage',
-                title:       '🗄 Menu item archived — ' . $row['name'],
+                title:       'Menu item archived — ' . $row['name'],
                 message:     'Removed from the active menu and the POS. It can be restored anytime.',
                 target_url:  'add_item.php?view=archived',
                 entity_type: 'product',
@@ -198,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         notify_event(
             action_type: 'MENU_ITEM_RESTORED',
             perm_key:    'menu.manage',
-            title:       '↩️ Menu item restored — ' . $name->fetchColumn(),
+            title:       'Menu item restored — ' . $name->fetchColumn(),
             message:     'Back on the active menu and available in the POS.',
             target_url:  'add_item.php',
             entity_type: 'product',

@@ -1,28 +1,40 @@
 console.log("menu.js loaded");
 let menuData = {};
 
-// Best-guess icon per product: match on name keywords first, then
-// fall back to a sensible default for the category. Keeps the grid
-// from showing the same bubble-tea emoji on every single card.
-const CATEGORY_ICON = {
-    "ice-coffee": "🧊",
-    "hot-coffee": "☕",
-    "milk-tea":   "🧋",
-    "fruit-tea":  "🍹"
+// High-resolution real drink pictures mapped by category / drink profile
+const CATEGORY_DEFAULT_IMAGES = {
+    "ice-coffee": "../assets/menu/772270600_2085203345723099_8651165942499832865_n.jpg",
+    "hot-coffee": "../assets/menu/773290708_1367203135549588_5632825919597585597_n.jpg",
+    "milk-tea":   "../assets/menu/772170060_1768708697657907_585482959715212815_n.jpg",
+    "fruit-tea":  "../assets/menu/772465737_1877177910354395_5215628384114883458_n.jpg"
 };
-const NAME_ICON_RULES = [
-    [/mocha|latte|cappuccino|espresso|americano|macchiato/i, "☕"],
-    [/choco/i,   "🍫"],
-    [/vanilla|caramel|custard|flan/i, "🍮"],
-    [/matcha/i,  "🍵"],
-    [/straw|berry/i, "🍓"],
-    [/mango|pineapple|fruit/i, "🍹"],
-    [/pearl|milk ?tea|taro/i, "🧋"],
-    [/lemon|citrus/i, "🍋"]
-];
-function guessIcon(name, categoryKey) {
-    const hit = NAME_ICON_RULES.find(([re]) => re.test(name));
-    return hit ? hit[1] : (CATEGORY_ICON[categoryKey] || "🧋");
+const DEFAULT_DRINK_IMAGE = "../assets/menu/772270600_2085203345723099_8651165942499832865_n.jpg";
+
+function getProductImage(item, categoryKey) {
+    if (item.image_path && item.image_path.trim()) {
+        const raw = item.image_path.trim().replace(/^\/+/, '');
+        return raw.startsWith('assets/') ? `../${raw}` : `../assets/${raw}`;
+    }
+    const name = (item.name || '').toLowerCase();
+    if (name.includes('melon') || name.includes('watermelon')) {
+        return '../assets/menu/1.jpg';
+    }
+    if (name.includes('berry') || name.includes('straw')) {
+        return '../assets/menu/772465737_1877177910354395_5215628384114883458_n.jpg';
+    }
+    if (name.includes('lychee')) {
+        return '../assets/menu/3.jpg';
+    }
+    if (name.includes('choco')) {
+        return '../assets/menu/775492503_2412138042606551_5333859346167873462_n.jpg';
+    }
+    if (name.includes('caramel') || name.includes('spanish')) {
+        return '../assets/menu/772270600_2085203345723099_8651165942499832865_n.jpg';
+    }
+    if (name.includes('pearl') || name.includes('boba') || name.includes('milk tea')) {
+        return '../assets/menu/772170060_1768708697657907_585482959715212815_n.jpg';
+    }
+    return CATEGORY_DEFAULT_IMAGES[categoryKey] || DEFAULT_DRINK_IMAGE;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -42,8 +54,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         menuData[key].push({
             id:         item.id,
             name:       item.name,
-            icon:       guessIcon(item.name, key),
-            imagePath:  item.image_path || '',
+            imageSrc:   getProductImage(item, key),
             priceSmall: parseFloat(item.price_small),
             priceLarge: parseFloat(item.price_large),
             stock:      parseInt(item.stock, 10) || 0
@@ -103,11 +114,11 @@ function renderGrid() {
 
     if (items.length === 0) {
         grid.innerHTML = searchTerm ? `<div class="empty-cat">
-            <div class="empty-icon">🔍</div>
+            <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
             <p>No drinks match "${escapeHtml(searchTerm)}"</p>
             <small>Try a different name or check another category</small>
         </div>` : `<div class="empty-cat">
-            <div class="empty-icon">🫙</div>
+            <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
             <p>No items in this category yet</p>
             <small>Add products in the menu manager</small>
         </div>`;
@@ -117,14 +128,11 @@ function renderGrid() {
     grid.innerHTML = items.map(item => {
         const price   = currentSize === 'small' ? item.priceSmall : item.priceLarge;
         const soldOut = item.stock <= 0;
-        const rawPath = (item.imagePath || '').replace(/^\/+/, '');
-        const imgSrc = rawPath.startsWith('assets/') ? `../${rawPath}` : `../assets/${rawPath}`;
-        const imgHtml = item.imagePath
-            ? `<img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(item.name)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.onerror=null;this.parentElement.innerHTML='<span>${item.icon}</span>'"/>`
-            : `<span>${item.icon}</span>`;
         return `
         <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`}>
-            <div class="item-img">${imgHtml}</div>
+            <div class="item-img">
+                <img src="${escapeHtml(item.imageSrc)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
+            </div>
             <div class="item-name">${escapeHtml(item.name)}</div>
             ${soldOut
                 ? `<div class="item-soldout">Sold out</div>`
@@ -193,12 +201,12 @@ async function addToOrder(itemId) {
         } else {
             orderItems.push({
                 key,
-                id:    itemId,
-                name:  item.name,
-                icon:  item.icon,
-                size:  currentSize,
-                price: parseFloat(price),
-                qty:   1
+                id:       itemId,
+                name:     item.name,
+                imageSrc: item.imageSrc,
+                size:     currentSize,
+                price:    parseFloat(price),
+                qty:      1
             });
         }
         renderOrder();
@@ -222,7 +230,7 @@ function renderOrder() {
     if (orderItems.length === 0) {
         container.innerHTML = `
         <div class="order-empty">
-            <div class="oe-icon">🧋</div>
+            <div class="oe-icon"><img src="../assets/milktea.png" alt="" style="width:48px;height:48px;opacity:0.6;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;"/></div>
             <p>No items yet</p>
             <small>Tap a drink to add it</small>
         </div>`;
@@ -232,9 +240,11 @@ function renderOrder() {
 
     container.innerHTML = orderItems.map((o, i) => `
         <div class="order-item-row">
-            <div class="oi-icon">${o.icon}</div>
+            <div class="oi-thumb">
+                <img src="${escapeHtml(o.imageSrc)}" alt="${escapeHtml(o.name)}" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
+            </div>
             <div class="oi-info">
-                <div class="oi-name">${o.name}</div>
+                <div class="oi-name">${escapeHtml(o.name)}</div>
                 <div class="oi-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
             </div>
             <div class="oi-controls">
@@ -379,9 +389,9 @@ function selectPaymentMethod(method) {
     selectedPaymentMethod = method === 'paymongo' ? 'paymongo' : 'cash';
     const button = document.getElementById('confirm-order-btn');
     if (button) {
-        button.textContent = selectedPaymentMethod === 'paymongo'
-            ? '✅ Continue to PayMongo'
-            : '✅ Confirm & Place Order';
+        button.innerHTML = selectedPaymentMethod === 'paymongo'
+            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg> Continue to PayMongo'
+            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg> Confirm & Place Order';
     }
 }
 
@@ -503,13 +513,13 @@ function showSimpleError(message) {
 
 // ── Receipt Modal ─────────────────────────────
 function showReceipt(orderId, subtotal, vat, total, items) {
-    const typeLabels = { dine: "🍽️ Dine In", take: "🛍️ Take Out", delivery: "🚗 Delivery" };
+    const typeLabels = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
 
     document.getElementById('r-order-num').textContent =
         '#' + String(orderId).padStart(4, '0');
 
     document.getElementById('r-type').textContent =
-        typeLabels[orderType] || '🍽️ Dine In';
+        typeLabels[orderType] || 'Dine In';
 
     const now = new Date();
     const timeStr = now.toLocaleString('en-PH', {
@@ -521,9 +531,11 @@ function showReceipt(orderId, subtotal, vat, total, items) {
 
     document.getElementById('r-items').innerHTML = items.map(o => `
         <div class="receipt-item">
-            <div class="ri-icon">${o.icon}</div>
+            <div class="ri-thumb">
+                <img src="${escapeHtml(o.imageSrc || DEFAULT_DRINK_IMAGE)}" alt="" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
+            </div>
             <div class="ri-info">
-                <div class="ri-name">${o.name}</div>
+                <div class="ri-name">${escapeHtml(o.name)}</div>
                 <div class="ri-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
             </div>
             <span class="ri-qty">×${o.qty}</span>

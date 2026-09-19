@@ -158,7 +158,7 @@ $initials = strtoupper(substr($fname, 0, 1));
         </thead>
         <tbody>
           <?php if (empty($recent)): ?>
-            <tr class="empty-row"><td colspan="6">🫙 No orders yet today</td></tr>
+            <tr class="empty-row"><td colspan="6"><?= icon('history', 16) ?> No orders yet today</td></tr>
           <?php else: foreach ($recent as $o):
             $pm = strtolower($o['payment_method']);
             $pm_class = str_contains($pm,'dine') ? 'badge-dine' : (str_contains($pm,'take') ? 'badge-take' : 'badge-delivery');

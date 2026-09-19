@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_clocked_in_for_pos();
 require_permission('orders.new');
@@ -36,18 +37,10 @@ require_permission('orders.new');
       </div>
 
       <div class="category-tabs">
-        <div class="cat-tab active" onclick="switchCat(this,'ice-coffee')">
-          <span class="cat-icon">🧊</span>Ice Coffee
-        </div>
-        <div class="cat-tab" onclick="switchCat(this,'hot-coffee')">
-          <span class="cat-icon">☕</span>Hot Coffee
-        </div>
-        <div class="cat-tab" onclick="switchCat(this,'milk-tea')">
-          <span class="cat-icon">🧋</span>Milk Tea
-        </div>
-        <div class="cat-tab" onclick="switchCat(this,'fruit-tea')">
-          <span class="cat-icon">🍹</span>Fruit Tea
-        </div>
+        <div class="cat-tab active" onclick="switchCat(this,'ice-coffee')">Ice Coffee</div>
+        <div class="cat-tab" onclick="switchCat(this,'hot-coffee')">Hot Coffee</div>
+        <div class="cat-tab" onclick="switchCat(this,'milk-tea')">Milk Tea</div>
+        <div class="cat-tab" onclick="switchCat(this,'fruit-tea')">Fruit Tea</div>
       </div>
 
       <div class="size-bar">
@@ -74,7 +67,7 @@ require_permission('orders.new');
 
       <div id="order-items" class="order-items">
         <div class="order-empty">
-          <div class="oe-icon">🧋</div>
+          <div class="oe-icon"><img src="../assets/milktea.png" alt="" style="width:48px;height:48px;opacity:0.6;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;"/></div>
           <p>No items yet</p>
           <small>Tap a drink to add it</small>
         </div>
@@ -85,7 +78,7 @@ require_permission('orders.new');
         <div class="order-row"><span>VAT (12%)</span><span id="tax">₱0.00</span></div>
         <div class="order-row total"><strong>Total</strong><strong id="total">₱0.00</strong></div>
         <button class="checkout-btn" onclick="checkout()">Place Order</button>
-        <button class="clear-btn" onclick="clearOrder()">🗑️ Clear Order</button>
+        <button class="clear-btn" onclick="clearOrder()"><?= icon('trash', 14) ?> Clear Order</button>
       </div>
     </div>
 
@@ -96,7 +89,7 @@ require_permission('orders.new');
   <div class="receipt-modal">
 
     <div class="receipt-head">
-      <div class="receipt-check">✅</div>
+      <div class="receipt-check"><?= icon('check', 24) ?></div>
       <h2>Order Placed!</h2>
       <p>Your order has been sent to the kitchen</p>
       <span class="receipt-order-num" id="r-order-num">#0001</span>
@@ -118,8 +111,8 @@ require_permission('orders.new');
     </div>
 
     <div class="receipt-footer">
-      <button class="btn-print" onclick="printReceipt()">🖨️ Print</button>
-      <button class="btn-new-order" onclick="closeReceipt()">✅ New Order</button>
+      <button class="btn-print" onclick="printReceipt()"><?= icon('printer', 14) ?> Print</button>
+      <button class="btn-new-order" onclick="closeReceipt()"><?= icon('plus', 14) ?> New Order</button>
     </div>
 
   </div>
@@ -128,7 +121,7 @@ require_permission('orders.new');
 <div class="modal-overlay" id="confirm-overlay">
   <div class="receipt-modal" style="max-width:360px">
     <div class="receipt-head" style="padding:24px 24px 18px">
-      <div class="receipt-check" style="background:#8B5E3C">❓</div>
+      <div class="receipt-check" style="background:#8B5E3C"><?= icon('help', 24) ?></div>
       <h2>Confirm Order?</h2>
     </div>
     <div class="receipt-body" style="padding:18px 24px">
@@ -151,7 +144,7 @@ require_permission('orders.new');
     </div>
     <div class="receipt-footer">
       <button class="btn-print" onclick="closeConfirmOrder()">Cancel</button>
-      <button class="btn-new-order" id="confirm-order-btn" onclick="submitConfirmedOrder()">✅ Confirm & Place Order</button>
+      <button class="btn-new-order" id="confirm-order-btn" onclick="submitConfirmedOrder()"><?= icon('check', 14) ?> Confirm & Place Order</button>
     </div>
   </div>
 </div>
@@ -160,7 +153,7 @@ require_permission('orders.new');
 <div class="modal-overlay" id="noitems-overlay">
   <div class="receipt-modal" style="max-width:340px">
     <div class="receipt-head" style="padding:24px 24px 18px">
-      <div class="receipt-check" style="background:#d4a056">⚠️</div>
+      <div class="receipt-check" style="background:#d4a056"><?= icon('alert-triangle', 24) ?></div>
       <h2>No Items!</h2>
       <p>Please add items first.</p>
     </div>

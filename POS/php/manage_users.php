@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
+require_once '../includes/icons.php';
 require_login();
 require_permission('users.manage');
 
@@ -75,11 +76,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $salary     = (float)($_POST['base_salary'] ?? 0);
 
         if (!$firstname || !$lastname) {
-            $toast = '⚠️ First and last name are required.'; $toast_type = 'error';
+            $toast = 'First and last name are required.'; $toast_type = 'error';
         } elseif (!$want_account && !$want_employee) {
-            $toast = '⚠️ Enable at least a login account or an employee profile.'; $toast_type = 'error';
+            $toast = 'Enable at least a login account or an employee profile.'; $toast_type = 'error';
         } elseif ($want_account && empty($roles_selected)) {
-            $toast = '⚠️ Select at least one role for the login account.'; $toast_type = 'error';
+            $toast = 'Select at least one role for the login account.'; $toast_type = 'error';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -149,11 +150,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->commit();
-                $toast = '✅ "' . htmlspecialchars($firstname . ' ' . $lastname) . '" saved successfully!';
+                $toast = '"' . htmlspecialchars($firstname . ' ' . $lastname) . '" saved successfully!';
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 $msg = str_contains($e->getMessage(), 'Duplicate') ? 'That employee code already exists.' : $e->getMessage();
-                $toast = '⚠️ ' . $msg; $toast_type = 'error';
+                $toast = $msg; $toast_type = 'error';
             }
         }
 
@@ -178,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id && in_array($status, ['active','blocked','on_hold'], true)) {
             $pdo->prepare('UPDATE users SET status=:s, updated_at=NOW() WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
             $labels = ['active'=>'Activated','blocked'=>'Blocked','on_hold'=>'Put on Hold'];
-            $toast  = '✅ Account ' . $labels[$status] . '.';
+            $toast  = 'Account ' . $labels[$status] . '.';
         }
     }
 
@@ -188,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status = $_POST['status'] ?? '';
         if ($id && in_array($status, ['active','inactive'], true)) {
             $pdo->prepare('UPDATE employees SET status=:s WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
-            $toast = $status === 'active' ? '✅ Employee reactivated.' : '🚫 Employee marked inactive.';
+            $toast = $status === 'active' ? 'Employee reactivated.' : 'Employee marked inactive.';
         }
     }
 
@@ -291,7 +292,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
       <h1>Staff</h1>
       <p>Manage login accounts and employee profiles in one place</p>
     </div>
-    <button class="btn-add-staff" onclick="openAdd()">➕ Add Staff Member</button>
+    <button class="btn-add-staff" onclick="openAdd()"><?= icon('user-plus', 16) ?> <span>Add Staff Member</span></button>
   </div>
 
   <div class="page-body">
@@ -299,19 +300,19 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 
       <div class="stat-row">
         <div class="mini-stat">
-          <div class="mini-stat-icon" style="background:#fdf3ea">👥</div>
+          <div class="mini-stat-icon" style="background:#fdf3ea;color:#c47d3e"><?= icon('users', 18) ?></div>
           <div><div class="mini-stat-val"><?= $total ?></div><div class="mini-stat-lbl">Total People</div></div>
         </div>
         <div class="mini-stat">
-          <div class="mini-stat-icon" style="background:var(--green-lt)">🔑</div>
+          <div class="mini-stat-icon" style="background:var(--green-lt);color:var(--green)"><?= icon('key', 18) ?></div>
           <div><div class="mini-stat-val"><?= $with_login ?></div><div class="mini-stat-lbl">With Login</div></div>
         </div>
         <div class="mini-stat">
-          <div class="mini-stat-icon" style="background:var(--blue-lt)">🪪</div>
+          <div class="mini-stat-icon" style="background:var(--blue-lt);color:var(--blue)"><?= icon('award', 18) ?></div>
           <div><div class="mini-stat-val"><?= $with_profile ?></div><div class="mini-stat-lbl">Employee Profiles</div></div>
         </div>
         <div class="mini-stat">
-          <div class="mini-stat-icon" style="background:var(--amber-lt)">✅</div>
+          <div class="mini-stat-icon" style="background:var(--amber-lt);color:var(--amber)"><?= icon('check-circle', 18) ?></div>
           <div><div class="mini-stat-val"><?= $active_acct ?></div><div class="mini-stat-lbl">Active Accounts</div></div>
         </div>
       </div>
@@ -321,7 +322,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
           <h2>All Staff</h2>
           <form method="GET" style="display:contents">
             <div class="search-wrap">
-              <span class="s-icon">🔍</span>
+              <span class="s-icon"><?= icon('search', 14) ?></span>
               <input type="text" name="search" placeholder="Name, username, code, position…" value="<?= htmlspecialchars($search) ?>"/>
             </div>
             <select class="filter-select" name="filter" onchange="this.form.submit()">
@@ -352,7 +353,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
             </thead>
             <tbody>
             <?php if (empty($filtered)): ?>
-              <tr class="empty-row"><td colspan="8">🫙 No staff found.</td></tr>
+              <tr class="empty-row"><td colspan="8"><?= icon('users', 16) ?> No staff found.</td></tr>
             <?php else:
               // Avatar tint matches the role badge colors — a glance at the
               // left edge of the table now tells you who's what.
@@ -408,26 +409,26 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
                 <td>
                   <div class="act-group">
                     <button class="act-btn act-edit"
-                      onclick='openEdit(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)'>✏️ Edit</button>
+                      onclick='openEdit(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)'><?= icon('edit', 13) ?> Edit</button>
 
                     <?php if ($r['user_id'] && !$is_self): ?>
                       <?php if ($r['account_status'] !== 'active'): ?>
                         <button type="button" class="act-btn act-activate"
-                          onclick="askStatusConfirm('set_account_status', <?= (int)$r['user_id'] ?>, 'active', <?= $full_js ?>, 'account')">✅ Activate</button>
+                          onclick="askStatusConfirm('set_account_status', <?= (int)$r['user_id'] ?>, 'active', <?= $full_js ?>, 'account')"><?= icon('check', 13) ?> Activate</button>
                       <?php endif; ?>
                       <?php if ($r['account_status'] !== 'blocked'): ?>
                         <button type="button" class="act-btn act-block"
-                          onclick="askStatusConfirm('set_account_status', <?= (int)$r['user_id'] ?>, 'blocked', <?= $full_js ?>, 'account')">🚫 Block</button>
+                          onclick="askStatusConfirm('set_account_status', <?= (int)$r['user_id'] ?>, 'blocked', <?= $full_js ?>, 'account')"><?= icon('x', 13) ?> Block</button>
                       <?php endif; ?>
                     <?php endif; ?>
 
                     <?php if ($r['emp_id']): ?>
                       <?php if ($r['emp_status'] === 'active'): ?>
                         <button type="button" class="act-btn act-hold"
-                          onclick="askStatusConfirm('set_employee_status', <?= (int)$r['emp_id'] ?>, 'inactive', <?= $full_js ?>, 'employee')">⏸️ Deactivate</button>
+                          onclick="askStatusConfirm('set_employee_status', <?= (int)$r['emp_id'] ?>, 'inactive', <?= $full_js ?>, 'employee')"><?= icon('alert-triangle', 13) ?> Deactivate</button>
                       <?php else: ?>
                         <button type="button" class="act-btn act-activate"
-                          onclick="askStatusConfirm('set_employee_status', <?= (int)$r['emp_id'] ?>, 'active', <?= $full_js ?>, 'employee')">✅ Reactivate</button>
+                          onclick="askStatusConfirm('set_employee_status', <?= (int)$r['emp_id'] ?>, 'active', <?= $full_js ?>, 'employee')"><?= icon('check', 13) ?> Reactivate</button>
                       <?php endif; ?>
                     <?php endif; ?>
                   </div>
@@ -447,8 +448,8 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 <div class="modal-bg" id="staff-modal" onclick="closeModalBg(event)">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="modal-title">➕ Add Staff Member</h3>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+      <h3 id="modal-title"><?= icon('user-plus', 18) ?> Add Staff Member</h3>
+      <button class="modal-close" onclick="closeModal()"><?= icon('x', 16) ?></button>
     </div>
 
     <form method="POST" id="staff-form">
@@ -478,7 +479,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 
       <!-- ── Login account section (toggle) ── -->
       <label class="section-toggle" for="f-want-account">
-        <span class="section-toggle-icon">🔑</span>
+        <span class="section-toggle-icon"><?= icon('key', 16) ?></span>
         <span class="section-toggle-text">
           <strong>Login Account</strong>
           <small>Lets this person sign in to the POS</small>
@@ -510,14 +511,14 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
             <label class="field-label">Password <span id="pw-hint" class="field-hint"></span></label>
             <div class="pw-wrap">
               <input class="field-input" type="password" name="password" id="f-password"/>
-              <button type="button" class="pw-eye" onclick="togglePw('f-password',this)">👁️</button>
+              <button type="button" class="pw-eye" onclick="togglePw('f-password',this)"><?= icon('eye', 14) ?></button>
             </div>
           </div>
           <div class="field-group">
             <label class="field-label">Confirm Password</label>
             <div class="pw-wrap">
               <input class="field-input" type="password" name="confirm_password" id="f-confirm"/>
-              <button type="button" class="pw-eye" onclick="togglePw('f-confirm',this)">👁️</button>
+              <button type="button" class="pw-eye" onclick="togglePw('f-confirm',this)"><?= icon('eye', 14) ?></button>
             </div>
           </div>
         </div>
@@ -525,7 +526,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 
       <!-- ── Employee profile section (toggle) ── -->
       <label class="section-toggle" for="f-want-employee">
-        <span class="section-toggle-icon">🪪</span>
+        <span class="section-toggle-icon"><?= icon('award', 16) ?></span>
         <span class="section-toggle-text">
           <strong>Employee Profile</strong>
           <small>Position, pay, and HR details</small>
@@ -566,7 +567,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
         </div>
         <div class="field-row mg-b">
           <div class="field-group">
-            <label class>="field-label">Hire Date</label>
+            <label class="field-label">Hire Date</label>
             <input class="field-input" type="date" name="hire_date" id="f-hire"/>
           </div>
           <div class="field-group">
@@ -578,7 +579,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
-        <button type="submit" class="btn-save" id="save-btn">➕ Add Staff Member</button>
+        <button type="submit" class="btn-save" id="save-btn"><?= icon('plus', 14) ?> Add Staff Member</button>
       </div>
     </form>
   </div>
@@ -588,7 +589,7 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 <div class="modal-bg" id="status-confirm-modal" onclick="if(event.target===this) closeStatusConfirm()">
   <div class="modal" style="max-width:380px;text-align:center">
     <div style="padding:26px 22px 6px">
-      <div id="sc-icon" style="font-size:44px;margin-bottom:12px">❓</div>
+      <div id="sc-icon" style="margin-bottom:12px;display:flex;justify-content:center"><?= icon('help', 36) ?></div>
       <h3 id="sc-title" style="margin-bottom:8px">Confirm Action</h3>
       <p id="sc-message" style="font-size:13px;color:var(--text-muted)"></p>
     </div>

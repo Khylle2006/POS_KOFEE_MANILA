@@ -239,33 +239,33 @@ function user_display_name(?int $user_id): string {
     return $cache[$user_id] = ($name !== '' ? $name : $u['username']);
 }
 
-/** Human label for a PO/GRN/invoice/payment status enum, with an emoji badge. */
+/** Human label for a PO/GRN/invoice/payment status enum. */
 function status_badge(string $status): string {
     $map = [
-        'pending'      => '⏳ Pending',
-        'approved'     => '✅ Approved',
-        'rejected'     => '❌ Rejected',
-        'sourcing'     => '🔍 Sourcing',
-        'awarded'      => '🏆 Awarded',
-        'closed'       => '🔒 Closed',
-        'draft'        => '📝 Draft',
-        'sent'         => '📨 Sent',
-        'acknowledged' => '👍 Acknowledged',
-        'delivered'    => '📦 Delivered',
-        'cancelled'    => '🚫 Cancelled',
-        'partial'      => '⚠️ Partial',
-        'complete'     => '✅ Complete',
-        'discrepancy'  => '⚠️ Discrepancy',
-        'matched'      => '✅ Matched',
-        'disputed'     => '⚠️ Disputed',
-        'paid'         => '💸 Paid',
-        'scheduled'    => '🗓️ Scheduled',
-        'completed'    => '✅ Completed',
-        'failed'       => '❌ Failed',
-        'submitted'    => '📤 Submitted',
-        'shortlisted'  => '⭐ Shortlisted',
-        'selected'     => '🏆 Selected',
-        'open'         => '🔓 Open',
+        'pending'      => 'Pending',
+        'approved'     => 'Approved',
+        'rejected'     => 'Rejected',
+        'sourcing'     => 'Sourcing',
+        'awarded'      => 'Awarded',
+        'closed'       => 'Closed',
+        'draft'        => 'Draft',
+        'sent'         => 'Sent',
+        'acknowledged' => 'Acknowledged',
+        'delivered'    => 'Delivered',
+        'cancelled'    => 'Cancelled',
+        'partial'      => 'Partial',
+        'complete'     => 'Complete',
+        'discrepancy'  => 'Discrepancy',
+        'matched'      => 'Matched',
+        'disputed'     => 'Disputed',
+        'paid'         => 'Paid',
+        'scheduled'    => 'Scheduled',
+        'completed'    => 'Completed',
+        'failed'       => 'Failed',
+        'submitted'    => 'Submitted',
+        'shortlisted'  => 'Shortlisted',
+        'selected'     => 'Selected',
+        'open'         => 'Open',
     ];
     return $map[$status] ?? ucfirst($status);
 }
