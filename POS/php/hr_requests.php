@@ -177,12 +177,16 @@ foreach ($requests as $r) {
     </div>
 
     <div class="table-card">
+      <div class="table-scroll-hint">
+        <span><?= icon('chevron-right', 12) ?> Swipe to view all columns</span>
+      </div>
       <div class="table-scroll-wrapper">
         <table>
           <thead>
             <tr>
-              <?php if ($is_reviewer): ?><th>Employee</th><?php endif; ?>
-              <th>Request Type</th><th>Details</th><th>Filed</th><th>Status</th><th>Actions</th>
+              <?php if ($is_reviewer): ?><th class="col-sticky">Employee</th><?php else: ?><th class="col-sticky">Request Type</th><?php endif; ?>
+              <?php if ($is_reviewer): ?><th>Request Type</th><?php endif; ?>
+              <th>Details</th><th>Filed</th><th>Status</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -191,9 +195,11 @@ foreach ($requests as $r) {
           <?php else: foreach ($requests as $r): ?>
             <tr>
               <?php if ($is_reviewer): ?>
-                <td style="font-weight:700"><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
+                <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
+                <td><?= htmlspecialchars($r['request_type']) ?></td>
+              <?php else: ?>
+                <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($r['request_type']) ?></td>
               <?php endif; ?>
-              <td><?= htmlspecialchars($r['request_type']) ?></td>
               <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)"><?= htmlspecialchars($r['details'] ?: '—') ?></td>
               <td style="color:var(--text-muted);font-size:12px"><?= date('M d, Y', strtotime($r['created_at'])) ?></td>
               <td><span class="status-badge status-<?= $r['status'] ?>"><?= ucfirst($r['status']) ?></span></td>

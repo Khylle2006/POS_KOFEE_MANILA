@@ -2,6 +2,8 @@
    Kofee Manila — Receipt / confirm modals
    ============================================================ */
 
+.modal-overlay, .prog-modal-overlay { z-index: 1000 !important; }
+
 .receipt-modal { max-width: 380px; position: relative; }
 
 .receipt-head {

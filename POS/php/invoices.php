@@ -407,15 +407,18 @@ $invoices = $list_stmt->fetchAll();
         <a href="invoices.php?status=disputed" class="filter-pill <?= $filter==='disputed'?'active':'' ?>">Disputed</a>
         <a href="invoices.php?status=paid" class="filter-pill <?= $filter==='paid'?'active':'' ?>">Paid</a>
       </div>
+      <div class="table-scroll-hint">
+        <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+      </div>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>Invoice #</th><th>PO #</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
+          <thead><tr><th class="col-sticky">Invoice #</th><th>PO #</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($invoices)): ?>
             <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No invoices logged yet.</td></tr>
           <?php else: foreach ($invoices as $i): ?>
             <tr>
-              <td style="font-weight:700"><?= htmlspecialchars($i['invoice_number']) ?></td>
+              <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($i['invoice_number']) ?></td>
               <td>#<?= str_pad($i['po_id'],5,'0',STR_PAD_LEFT) ?></td>
               <td><?= htmlspecialchars($i['supplier_name']) ?></td>
               <td style="font-weight:700"><?= php_currency($i['total_amount']) ?></td>

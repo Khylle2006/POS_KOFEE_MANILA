@@ -24,6 +24,11 @@ if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 // raw error text is ever shown to a visitor.
 if (!defined('APP_ENV')) define('APP_ENV', getenv('APP_ENV') ?: 'development');
 
+// Ensure system timezone is aligned with Kofee Manila (Asia/Manila, UTC+8)
+if (date_default_timezone_get() !== 'Asia/Manila') {
+    date_default_timezone_set('Asia/Manila');
+}
+
 function get_db(): PDO {
     static $pdo = null;
 
@@ -37,6 +42,7 @@ function get_db(): PDO {
                 PDO::ATTR_EMULATE_PREPARES   => false,
                 PDO::ATTR_STRINGIFY_FETCHES  => false,
             ]);
+            $pdo->exec("SET time_zone = '+08:00'");
         } catch (PDOException $e) {
             error_log('DB connection failed: ' . $e->getMessage());
             http_response_code(500);

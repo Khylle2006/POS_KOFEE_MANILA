@@ -3,6 +3,7 @@ require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
 require_permission('dashboard.view');
+require_clocked_in_for_pos();
 ob_start();
 
 $pdo  = get_db();
@@ -145,38 +146,40 @@ $initials = strtoupper(substr($fname, 0, 1));
         <h2>Recent Orders</h2>
         <a href="history.php" style="font-size:12px;color:var(--caramel);font-weight:600;text-decoration:none">View all →</a>
       </div>
-      <table class="recent-table">
-        <thead>
-          <tr>
-            <th>Order #</th>
-            <th>Items</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Total</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php if (empty($recent)): ?>
-            <tr class="empty-row"><td colspan="6"><?= icon('history', 16) ?> No orders yet today</td></tr>
-          <?php else: foreach ($recent as $o):
-            $pm = strtolower($o['payment_method']);
-            $pm_class = str_contains($pm,'dine') ? 'badge-dine' : (str_contains($pm,'take') ? 'badge-take' : 'badge-delivery');
-            $st_class = $o['status'] === 'complete' ? 'badge-complete' : 'badge-pending';
-          ?>
+      <div class="table-scroll-wrapper">
+        <table class="recent-table">
+          <thead>
             <tr>
-              <td style="font-weight:700">#<?= str_pad($o['id'],4,'0',STR_PAD_LEFT) ?></td>
-              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">
-                <?= htmlspecialchars($o['items'] ?? '—') ?>
-              </td>
-              <td><span class="badge <?= $pm_class ?>"><?= htmlspecialchars($o['payment_method']) ?></span></td>
-              <td><span class="badge <?= $st_class ?>"><?= ucfirst($o['status'] ?: 'pending') ?></span></td>
-              <td style="font-weight:700">₱<?= number_format($o['total_amount']) ?></td>
-              <td style="color:var(--text-muted)"><?= $o['created_at'] ?></td>
+              <th class="col-sticky">Order #</th>
+              <th>Items</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th>Date</th>
             </tr>
-          <?php endforeach; endif; ?>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <?php if (empty($recent)): ?>
+              <tr class="empty-row"><td colspan="6"><?= icon('history', 16) ?> No orders yet today</td></tr>
+            <?php else: foreach ($recent as $o):
+              $pm = strtolower($o['payment_method']);
+              $pm_class = str_contains($pm,'dine') ? 'badge-dine' : (str_contains($pm,'take') ? 'badge-take' : 'badge-delivery');
+              $st_class = $o['status'] === 'complete' ? 'badge-complete' : 'badge-pending';
+            ?>
+              <tr>
+                <td class="col-sticky" style="font-weight:700">#<?= str_pad($o['id'],4,'0',STR_PAD_LEFT) ?></td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">
+                  <?= htmlspecialchars($o['items'] ?? '—') ?>
+                </td>
+                <td><span class="badge <?= $pm_class ?>"><?= htmlspecialchars($o['payment_method']) ?></span></td>
+                <td><span class="badge <?= $st_class ?>"><?= ucfirst($o['status'] ?: 'pending') ?></span></td>
+                <td style="font-weight:700">₱<?= number_format($o['total_amount']) ?></td>
+                <td style="color:var(--text-muted)"><?= $o['created_at'] ?></td>
+              </tr>
+            <?php endforeach; endif; ?>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Role Access Overview — pulled live from Manage Permissions -->

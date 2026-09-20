@@ -34,6 +34,8 @@ async function openCamera(mode) {
   document.getElementById('camera-capture-btn').style.display = '';
   document.getElementById('camera-confirm-btn').style.display = 'none';
   document.getElementById('camera-retake-btn').style.display = 'none';
+  const fbBtn = document.getElementById('camera-fallback-btn');
+  if (fbBtn) fbBtn.style.display = 'none';
 
   document.getElementById('camera-modal').classList.add('open');
 
@@ -43,6 +45,10 @@ async function openCamera(mode) {
   } catch (err) {
     document.getElementById('camera-error').textContent = 'Could not access camera: ' + err.message;
     document.getElementById('camera-error').style.display = 'block';
+    if (fbBtn) {
+      fbBtn.textContent = (mode === 'clock_in' ? 'Clock In' : 'Clock Out') + ' Without Photo';
+      fbBtn.style.display = '';
+    }
   }
 }
 
@@ -160,6 +166,34 @@ async function confirmCapture() {
     }
   }
 }
+
+async function quickClockWithoutPhoto() {
+  const fbBtn = document.getElementById('camera-fallback-btn');
+  if (fbBtn) {
+    fbBtn.disabled = true;
+    fbBtn.textContent = 'Submitting…';
+  }
+  try {
+    const res = await fetch('../api/shift_clock.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: cameraMode || 'clock_in' })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'Clock action failed.');
+    }
+    showToast(cameraMode === 'clock_in' ? 'Clocked in successfully!' : 'Clocked out successfully!');
+    stopCameraStream();
+    document.getElementById('camera-modal').classList.remove('open');
+    location.reload();
+  } catch (err) {
+    document.getElementById('camera-error').textContent = err.message;
+    document.getElementById('camera-error').style.display = 'block';
+    if (fbBtn) {
+      fbBtn.disabled = false;
+      fbBtn.textContent = (cameraMode === 'clock_in' ? 'Clock In' : 'Clock Out') + ' Without Photo';
+    }
   }
 }
 

@@ -136,17 +136,20 @@ $not_marked = count($unmarked);
     </div>
 
     <div class="table-card">
+      <div class="table-scroll-hint">
+        <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+      </div>
       <div class="table-scroll-wrapper">
         <table>
           <thead>
-            <tr><th>Employee</th><th>Department</th><th>Time In</th><th>Time Out</th><th>Status</th><th>Notes</th><th>Actions</th></tr>
+            <tr><th class="col-sticky">Employee</th><th>Department</th><th>Time In</th><th>Time Out</th><th>Status</th><th>Notes</th><th>Actions</th></tr>
           </thead>
           <tbody>
           <?php if (empty($records)): ?>
             <tr class="empty-row"><td colspan="7"><?= icon('attendance', 16) ?> No attendance recorded for this date yet.</td></tr>
           <?php else: foreach ($records as $r): ?>
             <tr>
-              <td style="font-weight:700"><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
+              <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?> <span style="color:var(--text-muted);font-weight:400">#<?= htmlspecialchars($r['employee_code']) ?></span></td>
               <td><?= htmlspecialchars($r['department']) ?></td>
               <td><?= $r['time_in']  ? date('g:i A', strtotime($r['time_in']))  : '—' ?></td>
               <td><?= $r['time_out'] ? date('g:i A', strtotime($r['time_out'])) : '—' ?></td>

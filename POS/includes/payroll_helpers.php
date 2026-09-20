@@ -829,7 +829,7 @@ function render_payroll_subnav(string $active_tab = 'runs', ?string $trail_label
     require_once __DIR__ . '/icons.php';
 
     $can_view_all = has_permission('payroll.view');
-    $can_settings = has_permission('payroll.settings');
+    $can_settings = has_permission('payroll.settings') || has_permission('payroll.loans') || has_permission('payroll.manage');
     $can_own      = has_permission('payroll.own') || !empty($_SESSION['user_id']);
 
     $items = [];
@@ -858,7 +858,7 @@ function render_payroll_subnav(string $active_tab = 'runs', ?string $trail_label
     if ($can_own) {
         $items[] = [
             'key'   => 'my_payslips',
-            'label' => 'My Payslips',
+            'label' => 'My Compensation',
             'url'   => 'my_payslips.php',
             'icon'  => 'file-text'
         ];

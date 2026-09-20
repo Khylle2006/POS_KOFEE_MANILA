@@ -220,6 +220,15 @@ function get_permission_aliases(string $perm_key): array {
         'procurement.invoice.match'=> ['can_match_invoices', 'procurement.invoice.match'],
         'can_manage_suppliers'     => ['procurement.suppliers.manage', 'can_manage_suppliers'],
         'procurement.suppliers.manage' => ['can_manage_suppliers', 'procurement.suppliers.manage'],
+
+        // Payroll
+        'can_view_payroll'         => ['payroll.view', 'can_view_payroll'],
+        'payroll.view'             => ['can_view_payroll', 'payroll.view'],
+        'can_manage_payroll'       => ['payroll.manage', 'can_manage_payroll'],
+        'payroll.manage'           => ['can_manage_payroll', 'payroll.manage'],
+        'payroll.loans'            => ['payroll.loans', 'payroll.loans.manage', 'can_manage_loans'],
+        'payroll.advance.request'  => ['payroll.advance.request', 'can_request_advance'],
+        'payroll.own'              => ['payroll.own', 'can_view_own_payroll'],
     ];
 
     return $map[$perm_key] ?? [$perm_key];
@@ -500,9 +509,19 @@ function install_default_permissions(): void {
             ['procurement.attachments.manage', 'Manage Procurement Attachments', 'Procurement', 'Upload and view supporting documents on procurement records'],
             ['procurement.suppliers.manage', 'Manage Suppliers', 'Procurement', 'Add, edit, or deactivate suppliers in the directory'],
             ['procurement.supplier.portal', 'Supplier Portal Access', 'Procurement', 'Supplier-side access: view RFQ invites, submit bids, acknowledge POs'],
+            // Payroll Permissions
+            ['payroll.view', 'View Payroll Register & Dashboard', 'Payroll', 'Access payroll summary metrics, period lists, and employee payslip registers'],
+            ['payroll.manage', 'Manage Payroll Periods & Calculate', 'Payroll', 'Create pay periods, trigger automated hours/tips/deduction calculations, and add manual adjustments'],
+            ['payroll.approve', 'Approve Calculated Payroll Runs', 'Payroll', 'Authorize and approve draft payroll periods prior to disbursement'],
+            ['payroll.release', 'Disburse & Release Payroll', 'Payroll', 'Disburse funds via cash/bank advice/e-wallets, release payslips to staff, and lock pay period'],
+            ['payroll.loans', 'Manage & Approve Loans / Advances', 'Payroll', 'Issue employee cash advances, review staff requests, and approve or decline amortization terms'],
+            ['payroll.settings', 'Configure Payroll Standards & Multipliers', 'Payroll', 'Configure working hours, overtime/holiday/night multipliers, tip distribution rules, and statutory schedules'],
+            ['payroll.own', 'My Compensation & Payslips (Staff)', 'Payroll', 'Employee self-service: view personal compensation, released payslips, and loan/advance ledger'],
+            ['payroll.advance.request', 'Request Cash Advance (Staff)', 'Payroll', 'Staff self-service: submit salary advance or emergency cash requests for management review'],
         ];
         
-        $pStmt = $pdo->prepare("INSERT IGNORE INTO permissions (perm_key, label, category, description) VALUES (?, ?, ?, ?)");
+        $pStmt = $pdo->prepare("INSERT INTO permissions (perm_key, label, category, description) VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE label = VALUES(label), category = VALUES(category), description = VALUES(description)");
         foreach ($default_permissions as $perm) {
             $pStmt->execute($perm);
         }
@@ -511,11 +530,14 @@ function install_default_permissions(): void {
         $roles_to_ensure = [
             ['admin', 'Administrator', 1],
             ['manager', 'Branch Manager', 0],
+            ['hr', 'Human Resources', 0],
+            ['finance', 'Finance Officer', 0],
             ['cashier', 'Cashier', 0],
             ['staff', 'Crew / Barista', 0],
+            ['crew', 'Service Crew', 0],
+            ['ops', 'Operations Supervisor', 0],
             ['procurement', 'Procurement Officer', 0],
             ['warehouse', 'Warehouse / Receiving', 0],
-            ['finance', 'Finance Officer', 0],
             ['supplier', 'Supplier', 0],
         ];
         
@@ -533,13 +555,15 @@ function install_default_permissions(): void {
         
         // Default role grants
         $default_grants = [
-            'manager'     => ['dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'inventory.view', 'inventory.manage', 'menu.manage', 'menu.edit', 'analytics.view', 'attendance.view', 'leave.view', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review'],
-            'cashier'     => ['dashboard.view', 'orders.new', 'orders.pending', 'orders.history'],
-            'staff'       => ['dashboard.view', 'orders.pending', 'attendance.view'],
-            'crew'        => ['dashboard.view', 'orders.new', 'orders.pending', 'attendance.view'],
-            'procurement' => ['dashboard.view', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review', 'procurement.rfq.manage', 'procurement.bidding.review', 'procurement.negotiation', 'procurement.po.manage', 'procurement.close', 'procurement.reports.view', 'procurement.suppliers.manage', 'procurement.performance.rate', 'procurement.attachments.manage'],
-            'warehouse'   => ['dashboard.view', 'inventory.view', 'inventory.manage', 'procurement.view', 'procurement.receiving', 'procurement.grn.discrepancy.manage'],
-            'finance'     => ['dashboard.view', 'analytics.view', 'procurement.view', 'procurement.invoice.create', 'procurement.invoice.match', 'procurement.payment.process', 'procurement.budget.manage', 'procurement.reports.view', 'procurement.audit.view'],
+            'manager'     => ['dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'inventory.view', 'inventory.manage', 'menu.manage', 'menu.edit', 'analytics.view', 'attendance.view', 'leave.view', 'payroll.view', 'payroll.manage', 'payroll.approve', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review'],
+            'hr'          => ['dashboard.view', 'users.manage', 'recruitment.manage', 'attendance.view', 'leave.view', 'payroll.view', 'payroll.manage', 'payroll.loans', 'payroll.settings', 'payroll.own'],
+            'finance'     => ['dashboard.view', 'analytics.view', 'payroll.view', 'payroll.release', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.invoice.create', 'procurement.invoice.match', 'procurement.payment.process', 'procurement.budget.manage', 'procurement.reports.view', 'procurement.audit.view'],
+            'cashier'     => ['dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'payroll.own', 'payroll.advance.request'],
+            'staff'       => ['dashboard.view', 'orders.pending', 'attendance.view', 'payroll.own', 'payroll.advance.request'],
+            'crew'        => ['dashboard.view', 'orders.new', 'orders.pending', 'attendance.view', 'payroll.own', 'payroll.advance.request'],
+            'ops'         => ['dashboard.view', 'attendance.view', 'leave.view', 'payroll.own', 'payroll.advance.request'],
+            'procurement' => ['dashboard.view', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review', 'procurement.rfq.manage', 'procurement.bidding.review', 'procurement.negotiation', 'procurement.po.manage', 'procurement.close', 'procurement.reports.view', 'procurement.suppliers.manage', 'procurement.performance.rate', 'procurement.attachments.manage', 'payroll.own', 'payroll.advance.request'],
+            'warehouse'   => ['dashboard.view', 'inventory.view', 'inventory.manage', 'procurement.view', 'procurement.receiving', 'procurement.grn.discrepancy.manage', 'payroll.own', 'payroll.advance.request'],
             'supplier'    => ['procurement.supplier.portal'],
         ];
 

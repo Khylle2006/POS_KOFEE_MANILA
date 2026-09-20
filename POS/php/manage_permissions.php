@@ -44,6 +44,7 @@ $isSystemRole  = (bool)($selectedRole['is_system'] ?? false);
 // Standard category icon keys & grouping
 $categoryIcons = [
     'Procurement' => 'shopping-cart',
+    'Payroll'     => 'coin',
     'Orders'      => 'credit-card',
     'Inventory'   => 'package',
     'Menu'        => 'coffee',
@@ -57,13 +58,19 @@ $categoryIcons = [
 
 $permsByCategory = [];
 foreach ($permissions as $p) {
-    $cat = ucfirst(strtolower(trim($p['category'] ?? 'General')));
-    if ($cat === 'Hr') $cat = 'HR';
+    $rawCat = strtolower(trim($p['category'] ?? 'general'));
+    if ($rawCat === 'hr') {
+        $cat = 'HR';
+    } elseif ($rawCat === 'payroll') {
+        $cat = 'Payroll';
+    } else {
+        $cat = ucfirst($rawCat);
+    }
     $permsByCategory[$cat][] = $p;
 }
 
 // Preferred category presentation order
-$categoryOrder = ['Procurement', 'Orders', 'Inventory', 'Menu', 'Reports', 'Users', 'HR', 'Settings', 'General'];
+$categoryOrder = ['Procurement', 'Payroll', 'Orders', 'Inventory', 'Menu', 'Reports', 'Users', 'HR', 'Settings', 'General'];
 uksort($permsByCategory, function($a, $b) use ($categoryOrder) {
     $posA = array_search($a, $categoryOrder);
     $posB = array_search($b, $categoryOrder);

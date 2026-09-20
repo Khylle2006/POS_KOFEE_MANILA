@@ -193,15 +193,18 @@ $pos = $list_stmt->fetchAll();
         <a href="purchase_orders.php?status=delivered" class="filter-pill <?= $filter==='delivered'?'active':'' ?>">Delivered</a>
         <a href="purchase_orders.php?status=closed" class="filter-pill <?= $filter==='closed'?'active':'' ?>">Closed</a>
       </div>
+      <div class="table-scroll-hint">
+        <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+      </div>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>PO #</th><th>Requisition</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
+          <thead><tr><th class="col-sticky">PO #</th><th>Requisition</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($pos)): ?>
             <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No purchase orders yet — award a bid from an RFQ first.</td></tr>
           <?php else: foreach ($pos as $p): ?>
             <tr>
-              <td style="font-weight:700">#<?= str_pad($p['id'],5,'0',STR_PAD_LEFT) ?></td>
+              <td class="col-sticky" style="font-weight:700">#<?= str_pad($p['id'],5,'0',STR_PAD_LEFT) ?></td>
               <td><?= htmlspecialchars($p['req_title']) ?></td>
               <td><?= htmlspecialchars($p['supplier_name']) ?></td>
               <td style="font-weight:700">₱<?= number_format($p['total_amount'],2) ?></td>

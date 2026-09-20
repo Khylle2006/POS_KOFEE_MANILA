@@ -352,12 +352,33 @@ function calcVAT(gross) {
 
 function updateTotals() {
     const gross = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
+    const totalCount = orderItems.reduce((sum, o) => sum + o.qty, 0);
     const { subtotal, vat, total } = calcVAT(gross);
 
     const el = id => document.getElementById(id);
     if (el('subtotal')) el('subtotal').textContent = '₱' + subtotal.toFixed(2);
     if (el('tax'))      el('tax').textContent      = '₱' + vat.toFixed(2);
     if (el('total'))    el('total').textContent    = '₱' + total.toFixed(2);
+
+    // Sync Mobile Cart Bar & Mobile Drawer Counters
+    if (el('mobile-ticket-count')) {
+        el('mobile-ticket-count').textContent = `${totalCount} item${totalCount !== 1 ? 's' : ''}`;
+    }
+    if (el('mcb-count')) {
+        el('mcb-count').textContent = totalCount;
+    }
+    if (el('mcb-total')) {
+        el('mcb-total').textContent = '₱' + total.toFixed(2);
+    }
+    const mobileBar = el('mobile-cart-bar');
+    if (mobileBar) {
+        if (totalCount > 0) {
+            mobileBar.classList.add('has-items');
+        } else {
+            mobileBar.classList.remove('has-items');
+            closeMobileCart();
+        }
+    }
 }
 
 async function clearOrder() {
@@ -477,11 +498,24 @@ function clearTendered() {
     }
 }
 
+function openMobileCart() {
+    document.getElementById('order-panel')?.classList.add('drawer-open');
+    document.getElementById('mobile-cart-backdrop')?.classList.add('drawer-open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobileCart() {
+    document.getElementById('order-panel')?.classList.remove('drawer-open');
+    document.getElementById('mobile-cart-backdrop')?.classList.remove('drawer-open');
+    document.body.style.overflow = '';
+}
+
 function checkout() {
     if (orderItems.length === 0) {
         document.getElementById('noitems-overlay').classList.add('open');
         return;
     }
+    closeMobileCart();
 
     const gross    = orderItems.reduce((s, o) => s + o.price * o.qty, 0);
     const { subtotal, vat, total } = calcVAT(gross);
@@ -1017,10 +1051,13 @@ document.addEventListener('keydown', e => {
         closeReceipt();
         closeConfirmOrder();
         closeNoItems();
+        closeMobileCart();
     }
 });
 
 // ── Window Exports ────────────────────────────
+window.openMobileCart             = openMobileCart;
+window.closeMobileCart            = closeMobileCart;
 window.closeConfirmOrder          = closeConfirmOrder;
 window.submitConfirmedOrder       = submitConfirmedOrder;
 window.closeNoItems               = closeNoItems;

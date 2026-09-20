@@ -375,15 +375,18 @@ $payments = $list_stmt->fetchAll();
         <a href="payments.php?status=completed" class="filter-pill <?= $filter==='completed'?'active':'' ?>">Completed</a>
         <a href="payments.php?status=failed" class="filter-pill <?= $filter==='failed'?'active':'' ?>">Failed</a>
       </div>
+      <div class="table-scroll-hint">
+        <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+      </div>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>Invoice</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
+          <thead><tr><th class="col-sticky">Invoice</th><th>Supplier</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($payments)): ?>
             <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No payments recorded yet.</td></tr>
           <?php else: foreach ($payments as $p): ?>
             <tr>
-              <td style="font-weight:700"><?= htmlspecialchars($p['invoice_number']) ?></td>
+              <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($p['invoice_number']) ?></td>
               <td><?= htmlspecialchars($p['supplier_name']) ?></td>
               <td style="font-weight:700"><?= php_currency($p['amount']) ?></td>
               <td><?= ucwords(str_replace('_',' ',$p['payment_method'])) ?></td>

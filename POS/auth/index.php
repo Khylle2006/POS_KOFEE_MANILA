@@ -53,6 +53,12 @@ if (in_array('admin', $roles, true)) {
     exit;
 }
 
+// All staff aside from admin and supplier MUST be clocked in before accessing the system.
+if (!in_array('admin', $roles, true) && !in_array('supplier', $roles, true) && !user_is_clocked_in()) {
+    header('Location: ../php/employee_dashboard.php?reason=clock_in_required');
+    exit;
+}
+
 // Union of permissions across every role held.
 $user_perms = [];
 foreach ($roles as $r) {

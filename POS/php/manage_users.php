@@ -319,29 +319,38 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
 
       <div class="table-card">
         <div class="table-toolbar">
-          <h2>All Staff</h2>
-          <form method="GET" style="display:contents">
+          <div class="table-toolbar-head">
+            <h2>All Staff</h2>
+            <span class="staff-count-pill"><?= count($filtered) ?> staff</span>
+          </div>
+          <form method="GET" class="toolbar-form">
             <div class="search-wrap">
               <span class="s-icon"><?= icon('search', 14) ?></span>
               <input type="text" name="search" placeholder="Name, username, code, position…" value="<?= htmlspecialchars($search) ?>"/>
             </div>
-            <select class="filter-select" name="filter" onchange="this.form.submit()">
-              <option value="all"        <?= $filter==='all'?'selected':'' ?>>All</option>
-              <?php foreach ($roles as $val=>$label): ?>
-                <option value="<?= $val ?>" <?= $filter===$val?'selected':'' ?>><?= $label ?></option>
-              <?php endforeach; ?>
-              <option value="no_account"  <?= $filter==='no_account'?'selected':'' ?>>No Login Account</option>
-              <option value="no_profile"  <?= $filter==='no_profile'?'selected':'' ?>>No Employee Profile</option>
-            </select>
-            <button type="submit" class="act-btn act-activate">Search</button>
+            <div class="toolbar-filters">
+              <select class="filter-select" name="filter" onchange="this.form.submit()">
+                <option value="all"        <?= $filter==='all'?'selected':'' ?>>All</option>
+                <?php foreach ($roles as $val=>$label): ?>
+                  <option value="<?= $val ?>" <?= $filter===$val?'selected':'' ?>><?= $label ?></option>
+                <?php endforeach; ?>
+                <option value="no_account"  <?= $filter==='no_account'?'selected':'' ?>>No Login Account</option>
+                <option value="no_profile"  <?= $filter==='no_profile'?'selected':'' ?>>No Employee Profile</option>
+              </select>
+              <button type="submit" class="act-btn act-activate"><?= icon('search', 13) ?> <span>Search</span></button>
+            </div>
           </form>
         </div>
 
+        <div class="table-scroll-hint">
+          <span><?= icon('chevron-right', 12) ?> Swipe to view all 8 columns</span>
+        </div>
+
         <div class="table-scroll-wrapper">
-          <table>
+          <table class="staff-table">
             <thead>
               <tr>
-                <th>Person</th>
+                <th class="col-sticky">Person</th>
                 <th>Login</th>
                 <th>Code</th>
                 <th>Position</th>
@@ -368,10 +377,10 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
                 $is_self  = ((int)$r['user_id'] === (int)$_SESSION['user_id']) && $r['user_id'];
             ?>
               <tr>
-                <td>
+                <td class="col-sticky">
                   <div class="user-cell">
                     <div class="avatar" style="background:<?= $color ?>"><?= $initials ?></div>
-                    <div>
+                    <div class="user-cell-info">
                       <div class="user-name"><?= $full_esc ?><?= $is_self ? ' <span class="user-you">(you)</span>' : '' ?></div>
                       <div class="user-meta"><?= htmlspecialchars($r['display_email'] ?: '—') ?></div>
                     </div>

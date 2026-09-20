@@ -13,9 +13,9 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/auth.php';
 
-// Roles that are never gated (they manage the system, not a till).
+// Roles that are never gated (admin and external supplier).
 if (!defined('SHIFT_EXEMPT_ROLES')) {
-    define('SHIFT_EXEMPT_ROLES', ['admin', 'manager', 'hr', 'supplier']);
+    define('SHIFT_EXEMPT_ROLES', ['admin', 'supplier']);
 }
 
 /**
@@ -37,11 +37,8 @@ function shift_state(): array {
     try {
         $pdo = get_db();
 
-        $emp = $pdo->prepare(
-            "SELECT id FROM employees WHERE user_id = :u AND status = 'active' LIMIT 1"
-        );
-        $emp->execute([':u' => (int)$_SESSION['user_id']]);
-        $employee_id = $emp->fetchColumn();
+        $emp = get_or_create_user_employee($pdo, (int)$_SESSION['user_id']);
+        $employee_id = (int)($emp['id'] ?? 0);
 
         if (!$employee_id) {
             // No employee profile = cannot clock in. Don't lock them out
@@ -53,10 +50,14 @@ function shift_state(): array {
         $att = $pdo->prepare(
             "SELECT time_in FROM attendance
               WHERE employee_id = :e
-                AND attendance_date = CURDATE()
+                AND (
+                    attendance_date = CURDATE()
+                    OR (attendance_date >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND created_at >= NOW() - INTERVAL 18 HOUR)
+                )
                 AND time_in  IS NOT NULL
                 AND time_out IS NULL
                 AND status IN ('present','late','half_day')
+              ORDER BY id DESC
               LIMIT 1"
         );
         $att->execute([':e' => (int)$employee_id]);

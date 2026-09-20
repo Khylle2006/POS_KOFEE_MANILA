@@ -3,6 +3,7 @@ require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
 require_permission('orders.pending');
+require_clocked_in_for_pos();
 
 $user = current_user();
 ?>

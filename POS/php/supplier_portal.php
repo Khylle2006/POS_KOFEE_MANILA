@@ -412,19 +412,21 @@ if ($supplier) {
                 <input class="field-input" type="number" step="0.01" min="0" name="tax_amount" value="0"/>
               </div>
             </div>
-            <table style="width:100%;margin-bottom:10px">
-              <thead><tr><th style="text-align:left;font-size:11.5px">Item</th><th style="text-align:left;font-size:11.5px">Ordered</th><th style="text-align:left;font-size:11.5px">Qty Invoiced</th><th style="text-align:left;font-size:11.5px">Unit Price (₱)</th></tr></thead>
-              <tbody>
-                <?php foreach (($invoiceable_items[$p['id']] ?? []) as $ri): ?>
-                  <tr>
-                    <td style="font-size:12.5px;font-weight:600"><?= htmlspecialchars($ri['item_name']) ?></td>
-                    <td style="font-size:12.5px" class="muted-cell"><?= number_format((float)$ri['quantity'],2) ?> <?= htmlspecialchars($ri['unit']) ?></td>
-                    <td><input class="field-input" type="number" step="0.01" min="0" style="width:90px;padding:6px 8px" name="lines[<?= $ri['id'] ?>][qty]" value="<?= number_format((float)$ri['quantity'],2) ?>"/></td>
-                    <td><input class="field-input" type="number" step="0.01" min="0" style="width:100px;padding:6px 8px" name="lines[<?= $ri['id'] ?>][unit_price]" value="<?= number_format((float)$ri['est_unit_price'],2) ?>"/></td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
+            <div class="table-scroll-wrapper" style="margin-bottom:10px">
+              <table style="width:100%;min-width:480px">
+                <thead><tr><th style="text-align:left;font-size:11.5px">Item</th><th style="text-align:left;font-size:11.5px">Ordered</th><th style="text-align:left;font-size:11.5px">Qty Invoiced</th><th style="text-align:left;font-size:11.5px">Unit Price (₱)</th></tr></thead>
+                <tbody>
+                  <?php foreach (($invoiceable_items[$p['id']] ?? []) as $ri): ?>
+                    <tr>
+                      <td style="font-size:12.5px;font-weight:600"><?= htmlspecialchars($ri['item_name']) ?></td>
+                      <td style="font-size:12.5px" class="muted-cell"><?= number_format((float)$ri['quantity'],2) ?> <?= htmlspecialchars($ri['unit']) ?></td>
+                      <td><input class="field-input" type="number" step="0.01" min="0" style="width:90px;padding:6px 8px" name="lines[<?= $ri['id'] ?>][qty]" value="<?= number_format((float)$ri['quantity'],2) ?>"/></td>
+                      <td><input class="field-input" type="number" step="0.01" min="0" style="width:100px;padding:6px 8px" name="lines[<?= $ri['id'] ?>][unit_price]" value="<?= number_format((float)$ri['est_unit_price'],2) ?>"/></td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
             <div style="text-align:right"><button type="submit" class="btn-save"><?= icon('invoice', 14) ?> Submit Invoice</button></div>
           </form>
           <?php endif; ?>
@@ -433,15 +435,18 @@ if ($supplier) {
 
       <!-- ── My Bid History ── -->
       <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px"><?= icon('clipboard', 16, '', 'color:var(--caramel)') ?> My Bid History</h3>
+      <div class="table-scroll-hint">
+        <span><?= icon('chevron-right', 12) ?> Swipe to view all 5 columns</span>
+      </div>
       <div class="table-scroll-wrapper" style="margin-bottom:8px">
         <table>
-          <thead><tr><th>Requisition</th><th>Quoted</th><th>Lead Time</th><th>Status</th><th>Submitted</th></tr></thead>
+          <thead><tr><th class="col-sticky">Requisition</th><th>Quoted</th><th>Lead Time</th><th>Status</th><th>Submitted</th></tr></thead>
           <tbody>
           <?php if (empty($my_bids)): ?>
             <tr class="empty-row"><td colspan="5"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No quotes submitted yet.</td></tr>
           <?php else: foreach ($my_bids as $b): ?>
             <tr>
-              <td style="font-weight:700"><?= htmlspecialchars($b['req_title']) ?></td>
+              <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($b['req_title']) ?></td>
               <td><?= php_currency($b['quoted_total']) ?></td>
               <td><?= $b['lead_time_days'] ?> day(s)</td>
               <td><span class="status-badge status-<?= $b['status']==='selected'?'approved':($b['status']==='rejected'?'rejected':'pending') ?>"><?= status_badge($b['status']) ?></span></td>

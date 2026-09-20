@@ -4,6 +4,7 @@ require_once '../includes/permissions.php';
 require_once '../includes/icons.php';
 require_login();
 require_permission('orders.history');
+require_clocked_in_for_pos();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,11 +58,14 @@ require_permission('orders.history');
       <span id="record-count" style="font-size:12px;color:var(--text-muted);white-space:nowrap;margin-left:auto"></span>
     </div>
 
+    <div class="table-scroll-hint">
+      <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+    </div>
     <div class="table-scroll-wrapper">
     <table>
       <thead>
         <tr>
-          <th>Order #</th>
+          <th class="col-sticky">Order #</th>
           <th>Date</th>
           <th>Items</th>
           <th>Type</th>

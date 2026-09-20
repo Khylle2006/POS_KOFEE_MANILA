@@ -8,6 +8,9 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/payroll_helpers.php';
+if (file_exists(__DIR__ . '/../includes/procurement_helpers.php')) {
+    require_once __DIR__ . '/../includes/procurement_helpers.php';
+}
 require_login();
 
 $raw_input = file_get_contents('php://input');
@@ -280,13 +283,16 @@ try {
 
     // ── Loans ─────────────────────────────────
     if ($action === 'add_loan' || $action === 'issue_loan') {
-        require_permission_json('payroll.manage');
+        if (!has_permission('payroll.loans') && !has_permission('payroll.manage')) {
+            require_permission_json('payroll.loans');
+        }
 
         $employee_id = (int)($data['employee_id'] ?? 0);
         $principal   = round((float)($data['principal'] ?? 0), 2);
         $per_period  = round((float)($data['per_period_amount'] ?? 0), 2);
         $type        = trim((string)($data['loan_type'] ?? 'Cash Advance'));
         $start       = trim((string)($data['start_date'] ?? date('Y-m-d')));
+        $notes       = trim((string)($data['notes'] ?? ''));
 
         if ($employee_id <= 0 || $principal <= 0 || $per_period <= 0) {
             respond(['ok' => false, 'error' => 'Employee, principal and per-period amount are all required.'], 422);
@@ -297,36 +303,110 @@ try {
 
         $pdo->prepare(
             'INSERT INTO employee_loans
-                (employee_id, loan_type, principal, balance, per_period_amount, start_date, created_by)
-             VALUES (:e, :t, :p, :p2, :pp, :s, :u)'
+                (employee_id, loan_type, principal, balance, per_period_amount, start_date, status, notes, approved_by, approved_at, created_by)
+             VALUES (:e, :t, :p, :p2, :pp, :s, "active", :n, :u, NOW(), :u2)'
         )->execute([
             ':e' => $employee_id, ':t' => mb_substr($type, 0, 60), ':p' => $principal,
-            ':p2' => $principal, ':pp' => $per_period, ':s' => $start, ':u' => (int)$user['id'],
+            ':p2' => $principal, ':pp' => $per_period, ':s' => $start, ':n' => mb_substr($notes, 0, 300),
+            ':u' => (int)$user['id'], ':u2' => (int)$user['id'],
         ]);
+        $loan_id = (int)$pdo->lastInsertId();
 
         payroll_audit(null, null, 'loan_created',
             'Loan for employee #' . $employee_id . ': ' . number_format($principal, 2), (int)$user['id']);
 
-        respond(['ok' => true, 'message' => 'Loan recorded.']);
+        // Notify employee
+        try {
+            $emp_row = $pdo->query("SELECT user_id FROM employees WHERE id = " . (int)$employee_id)->fetch();
+            if ($emp_row && !empty($emp_row['user_id']) && function_exists('notify_user')) {
+                notify_user((int)$emp_row['user_id'], 'payroll_loan', 'Cash Advance Issued', 'A cash advance of ₱' . number_format($principal, 2) . ' has been recorded to your account.', 'my_payslips.php');
+            }
+        } catch (Throwable $e) {}
+
+        respond(['ok' => true, 'message' => 'Loan / advance recorded successfully.']);
     }
 
-    // ── Update Loan Status ────────────────────
+    // ── Staff Cash Advance Request ─────────────
+    if ($action === 'request_advance') {
+        if (!has_permission('payroll.advance.request') && !has_permission('payroll.own')) {
+            require_permission_json('payroll.advance.request');
+        }
+
+        $emp_stmt = $pdo->prepare('SELECT * FROM employees WHERE user_id = :u AND status = "active" LIMIT 1');
+        $emp_stmt->execute([':u' => (int)$user['id']]);
+        $emp = $emp_stmt->fetch();
+
+        if (!$emp) {
+            respond(['ok' => false, 'error' => 'No active employee profile linked to your user account. Please contact HR.'], 422);
+        }
+
+        $principal   = round((float)($data['principal'] ?? 0), 2);
+        $periods     = max(1, min(12, (int)($data['installments'] ?? 1)));
+        $notes       = trim((string)($data['notes'] ?? ''));
+        $loan_type   = trim((string)($data['loan_type'] ?? 'Cash Advance'));
+
+        if ($principal <= 0) {
+            respond(['ok' => false, 'error' => 'Please enter a valid cash advance amount.'], 422);
+        }
+
+        $per_period  = round($principal / $periods, 2);
+
+        $pdo->prepare(
+            'INSERT INTO employee_loans
+                (employee_id, loan_type, principal, balance, per_period_amount, start_date, status, notes, created_by)
+             VALUES (:e, :t, :p, :p2, :pp, CURDATE(), "pending_approval", :n, :u)'
+        )->execute([
+            ':e'  => (int)$emp['id'],
+            ':t'  => mb_substr($loan_type, 0, 60),
+            ':p'  => $principal,
+            ':p2' => $principal,
+            ':pp' => $per_period,
+            ':n'  => mb_substr($notes, 0, 300),
+            ':u'  => (int)$user['id'],
+        ]);
+        $loan_id = (int)$pdo->lastInsertId();
+
+        payroll_audit(null, null, 'advance_requested', 'Advance request #' . $loan_id . ' (₱' . number_format($principal, 2) . ') submitted by ' . $emp['firstname'] . ' ' . $emp['lastname'], (int)$user['id']);
+
+        if (function_exists('notify_role_by_permission')) {
+            notify_role_by_permission('payroll.loans', 'payroll_loan', 'New Cash Advance Request', $emp['firstname'] . ' ' . $emp['lastname'] . ' requested ₱' . number_format($principal, 2) . ' cash advance.', 'payroll_settings.php#loans', (int)$user['id']);
+        }
+
+        respond(['ok' => true, 'message' => 'Cash advance request submitted successfully for management review.']);
+    }
+
+    // ── Update Loan Status (Approve / Decline / Cancel) ──
     if ($action === 'update_loan_status') {
-        require_permission_json('payroll.manage');
+        if (!has_permission('payroll.loans') && !has_permission('payroll.manage')) {
+            require_permission_json('payroll.loans');
+        }
 
         $loan_id = (int)($data['loan_id'] ?? 0);
         $status  = trim((string)($data['status'] ?? ''));
 
-        if (!in_array($status, ['active', 'completed', 'cancelled'], true)) {
+        if (!in_array($status, ['active', 'declined', 'completed', 'cancelled'], true)) {
             respond(['ok' => false, 'error' => 'Invalid loan status.'], 422);
         }
 
-        $stmt = $pdo->prepare('UPDATE employee_loans SET status = :st WHERE id = :id');
-        $stmt->execute([':st' => $status, ':id' => $loan_id]);
+        $stmt = $pdo->prepare('UPDATE employee_loans SET status = :st, approved_by = :u, approved_at = NOW() WHERE id = :id');
+        $stmt->execute([':st' => $status, ':u' => (int)$user['id'], ':id' => $loan_id]);
 
         payroll_audit(null, null, 'loan_status_updated', 'Loan #' . $loan_id . ' status changed to ' . $status, (int)$user['id']);
 
-        respond(['ok' => true, 'message' => 'Loan status updated.']);
+        // Notify employee of approval/decline
+        try {
+            $loan_row = $pdo->query("SELECT l.*, e.user_id, e.firstname, e.lastname FROM employee_loans l JOIN employees e ON e.id = l.employee_id WHERE l.id = " . (int)$loan_id)->fetch();
+            if ($loan_row && !empty($loan_row['user_id']) && function_exists('notify_user')) {
+                if ($status === 'active') {
+                    notify_user((int)$loan_row['user_id'], 'payroll_loan', 'Cash Advance Approved', 'Your cash advance request of ₱' . number_format((float)$loan_row['principal'], 2) . ' has been approved by management.', 'my_payslips.php');
+                } elseif ($status === 'declined') {
+                    notify_user((int)$loan_row['user_id'], 'payroll_loan', 'Cash Advance Declined', 'Your cash advance request of ₱' . number_format((float)$loan_row['principal'], 2) . ' was declined.', 'my_payslips.php');
+                }
+            }
+        } catch (Throwable $e) {}
+
+        $verb = $status === 'active' ? 'approved' : ($status === 'declined' ? 'declined' : 'updated');
+        respond(['ok' => true, 'message' => 'Loan status ' . $verb . ' successfully.']);
     }
 
     // ── Update Settings ───────────────────────

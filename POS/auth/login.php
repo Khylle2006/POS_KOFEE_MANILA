@@ -15,11 +15,12 @@ if (!empty($_SESSION['login_error'])) {
 }
 
 $info = match($_GET['reason'] ?? '') {
-    'logout'          => 'You have been signed out.',
-    'unauthenticated' => 'Please sign in to continue.',
-    'terminated'      => 'This account is no longer active.',
-    'error'           => 'A session error occurred. Please sign in again.',
-    default           => '',
+    'logout'                 => 'You have been signed out.',
+    'unauthenticated'        => 'Please sign in to continue.',
+    'terminated'             => 'This account is no longer active.',
+    'error'                  => 'A session error occurred. Please sign in again.',
+    'password_reset_success' => 'Your password has been updated! Please sign in with your new password.',
+    default                  => '',
 };
 
 $saved_username = htmlspecialchars($_SESSION['login_username'] ?? ($_POST['username'] ?? ''));
@@ -177,7 +178,10 @@ unset($_SESSION['login_username']);
         </div>
 
         <div class="field">
-          <label class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Password</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-semibold uppercase tracking-wide" style="color:var(--espresso)">Password</label>
+            <a href="forgot_password.php" class="text-[11px] font-semibold hover:underline" style="color:var(--caramel)">Forgot?</a>
+          </div>
           <input type="password" name="password" placeholder="••••••••" required
             class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
             style="color:var(--espresso)">
@@ -189,7 +193,7 @@ unset($_SESSION['login_username']);
         </button>
 
         <p class="text-center text-[11px] text-stone-500 pt-1">
-          Trouble signing in? <a href="#" class="font-semibold hover:underline" style="color:var(--caramel)">Contact your manager</a>
+          Trouble signing in? <a href="forgot_password.php" class="font-semibold hover:underline" style="color:var(--caramel)">Reset password</a>
         </p>
       </form>
     </div>

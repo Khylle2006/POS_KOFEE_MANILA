@@ -24,6 +24,7 @@ $ytd_gross = 0.0;
 $ytd_deductions = 0.0;
 $ytd_net = 0.0;
 $active_loans = [];
+$all_loans = [];
 $loan_balance = 0.0;
 
 if ($employee) {
@@ -48,16 +49,22 @@ if ($employee) {
         }
     }
 
-    // Active loans / advances
-    $loan_stmt = $pdo->prepare(
-        "SELECT * FROM employee_loans
-          WHERE employee_id = :e AND status = 'active'
-          ORDER BY created_at DESC"
+    // All loans / advances for this staff member (active, pending, completed, declined)
+    $all_loans_stmt = $pdo->prepare(
+        "SELECT l.*,
+                (SELECT COALESCE(SUM(amount), 0) FROM loan_repayments WHERE loan_id = l.id) AS total_repaid
+           FROM employee_loans l
+          WHERE l.employee_id = :e
+          ORDER BY (l.status = 'pending_approval') DESC, (l.status = 'active') DESC, l.created_at DESC"
     );
-    $loan_stmt->execute([':e' => (int)$employee['id']]);
-    $active_loans = $loan_stmt->fetchAll();
-    foreach ($active_loans as $al) {
-        $loan_balance += (float)$al['balance'];
+    $all_loans_stmt->execute([':e' => (int)$employee['id']]);
+    $all_loans = $all_loans_stmt->fetchAll();
+
+    foreach ($all_loans as $al) {
+        if ($al['status'] === 'active') {
+            $loan_balance += (float)$al['balance'];
+            $active_loans[] = $al;
+        }
     }
 }
 
@@ -71,10 +78,12 @@ $method_labels = [
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>My Payslips — Kofee POS</title>
+<meta name="csrf-token" content="<?= e(csrf_token()) ?>"/>
+<title>My Compensation &amp; Payslips — Kofee POS</title>
 <link rel="stylesheet" href="../css/style.css"/>
 <link rel="stylesheet" href="../css/sidebar.css"/>
 <link rel="stylesheet" href="../css/payroll.css"/>
+<script src="../assets/vendor/sweetalert2/sweetalert2.all.min.js"></script>
 </head>
 <body>
 
@@ -83,14 +92,19 @@ $method_labels = [
 <div id="page-my-payslips" class="page active">
   <div class="page-header">
     <div>
-      <h1>My Payslips</h1>
-      <p>Personal earnings summary, released payslips, and loan balances</p>
+      <h1>My Compensation &amp; Payslips</h1>
+      <p>Personal earnings summary, released payslips, and loan &amp; advance ledger</p>
     </div>
-    <?php if (has_permission('payroll.view')): ?>
     <div style="display:flex;gap:9px">
-      <a class="btn-ghost" href="payroll.php"><?= icon('coin', 15) ?> <span>All Payroll</span></a>
+      <?php if ($employee && (has_permission('payroll.advance.request') || has_permission('payroll.own'))): ?>
+      <button type="button" class="btn-add" onclick="openAdvanceModal()">
+        <?= icon('plus', 15) ?> <span>Request Cash Advance</span>
+      </button>
+      <?php endif; ?>
+      <?php if (has_permission('payroll.view')): ?>
+      <a class="btn-ghost" href="payroll.php"><?= icon('coin', 15) ?> <span>Payroll Management</span></a>
+      <?php endif; ?>
     </div>
-    <?php endif; ?>
   </div>
 
   <div class="page-body">
@@ -202,8 +216,93 @@ $method_labels = [
     </div>
     <?php endif; ?>
 
+    <!-- Personal Loans & Cash Advances Ledger Card -->
+    <div class="table-card" style="margin-top:20px">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div>
+          <h3 style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">
+            <?= icon('coin', 18) ?> <span>My Cash Advances &amp; Loans Ledger</span>
+          </h3>
+          <p style="font-size:12.5px;color:var(--text-muted);margin-top:2px">
+            Track your cash advance requests, repayment progress, and per-cutoff payroll amortizations
+          </p>
+        </div>
+        <?php if ($employee && (has_permission('payroll.advance.request') || has_permission('payroll.own'))): ?>
+        <button type="button" class="btn-ghost" style="padding:6px 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px" onclick="openAdvanceModal()">
+          <?= icon('plus', 14) ?> <span>Apply for Advance</span>
+        </button>
+        <?php endif; ?>
+      </div>
+
+      <div class="table-scroll-wrapper">
+        <table class="pr-table">
+          <thead>
+            <tr>
+              <th>Type &amp; Purpose</th>
+              <th class="pr-num">Original Amount</th>
+              <th class="pr-num">Repaid to Date</th>
+              <th class="pr-num">Remaining Balance</th>
+              <th class="pr-num">Cutoff Deduction</th>
+              <th>Date / Started</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php if (!$all_loans): ?>
+            <tr><td colspan="7">
+              <div class="pr-empty" style="padding:32px 16px">
+                <div class="pr-empty-icon"><?= icon('coin', 22) ?></div>
+                <h3 style="font-size:15px">No loans or cash advances on record</h3>
+                <p style="font-size:13px">You currently have no active advances or pending requests. If you need salary advances or emergency assistance, click "Apply for Advance".</p>
+              </div>
+            </td></tr>
+          <?php else: foreach ($all_loans as $al): ?>
+            <tr>
+              <td>
+                <strong style="color:var(--text-main)"><?= e($al['loan_type']) ?></strong>
+                <?php if (!empty($al['notes'])): ?>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:2px"><?= e($al['notes']) ?></div>
+                <?php endif; ?>
+              </td>
+              <td class="pr-num"><?= peso((float)$al['principal']) ?></td>
+              <td class="pr-num" style="color:var(--green);font-weight:600">
+                <?= peso((float)$al['total_repaid']) ?>
+              </td>
+              <td class="pr-num" style="font-weight:700;color:<?= (float)$al['balance'] > 0 ? 'var(--caramel)' : 'var(--text-muted)' ?>">
+                <?= peso((float)$al['balance']) ?>
+              </td>
+              <td class="pr-num">&minus;<?= peso((float)$al['per_period_amount']) ?></td>
+              <td><?= e(date('M j, Y', strtotime($al['start_date'] ?: $al['created_at']))) ?></td>
+              <td>
+                <?php if ($al['status'] === 'pending_approval'): ?>
+                  <span class="pr-badge pr-badge-amber"><?= icon('clock', 11) ?> <span>Pending Review</span></span>
+                <?php elseif ($al['status'] === 'active'): ?>
+                  <span class="pr-badge pr-badge-blue"><?= icon('check-circle', 11) ?> <span>Active</span></span>
+                <?php elseif ($al['status'] === 'completed'): ?>
+                  <span class="pr-badge pr-badge-green"><?= icon('check-circle', 11) ?> <span>Paid Off</span></span>
+                <?php elseif ($al['status'] === 'declined'): ?>
+                  <span class="pr-badge pr-badge-red"><?= icon('x-circle', 11) ?> <span>Declined</span></span>
+                <?php else: ?>
+                  <span class="pr-badge pr-badge-gray"><?= icon('x-circle', 11) ?> <span>Cancelled</span></span>
+                <?php endif; ?>
+              </td>
+            </tr>
+          <?php endforeach; endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Released Payslips Table -->
     <div class="table-card" style="margin-top:20px">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+        <h3 style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">
+          <?= icon('file-text', 18) ?> <span>Released Payslips History</span>
+        </h3>
+        <p style="font-size:12.5px;color:var(--text-muted);margin-top:2px">
+          View and download official itemized salary statements and statutory contribution breakdowns
+        </p>
+      </div>
       <div class="table-scroll-wrapper">
         <table class="pr-table">
           <thead>
@@ -262,6 +361,133 @@ $method_labels = [
 
   </div>
 </div>
+
+<!-- Request Cash Advance Modal -->
+<div class="modal-bg" id="advance-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h3><?= icon('coin', 18) ?> <span>Request Cash / Salary Advance</span></h3>
+      <button type="button" class="modal-close" onclick="closeAdvanceModal()" aria-label="Close"><?= icon('x', 16) ?></button>
+    </div>
+    <form id="advance-form" onsubmit="submitAdvanceRequest(event)">
+      <div class="modal-body">
+        <div class="pr-alert pr-alert-info" style="margin-bottom:16px">
+          <span class="pr-alert-icon"><?= icon('info', 16) ?></span>
+          <div style="font-size:12.5px;line-height:1.5">
+            Advance requests are reviewed and approved by management. Once approved, equal deductions will be automatically scheduled on your upcoming paychecks.
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="adv-type">Advance Type</label>
+          <select id="adv-type" name="loan_type">
+            <option value="Cash Advance">Cash Advance (Standard)</option>
+            <option value="Salary Advance">Salary Advance (Earned Wages)</option>
+            <option value="Emergency Assistance">Emergency Financial Assistance</option>
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="adv-amount">Requested Amount (&#8369;) <span class="req">*</span></label>
+            <input type="number" id="adv-amount" name="principal" step="50" min="100" max="50000" required placeholder="e.g. 3000" oninput="calculatePerCutoff()">
+          </div>
+          <div class="field">
+            <label for="adv-terms">Repayment Schedule <span class="req">*</span></label>
+            <select id="adv-terms" name="installments" onchange="calculatePerCutoff()">
+              <option value="1">1 Cutoff (Next Paycheck)</option>
+              <option value="2" selected>2 Cutoffs (1 Month)</option>
+              <option value="3">3 Cutoffs (1.5 Months)</option>
+              <option value="4">4 Cutoffs (2 Months)</option>
+              <option value="6">6 Cutoffs (3 Months)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" style="background:var(--cream, #fcfaf7);border:1px dashed var(--latte, #efe0cc);padding:10px 14px;border-radius:8px">
+          <div style="font-size:12px;color:var(--text-muted)">Estimated Deduction per Cutoff:</div>
+          <div id="adv-estimate" style="font-size:18px;font-weight:800;color:var(--caramel);margin-top:2px">&#8369;0.00 / cutoff</div>
+        </div>
+
+        <div class="field" style="margin-top:14px">
+          <label for="adv-notes">Purpose / Reason for Advance <span class="req">*</span></label>
+          <textarea id="adv-notes" name="notes" rows="3" required placeholder="Briefly describe the purpose of this advance request (e.g. medical emergency, tuition payment, family assistance)..." style="resize:vertical"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" onclick="closeAdvanceModal()"><?= icon('x', 14) ?> <span>Cancel</span></button>
+        <button type="submit" class="btn-add" id="btn-submit-advance">
+          <?= icon('send', 15) ?> <span>Submit Request</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+function openAdvanceModal() {
+  document.getElementById('advance-modal').classList.add('open');
+  calculatePerCutoff();
+}
+
+function closeAdvanceModal() {
+  document.getElementById('advance-modal').classList.remove('open');
+}
+
+document.getElementById('advance-modal')?.addEventListener('click', e => {
+  if (e.target.id === 'advance-modal') closeAdvanceModal();
+});
+
+function calculatePerCutoff() {
+  const amount = parseFloat(document.getElementById('adv-amount')?.value) || 0;
+  const terms = parseInt(document.getElementById('adv-terms')?.value) || 1;
+  const estimateEl = document.getElementById('adv-estimate');
+  if (estimateEl) {
+    if (amount > 0 && terms > 0) {
+      const perCutoff = (amount / terms).toFixed(2);
+      estimateEl.textContent = '₱' + Number(perCutoff).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' / cutoff (' + terms + ' installments)';
+    } else {
+      estimateEl.textContent = '₱0.00 / cutoff';
+    }
+  }
+}
+
+async function submitAdvanceRequest(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit-advance');
+  btn.disabled = true;
+
+  const form = document.getElementById('advance-form');
+  const formData = new FormData(form);
+  const payload = { action: 'request_advance' };
+  formData.forEach((val, key) => payload[key] = val);
+
+  try {
+    const res = await fetch('../api/payroll.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to submit advance request.');
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Request Submitted',
+      text: 'Your cash advance request has been forwarded to management for review.',
+      timer: 2000,
+      showConfirmButton: false
+    }).then(() => location.reload());
+  } catch (err) {
+    Swal.fire({ icon: 'error', title: 'Submission Failed', text: err.message });
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
 
 </body>
 </html>

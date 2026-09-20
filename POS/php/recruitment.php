@@ -544,11 +544,14 @@ $jobs_list = $pdo->query("SELECT id, title, location FROM job_postings ORDER BY 
           </button>
         </div>
 
+        <div class="table-scroll-hint">
+          <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+        </div>
         <div class="table-scroll-wrapper" style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
+          <table style="min-width:760px; width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
             <thead>
               <tr style="background:#FAF7F2; border-bottom:1px solid #E8DFD5; color:#786A77; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em;">
-                <th style="padding:14px 16px;">Position</th>
+                <th class="col-sticky" style="padding:14px 16px;">Position</th>
                 <th style="padding:14px 16px;">Department</th>
                 <th style="padding:14px 16px;">Location</th>
                 <th style="padding:14px 16px;">Type</th>
@@ -567,7 +570,7 @@ $jobs_list = $pdo->query("SELECT id, title, location FROM job_postings ORDER BY 
               <?php else: ?>
                 <?php foreach ($all_vacancies as $vac): ?>
                   <tr style="border-bottom:1px solid #F0EAE2; background: <?= $vac['is_active'] ? '#FFF' : '#FCFBF9' ?>;">
-                    <td style="padding:14px 16px;">
+                    <td class="col-sticky" style="padding:14px 16px;">
                       <strong style="font-size:14px; color:#201426;"><?= htmlspecialchars($vac['title']) ?></strong>
                       <div style="font-size:11.5px; color:#8B7C88;">
                         Slug: <code style="background:#F0EAE1; padding:1px 5px; border-radius:4px;"><?= htmlspecialchars($vac['slug']) ?></code>
@@ -737,11 +740,14 @@ $jobs_list = $pdo->query("SELECT id, title, location FROM job_postings ORDER BY 
 
       <!-- Applications Table -->
       <div class="table-card" style="background:#FFF; border-radius:12px; border:1px solid #E8DFD5; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+        <div class="table-scroll-hint">
+          <span><?= icon('chevron-right', 12) ?> Swipe to view all 8 columns</span>
+        </div>
         <div class="table-scroll-wrapper" style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
+          <table style="min-width:850px; width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
             <thead>
               <tr style="background:#FAF7F2; border-bottom:1px solid #E8DFD5; color:#786A77; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em;">
-                <th style="padding:14px 16px;">Tracking Code</th>
+                <th class="col-sticky" style="padding:14px 16px;">Tracking Code</th>
                 <th style="padding:14px 16px;">Candidate</th>
                 <th style="padding:14px 16px;">Position</th>
                 <th style="padding:14px 16px;">Location</th>
@@ -761,7 +767,7 @@ $jobs_list = $pdo->query("SELECT id, title, location FROM job_postings ORDER BY 
               <?php else: ?>
                 <?php foreach ($applications as $app): ?>
                   <tr style="border-bottom:1px solid #F0EAE2;">
-                    <td style="padding:14px 16px; font-family:monospace; font-weight:700; color:#201426;">
+                    <td class="col-sticky" style="padding:14px 16px; font-family:monospace; font-weight:700; color:#201426;">
                       <?= htmlspecialchars($app['application_code']) ?>
                       <div style="font-size:11px; font-family:sans-serif; color:#9E909D; font-weight:normal;">
                         <?= date('M d, Y', strtotime($app['created_at'])) ?>

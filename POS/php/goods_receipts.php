@@ -439,11 +439,11 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
       <h3 style="font-size:13.5px;margin-bottom:8px"><?= icon('alert-triangle', 16) ?> Open Discrepancies</h3>
       <div class="table-scroll-wrapper" style="margin-bottom:22px">
         <table>
-          <thead><tr><th>PO #</th><th>Supplier</th><th>Flagged</th><th style="text-align:center;width:95px">Action</th></tr></thead>
+          <thead><tr><th class="col-sticky">PO #</th><th>Supplier</th><th>Flagged</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php foreach ($open_discrepancies as $d): ?>
             <tr>
-              <td style="font-weight:700">#<?= str_pad($d['po_id'],5,'0',STR_PAD_LEFT) ?></td>
+              <td class="col-sticky" style="font-weight:700">#<?= str_pad($d['po_id'],5,'0',STR_PAD_LEFT) ?></td>
               <td><?= htmlspecialchars($d['supplier_name']) ?></td>
               <td class="muted-cell"><?= date('M d, Y', strtotime($d['received_at'])) ?></td>
               <td style="text-align:center"><button class="act-btn" onclick="window.location.href='goods_receipts.php?po_id=<?= $d['po_id'] ?>'"><?= icon('eye', 13) ?> Review</button></td>
@@ -455,15 +455,18 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
       <?php endif; ?>
 
       <h3 style="font-size:13.5px;margin-bottom:8px"><?= icon('package', 16) ?> Awaiting Delivery</h3>
+      <div class="table-scroll-hint">
+        <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+      </div>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>PO #</th><th>Requisition</th><th>Supplier</th><th>Total</th><th>Status</th><th>Expected</th><th style="text-align:center;width:95px">Action</th></tr></thead>
+          <thead><tr><th class="col-sticky">PO #</th><th>Requisition</th><th>Supplier</th><th>Total</th><th>Status</th><th>Expected</th><th style="text-align:center;width:95px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($ready_pos)): ?>
             <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No Purchase Orders currently awaiting delivery.</td></tr>
           <?php else: foreach ($ready_pos as $p): ?>
             <tr>
-              <td style="font-weight:700">#<?= str_pad($p['id'],5,'0',STR_PAD_LEFT) ?></td>
+              <td class="col-sticky" style="font-weight:700">#<?= str_pad($p['id'],5,'0',STR_PAD_LEFT) ?></td>
               <td><?= htmlspecialchars($p['req_title']) ?></td>
               <td><?= htmlspecialchars($p['supplier_name']) ?></td>
               <td style="font-weight:700">₱<?= number_format($p['total_amount'],2) ?></td>

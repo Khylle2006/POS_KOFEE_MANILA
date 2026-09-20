@@ -256,17 +256,21 @@ unset($r);
       <a href="requisitions.php?status=rejected" class="filter-pill <?= $filter==='rejected'?'active':'' ?>">Rejected</a>
     </div>
 
+    <div class="table-scroll-hint">
+      <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+    </div>
+
     <div class="table-scroll-wrapper">
       <table>
         <thead>
-          <tr><th>Title</th><th>Department</th><th>Requested By</th><th>Est. Total</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+          <tr><th class="col-sticky">Title</th><th>Department</th><th>Requested By</th><th>Est. Total</th><th>Status</th><th>Date</th><th>Actions</th></tr>
         </thead>
         <tbody>
         <?php if (empty($requisitions)): ?>
           <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No requisitions found.</td></tr>
         <?php else: foreach ($requisitions as $r): ?>
           <tr>
-            <td style="font-weight:700"><?= htmlspecialchars($r['title']) ?></td>
+            <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($r['title']) ?></td>
             <td><?= htmlspecialchars($departments[$r['department']] ?? $r['department']) ?></td>
             <td><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?></td>
             <td style="font-weight:700">₱<?= number_format($r['estimated_total'],2) ?></td>

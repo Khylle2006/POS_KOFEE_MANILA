@@ -17,6 +17,9 @@ $leave_types = ['Vacation','Sick','Emergency','Unpaid','Other'];
 $stmt = $pdo->prepare('SELECT * FROM employees WHERE user_id = :uid LIMIT 1');
 $stmt->execute([':uid' => $user['id']]);
 $my_employee = $stmt->fetch() ?: null;
+if (!$my_employee) {
+    $my_employee = get_or_create_user_employee($pdo, (int)$user['id']);
+}
 
 // ── Today's attendance row ─────────────────────
 $today_att = null;
@@ -315,6 +318,7 @@ $initials = strtoupper(substr($fname, 0, 1));
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-mcancel" onclick="closeCamera()">Cancel</button>
+      <button type="button" class="btn-mcancel" id="camera-fallback-btn" style="display:none;margin-right:auto;background:var(--accent-lt);color:var(--caramel);border-color:var(--caramel)" onclick="quickClockWithoutPhoto()">Clock In Without Photo</button>
       <button type="button" class="btn-msave" id="camera-capture-btn" onclick="capturePhoto()"><?= icon('camera', 14) ?> Capture</button>
       <button type="button" class="btn-msave" id="camera-confirm-btn" style="display:none;background:var(--green)" onclick="confirmCapture()"><?= icon('check', 14) ?> Confirm &amp; Submit</button>
       <button type="button" class="btn-mcancel" id="camera-retake-btn" style="display:none" onclick="retakePhoto()"><?= icon('refresh', 14) ?> Retake</button>

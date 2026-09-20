@@ -125,24 +125,28 @@ $eligible_logins = $login_stmt->fetchAll();
     </div>
 
     <div class="filter-bar" style="padding:0">
-      <form method="GET" style="display:contents">
+      <form method="GET" style="display:flex;gap:8px;width:100%;flex-wrap:wrap">
         <input class="filter-input" type="text" name="search" placeholder="Search name, contact, or email…"
-               value="<?= htmlspecialchars($search) ?>" style="flex:1;min-width:220px"/>
-        <button type="submit" class="act-btn act-activate">Search</button>
+               value="<?= htmlspecialchars($search) ?>" style="flex:1;min-width:200px"/>
+        <button type="submit" class="act-btn act-activate"><?= icon('search', 13) ?> Search</button>
       </form>
+    </div>
+
+    <div class="table-scroll-hint">
+      <span><?= icon('chevron-right', 12) ?> Swipe to view all 8 columns</span>
     </div>
 
     <div class="table-scroll-wrapper">
       <table>
         <thead>
-          <tr><th>Supplier</th><th>Contact</th><th>Email</th><th>Phone</th><th>Login</th><th>Rating</th><th>Status</th><th>Actions</th></tr>
+          <tr><th class="col-sticky">Supplier</th><th>Contact</th><th>Email</th><th>Phone</th><th>Login</th><th>Rating</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
         <?php if (empty($suppliers)): ?>
           <tr class="empty-row"><td colspan="8"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No suppliers yet — add your first one.</td></tr>
         <?php else: foreach ($suppliers as $s): ?>
           <tr>
-            <td style="font-weight:700"><?= htmlspecialchars($s['name']) ?></td>
+            <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($s['name']) ?></td>
             <td><?= htmlspecialchars($s['contact_person'] ?: '—') ?></td>
             <td class="muted-cell"><?= htmlspecialchars($s['email'] ?: '—') ?></td>
             <td class="muted-cell"><?= htmlspecialchars($s['phone'] ?: '—') ?></td>

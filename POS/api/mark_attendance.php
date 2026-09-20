@@ -12,6 +12,10 @@ $stmt->execute([':uid' => $user['id']]);
 $employee = $stmt->fetch();
 
 if (!$employee) {
+    $employee = get_or_create_user_employee($pdo, (int)$user['id']);
+}
+
+if (!$employee) {
     http_response_code(422);
     echo json_encode(['ok'=>false, 'error'=>"Your account isn't linked to an employee profile."]);
     exit;

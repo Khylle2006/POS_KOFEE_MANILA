@@ -67,7 +67,7 @@ $access = [
     'hr_attendance'      => has_permission('attendance.view'),
     'hr_leave'           => has_permission('leave.view'),
         'payroll'            => has_permission('payroll.view'),
-    'payroll_own'        => has_permission('payroll.own') && !has_permission('payroll.view'),
+    'payroll_own'        => has_permission('payroll.own') || !empty($_SESSION['user_id']),
     'hr_requests'        => has_permission('leave.view') || in_array('admin', $roles, true),
     'manage_permissions' => has_permission('permissions.manage'),
 
@@ -99,6 +99,10 @@ try {
         try { $c += (int)$pdo->query("SELECT COUNT(*) FROM hr_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
         try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
         $requests_count = $c;
+    }
+    $pending_loans_count = 0;
+    if ($access['payroll']) {
+        try { $pending_loans_count = (int)$pdo->query("SELECT COUNT(*) FROM employee_loans WHERE status = 'pending_approval'")->fetchColumn(); } catch (Throwable $e) {}
     }
 } catch (Throwable $e) {
     // DB not reachable — sidebar still renders, just without counts.
@@ -534,17 +538,18 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         'finance' => [
             'title' => 'Finance',
             'icon'  => 'coin',
-            'badge' => 0,
+            'badge' => $pending_loans_count,
             'items' => [
                 [
-                    'label'  => 'Payroll',
+                    'label'  => 'Payroll Management',
                     'url'    => 'payroll.php',
                     'icon'   => 'coin',
+                    'badge'  => $pending_loans_count,
                     'access' => $access['payroll'],
                     'active' => in_array($current, ['payroll.php', 'payroll_run.php', 'payroll_reports.php', 'payroll_settings.php'], true) || ($current === 'payslip.php' && $access['payroll']),
                 ],
                 [
-                    'label'  => 'My Payslips',
+                    'label'  => 'My Compensation',
                     'url'    => 'my_payslips.php',
                     'icon'   => 'file-text',
                     'access' => $access['payroll_own'],

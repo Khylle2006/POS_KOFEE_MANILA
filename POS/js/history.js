@@ -39,7 +39,7 @@ function renderHistory(orders) {
 
     return `
     <tr>
-      <td class="strong-cell">#${String(o.id).padStart(4,'0')}</td>
+      <td class="strong-cell col-sticky">#${String(o.id).padStart(4,'0')}</td>
       <td>${o.created_at}</td>
       <td class="muted-cell history-items-cell">${o.items || '—'}</td>
       <td><span class="badge ${pmClass}">${pm}</span></td>

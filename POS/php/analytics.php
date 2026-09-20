@@ -4,6 +4,7 @@ require_once '../includes/permissions.php';
 require_once '../includes/icons.php';
 require_login();
 require_permission('analytics.view');
+require_clocked_in_for_pos();
 
 ?>
 <!DOCTYPE html>

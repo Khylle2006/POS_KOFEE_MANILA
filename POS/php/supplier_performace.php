@@ -245,15 +245,18 @@ $suppliers = $suppliers_stmt->fetchAll();
       <?php endif; ?>
 
       <h3 style="font-size:13.5px;margin:22px 0 10px;display:flex;align-items:center;gap:6px"><?= icon('bar-chart', 16, '', 'color:var(--caramel)') ?> Supplier Leaderboard</h3>
+      <div class="table-scroll-hint">
+        <span><?= icon('chevron-right', 12) ?> Swipe to view all 5 columns</span>
+      </div>
       <div class="table-scroll-wrapper">
         <table>
-          <thead><tr><th>Supplier</th><th>Overall</th><th>Ratings</th><th>Status</th><th style="text-align:center;width:115px">Action</th></tr></thead>
+          <thead><tr><th class="col-sticky">Supplier</th><th>Overall</th><th>Ratings</th><th>Status</th><th style="text-align:center;width:115px">Action</th></tr></thead>
           <tbody>
           <?php if (empty($suppliers)): ?>
             <tr class="empty-row"><td colspan="5"><?= icon('inbox', 18, '', 'vertical-align:middle;margin-right:6px') ?> No suppliers yet.</td></tr>
           <?php else: foreach ($suppliers as $s): ?>
             <tr>
-              <td style="font-weight:700"><?= htmlspecialchars($s['name']) ?></td>
+              <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($s['name']) ?></td>
               <td><?= $s['rating_avg'] ? number_format($s['rating_avg'],2) . '/5' : '—' ?></td>
               <td><?= $s['rating_count'] ?></td>
               <td><span class="status-badge status-<?= $s['status']==='active'?'approved':'rejected' ?>"><?= ucfirst($s['status']) ?></span></td>

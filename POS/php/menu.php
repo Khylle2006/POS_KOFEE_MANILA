@@ -24,28 +24,97 @@ require_permission('orders.new');
 
 <div id="page-menu" class="page active">
 
+    <!-- Mobile Drawer Backdrop for phone / tablet -->
+    <div class="mobile-cart-backdrop" id="mobile-cart-backdrop" onclick="closeMobileCart()"></div>
+
     <div class="menu-left">
-      <div class="menu-left-head">
-        <div>
-          <h1>New Order</h1>
-          <p>Tap a drink to add it to the cart</p>
+      <!-- Executive POS Header matching reference design -->
+      <div class="pos-page-head">
+        <div class="pos-head-title-wrap">
+          <h1 class="pos-title">Point of Sale</h1>
+          <div class="pos-breadcrumbs">
+            <span class="p-crumb active">Catalog</span>
+            <span class="p-sep">&rarr;</span>
+            <span class="p-crumb">Size &amp; Add-ons</span>
+            <span class="p-sep">&rarr;</span>
+            <span class="p-crumb">Order Ticket</span>
+            <span class="p-sep">&rarr;</span>
+            <span class="p-crumb">Checkout &amp; Receipt</span>
+          </div>
         </div>
-        <div class="menu-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-          <input type="search" id="menu-search" placeholder="Search drinks…" oninput="filterProducts(this.value)">
+
+        <div class="pos-head-actions">
+          <div class="menu-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="search" id="menu-search" placeholder="Search drinks…" oninput="filterProducts(this.value)">
+          </div>
+          <div class="pos-shift-badge">
+            <span class="pos-pulse-ring"></span>
+            <span class="pos-shift-text">Active POS Counter</span>
+          </div>
         </div>
       </div>
 
-      <div class="category-tabs">
-        <div class="cat-tab active" onclick="switchCat(this,'ice-coffee')">Ice Coffee</div>
-        <div class="cat-tab" onclick="switchCat(this,'hot-coffee')">Hot Coffee</div>
-        <div class="cat-tab" onclick="switchCat(this,'milk-tea')">Milk Tea</div>
-        <div class="cat-tab" onclick="switchCat(this,'fruit-tea')">Fruit Tea</div>
+      <!-- POS Process Workflow Card (Inspired by reference design) -->
+      <div class="pos-process-card">
+        <div class="ppc-left">
+          <div class="ppc-icon"><?= icon('coffee', 20) ?></div>
+          <div class="ppc-info">
+            <strong>Order Workflow</strong>
+            <p>Tap drinks to add to ticket, choose size, review, and complete payment</p>
+          </div>
+        </div>
+        <div class="ppc-steps">
+          <div class="ppc-step is-active">
+            <span class="ppc-step-icon"><?= icon('coffee', 13) ?></span>
+            <span>1. Drinks</span>
+            <span class="ppc-step-arrow">&rsaquo;</span>
+          </div>
+          <div class="ppc-step">
+            <span class="ppc-step-icon"><?= icon('cup-tea', 13) ?></span>
+            <span>2. Size</span>
+            <span class="ppc-step-arrow">&rsaquo;</span>
+          </div>
+          <div class="ppc-step">
+            <span class="ppc-step-icon"><?= icon('shopping-bag', 13) ?></span>
+            <span>3. Ticket</span>
+            <span class="ppc-step-arrow">&rsaquo;</span>
+          </div>
+          <div class="ppc-step">
+            <span class="ppc-step-icon"><?= icon('credit-card', 13) ?></span>
+            <span>4. Payment</span>
+          </div>
+        </div>
       </div>
 
-      <div class="size-bar">
-        <button class="size-btn active" onclick="switchSize(this,'small')">Regular</button>
-        <button class="size-btn" onclick="switchSize(this,'large')">Up Size</button>
+      <div class="catalog-controls-bar">
+        <div class="category-tabs">
+          <button type="button" class="cat-tab active" onclick="switchCat(this,'ice-coffee')">
+            <?= icon('ice-coffee', 14) ?>
+            <span>Ice Coffee</span>
+          </button>
+          <button type="button" class="cat-tab" onclick="switchCat(this,'hot-coffee')">
+            <?= icon('coffee', 14) ?>
+            <span>Hot Coffee</span>
+          </button>
+          <button type="button" class="cat-tab" onclick="switchCat(this,'milk-tea')">
+            <?= icon('cup-tea', 14) ?>
+            <span>Milk Tea</span>
+          </button>
+          <button type="button" class="cat-tab" onclick="switchCat(this,'fruit-tea')">
+            <?= icon('fruit', 14) ?>
+            <span>Fruit Tea</span>
+          </button>
+        </div>
+
+        <div class="size-bar">
+          <button type="button" class="size-btn active" onclick="switchSize(this,'small')">
+            <span>Regular</span> <small>(16oz)</small>
+          </button>
+          <button type="button" class="size-btn" onclick="switchSize(this,'large')">
+            <span>Up Size</span> <small>(22oz)</small>
+          </button>
+        </div>
       </div>
 
       <div class="menu-grid-wrap">
@@ -53,15 +122,30 @@ require_permission('orders.new');
       </div>
     </div>
 
-    <div class="order-panel">
+    <!-- Order Panel (Right side on Desktop, Bottom Sheet Drawer on Mobile) -->
+    <div class="order-panel" id="order-panel">
+      <!-- Mobile Drawer Handle & Header (Visible only on mobile/tablet) -->
+      <div class="order-panel-mobile-bar">
+        <div class="op-drag-handle"></div>
+        <div class="op-mobile-head">
+          <div class="op-mobile-title">
+            <strong>Order Ticket</strong>
+            <span class="op-mobile-count" id="mobile-ticket-count">0 items</span>
+          </div>
+          <button type="button" class="op-mobile-close-btn" onclick="closeMobileCart()">
+            <?= icon('x', 16) ?> <span>Close</span>
+          </button>
+        </div>
+      </div>
+
       <div class="order-type-bar">
         <button class="order-type-btn active" onclick="switchOrderType(this,'dine')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h18M3 6h18M21 12H3M3 16h10"/><circle cx="17" cy="18" r="3"/></svg>
-          Dine In
+          <?= icon('utensils', 15) ?>
+          <span>Dine In</span>
         </button>
         <button class="order-type-btn" onclick="switchOrderType(this,'take')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-          Take Out
+          <?= icon('shopping-bag', 15) ?>
+          <span>Take Out</span>
         </button>
       </div>
 
@@ -77,9 +161,27 @@ require_permission('orders.new');
         <div class="order-row"><span>Subtotal (VAT-ex)</span><span id="subtotal">₱0.00</span></div>
         <div class="order-row"><span>VAT (12%)</span><span id="tax">₱0.00</span></div>
         <div class="order-row total"><strong>Total</strong><strong id="total">₱0.00</strong></div>
-        <button class="checkout-btn" onclick="checkout()">Place Order</button>
+        <button class="checkout-btn" onclick="checkout()"><?= icon('credit-card', 16) ?> Place Order</button>
         <button class="clear-btn" onclick="clearOrder()"><?= icon('trash', 14) ?> Clear Order</button>
       </div>
+    </div>
+
+    <!-- Sticky Mobile Cart Bar for Phones & Tablets -->
+    <div class="mobile-cart-bar" id="mobile-cart-bar" onclick="openMobileCart()">
+      <div class="mcb-left">
+        <div class="mcb-icon-wrap">
+          <?= icon('cart', 20) ?>
+          <span class="mcb-badge" id="mcb-count">0</span>
+        </div>
+        <div class="mcb-text">
+          <span class="mcb-label">Order Total</span>
+          <strong class="mcb-total" id="mcb-total">₱0.00</strong>
+        </div>
+      </div>
+      <button type="button" class="mcb-btn">
+        <span>View Ticket &amp; Pay</span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
     </div>
 
   </div>

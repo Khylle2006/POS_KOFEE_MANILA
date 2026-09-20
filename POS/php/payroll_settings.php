@@ -3,7 +3,9 @@ require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/payroll_helpers.php';
 require_login();
-require_permission('payroll.settings');
+if (!has_permission('payroll.settings') && !has_permission('payroll.loans') && !has_permission('payroll.manage')) {
+    require_permission('payroll.settings');
+}
 
 send_security_headers();
 
@@ -37,11 +39,15 @@ $employees = $pdo->query(
 
 // Fetch all loans
 $loans = $pdo->query(
-    "SELECT l.*, e.firstname, e.lastname, e.employee_code, e.position
+    "SELECT l.*, e.firstname, e.lastname, e.employee_code, e.position,
+            u.firstname AS approved_by_fn, u.lastname AS approved_by_ln
        FROM employee_loans l
        JOIN employees e ON e.id = l.employee_id
-      ORDER BY l.status = 'active' DESC, l.created_at DESC"
+       LEFT JOIN users u ON u.id = l.approved_by
+      ORDER BY (l.status = 'pending_approval') DESC, (l.status = 'active') DESC, l.created_at DESC"
 )->fetchAll();
+
+$pending_loans = array_values(array_filter($loans, fn($l) => $l['status'] === 'pending_approval'));
 
 // Fetch recent audit events
 $audits = $pdo->query(
@@ -90,6 +96,9 @@ $audits = $pdo->query(
       </button>
       <button type="button" class="pr-tab-btn" onclick="switchTab('tab-loans', this)">
         <?= icon('coin', 16) ?> <span>Cash Advances &amp; Loans (<?= count($loans) ?>)</span>
+        <?php if (!empty($pending_loans)): ?>
+          <span class="pr-badge pr-badge-amber" style="margin-left:6px;font-size:10.5px;padding:2px 7px"><?= count($pending_loans) ?> Pending</span>
+        <?php endif; ?>
       </button>
       <button type="button" class="pr-tab-btn" onclick="switchTab('tab-statutory', this)">
         <?= icon('file-text', 16) ?> <span>Statutory Schedules (Reference)</span>
@@ -241,10 +250,68 @@ $audits = $pdo->query(
 
     <!-- TAB 2: Cash Advances & Loans -->
     <div id="tab-loans" class="pr-tab-pane">
+
+      <?php if (!empty($pending_loans)): ?>
+      <!-- Pending Staff Advance Requests Card -->
+      <div class="pr-card" style="margin-bottom:20px;border-left:4px solid var(--caramel);background:rgba(201,123,61,0.03)">
+        <div class="pr-card-header" style="padding-bottom:12px">
+          <div>
+            <div class="pr-card-title" style="display:flex;align-items:center;gap:8px;color:var(--espresso)">
+              <?= icon('alert-triangle', 18) ?>
+              <span>Pending Staff Cash Advance Requests (<?= count($pending_loans) ?>)</span>
+            </div>
+            <div class="pr-card-sub">Review salary advances and emergency requests submitted by staff members</div>
+          </div>
+        </div>
+        <div class="table-scroll-wrapper">
+          <table class="pr-table">
+            <thead>
+              <tr>
+                <th>Staff Member</th>
+                <th>Advance Type</th>
+                <th class="pr-num">Requested Principal</th>
+                <th class="pr-num">Deduction / Cutoff</th>
+                <th>Requested Date</th>
+                <th>Purpose / Reason</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($pending_loans as $pl): ?>
+              <tr>
+                <td>
+                  <div class="pr-emp-name"><?= e($pl['lastname'] . ', ' . $pl['firstname']) ?></div>
+                  <div class="pr-emp-meta"><?= e($pl['employee_code']) ?> &middot; <?= e($pl['position']) ?></div>
+                </td>
+                <td><strong><?= e($pl['loan_type']) ?></strong></td>
+                <td class="pr-num" style="font-weight:700;font-size:14px;color:var(--text-main)"><?= peso((float)$pl['principal']) ?></td>
+                <td class="pr-num">&minus;<?= peso((float)$pl['per_period_amount']) ?></td>
+                <td><?= e(date('M j, Y', strtotime($pl['created_at'] ?: $pl['start_date']))) ?></td>
+                <td style="max-width:240px;font-size:12.5px;color:var(--text-muted)">
+                  <?= e($pl['notes'] ?: 'None specified') ?>
+                </td>
+                <td style="text-align:right;white-space:nowrap">
+                  <button type="button" class="btn-ghost" style="padding:4px 10px;font-size:12px;color:var(--green);border-color:var(--green);display:inline-flex;align-items:center;gap:4px"
+                          onclick="updateLoanStatus(<?= (int)$pl['id'] ?>, 'active')">
+                    <?= icon('check', 12) ?> <span>Approve</span>
+                  </button>
+                  <button type="button" class="btn-ghost" style="padding:4px 10px;font-size:12px;color:var(--red);border-color:var(--red);display:inline-flex;align-items:center;gap:4px;margin-left:4px"
+                          onclick="updateLoanStatus(<?= (int)$pl['id'] ?>, 'declined')">
+                    <?= icon('x', 12) ?> <span>Decline</span>
+                  </button>
+                </td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <?php endif; ?>
+
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
         <div>
-          <h2 style="font-size:18px;font-weight:700">Employee Loans &amp; Cash Advances</h2>
-          <p style="font-size:13px;color:var(--text-muted)">Automated per-period deductions are applied on every payroll run.</p>
+          <h2 style="font-size:18px;font-weight:700">All Company Loans &amp; Advances</h2>
+          <p style="font-size:13px;color:var(--text-muted)">Automated per-period deductions are applied on every active payroll run.</p>
         </div>
         <button type="button" class="btn-add" onclick="openLoanModal()">
           <?= icon('plus', 16) ?> <span>Issue New Loan / Advance</span>
@@ -257,7 +324,7 @@ $audits = $pdo->query(
             <thead>
               <tr>
                 <th>Employee</th>
-                <th>Type</th>
+                <th>Type &amp; Purpose</th>
                 <th class="pr-num">Principal</th>
                 <th class="pr-num">Balance</th>
                 <th class="pr-num">Deduction / Period</th>
@@ -281,7 +348,12 @@ $audits = $pdo->query(
                   <div class="pr-emp-name"><?= e($l['lastname'] . ', ' . $l['firstname']) ?></div>
                   <div class="pr-emp-meta"><?= e($l['employee_code']) ?> &middot; <?= e($l['position']) ?></div>
                 </td>
-                <td><strong><?= e($l['loan_type']) ?></strong></td>
+                <td>
+                  <strong><?= e($l['loan_type']) ?></strong>
+                  <?php if (!empty($l['notes'])): ?>
+                    <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px"><?= e($l['notes']) ?></div>
+                  <?php endif; ?>
+                </td>
                 <td class="pr-num"><?= peso((float)$l['principal']) ?></td>
                 <td class="pr-num" style="color:<?= (float)$l['balance'] > 0 ? 'var(--caramel)' : 'var(--green)' ?>;font-weight:700">
                   <?= peso((float)$l['balance']) ?>
@@ -289,21 +361,34 @@ $audits = $pdo->query(
                 <td class="pr-num">&minus;<?= peso((float)$l['per_period_amount']) ?></td>
                 <td><?= e(date('M j, Y', strtotime($l['start_date']))) ?></td>
                 <td>
-                  <?php if ($l['status'] === 'active'): ?>
-                    <span class="pr-badge pr-badge-amber"><?= icon('clock', 11) ?> <span>Active</span></span>
+                  <?php if ($l['status'] === 'pending_approval'): ?>
+                    <span class="pr-badge pr-badge-amber"><?= icon('clock', 11) ?> <span>Pending Review</span></span>
+                  <?php elseif ($l['status'] === 'active'): ?>
+                    <span class="pr-badge pr-badge-blue"><?= icon('check-circle', 11) ?> <span>Active</span></span>
                   <?php elseif ($l['status'] === 'completed'): ?>
                     <span class="pr-badge pr-badge-green"><?= icon('check-circle', 11) ?> <span>Completed</span></span>
+                  <?php elseif ($l['status'] === 'declined'): ?>
+                    <span class="pr-badge pr-badge-red"><?= icon('x-circle', 11) ?> <span>Declined</span></span>
                   <?php else: ?>
                     <span class="pr-badge pr-badge-gray"><?= icon('x-circle', 11) ?> <span>Cancelled</span></span>
                   <?php endif; ?>
                 </td>
                 <td style="text-align:right;white-space:nowrap">
-                  <?php if ($l['status'] === 'active'): ?>
+                  <?php if ($l['status'] === 'pending_approval'): ?>
+                  <button type="button" class="btn-ghost" style="padding:4px 8px;font-size:12px;color:var(--green);display:inline-flex;align-items:center;gap:4px"
+                          onclick="updateLoanStatus(<?= (int)$l['id'] ?>, 'active')">
+                    <?= icon('check', 12) ?> <span>Approve</span>
+                  </button>
+                  <button type="button" class="btn-ghost" style="padding:4px 8px;font-size:12px;color:var(--red);display:inline-flex;align-items:center;gap:4px;margin-left:4px"
+                          onclick="updateLoanStatus(<?= (int)$l['id'] ?>, 'declined')">
+                    <?= icon('x', 12) ?> <span>Decline</span>
+                  </button>
+                  <?php elseif ($l['status'] === 'active'): ?>
                   <button type="button" class="btn-ghost" style="padding:4px 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px"
                           onclick="updateLoanStatus(<?= (int)$l['id'] ?>, 'completed')">
                     <?= icon('check', 12) ?> <span>Mark Done</span>
                   </button>
-                  <button type="button" class="btn-ghost" style="padding:4px 8px;font-size:12px;color:var(--red);display:inline-flex;align-items:center;gap:4px"
+                  <button type="button" class="btn-ghost" style="padding:4px 8px;font-size:12px;color:var(--red);display:inline-flex;align-items:center;gap:4px;margin-left:4px"
                           onclick="updateLoanStatus(<?= (int)$l['id'] ?>, 'cancelled')">
                     <?= icon('x', 12) ?> <span>Cancel</span>
                   </button>
@@ -475,6 +560,11 @@ $audits = $pdo->query(
           <label for="l-start">Start Date</label>
           <input type="date" id="l-start" name="start_date" required value="<?= date('Y-m-d') ?>">
         </div>
+
+        <div class="field">
+          <label for="l-notes">Notes / Purpose (Optional)</label>
+          <input type="text" id="l-notes" name="notes" placeholder="e.g. Emergency advance, equipment loan">
+        </div>
       </div>
 
       <div class="modal-actions">
@@ -494,6 +584,13 @@ function switchTab(paneId, btn) {
   document.getElementById(paneId).classList.add('is-active');
   btn.classList.add('is-active');
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (location.hash === '#loans' || location.hash === '#tab-loans') {
+    const loanBtn = document.querySelector('[onclick*="tab-loans"]');
+    if (loanBtn) switchTab('tab-loans', loanBtn);
+  }
+});
 
 function openLoanModal()  { document.getElementById('loan-modal').classList.add('open'); }
 function closeLoanModal() { document.getElementById('loan-modal').classList.remove('open'); }
@@ -564,15 +661,41 @@ async function saveLoan(e) {
 }
 
 async function updateLoanStatus(loanId, status) {
-  const actionText = status === 'completed' ? 'mark this loan as completed' : 'cancel this loan';
+  let title = 'Are you sure?';
+  let text = 'Update loan status?';
+  let confirmBtn = 'Yes, proceed';
+  let btnColor = 'var(--caramel, #c97b3d)';
+
+  if (status === 'active') {
+    title = 'Approve Cash Advance?';
+    text = 'This will approve the employee\'s request and activate automatic payroll deductions.';
+    confirmBtn = 'Approve Request';
+    btnColor = '#10b981';
+  } else if (status === 'declined') {
+    title = 'Decline Cash Advance?';
+    text = 'Are you sure you want to decline this advance request?';
+    confirmBtn = 'Decline Request';
+    btnColor = '#ef4444';
+  } else if (status === 'completed') {
+    title = 'Mark Loan as Done?';
+    text = 'Mark this loan as completed? Future payroll runs will no longer deduct for this loan.';
+    confirmBtn = 'Mark Completed';
+    btnColor = '#10b981';
+  } else if (status === 'cancelled') {
+    title = 'Cancel Loan?';
+    text = 'Cancel this loan? Future deductions will immediately cease.';
+    confirmBtn = 'Cancel Loan';
+    btnColor = '#ef4444';
+  }
+
   const result = await Swal.fire({
-    title: 'Are you sure?',
-    text: `Do you want to ${actionText}? Future payroll runs will no longer deduct for this loan.`,
-    icon: 'warning',
+    title: title,
+    text: text,
+    icon: (status === 'declined' || status === 'cancelled') ? 'warning' : 'question',
     showCancelButton: true,
-    confirmButtonColor: '#8B4513',
-    cancelButtonColor: '#52434F',
-    confirmButtonText: 'Yes, proceed'
+    confirmButtonColor: btnColor,
+    cancelButtonColor: '#6b7280',
+    confirmButtonText: confirmBtn
   });
 
   if (!result.isConfirmed) return;
@@ -589,7 +712,7 @@ async function updateLoanStatus(loanId, status) {
     Swal.fire({
       icon: 'success',
       title: 'Updated',
-      text: 'Loan status updated.',
+      text: data.message || 'Loan status updated.',
       timer: 1400,
       showConfirmButton: false
     }).then(() => location.reload());

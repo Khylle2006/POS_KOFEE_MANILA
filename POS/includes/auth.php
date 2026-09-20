@@ -67,31 +67,94 @@ function require_login(): void {
     }
 }
 
-/** Return whether a crew member has started today's shift. */
+/**
+ * Ensure an active employee profile is linked to the given user account.
+ * If missing, automatically provisions an active employee profile.
+ */
+function get_or_create_user_employee(PDO $pdo, int $userId): ?array {
+    if ($userId <= 0) return null;
+
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM employees WHERE user_id = :uid LIMIT 1');
+        $stmt->execute([':uid' => $userId]);
+        $emp = $stmt->fetch();
+        if ($emp) return $emp;
+
+        // Fetch user account info
+        $uStmt = $pdo->prepare('SELECT * FROM users WHERE id = :uid LIMIT 1');
+        $uStmt->execute([':uid' => $userId]);
+        $u = $uStmt->fetch();
+        if (!$u) return null;
+
+        $role = strtolower(trim($u['role'] ?? ''));
+        if ($role === 'supplier') return null;
+
+        // Generate a clean employee code like EMP-0016
+        $code = 'EMP-' . str_pad((string)$userId, 4, '0', STR_PAD_LEFT);
+        $chk = $pdo->prepare('SELECT id FROM employees WHERE employee_code = :c');
+        $chk->execute([':c' => $code]);
+        if ($chk->fetch()) {
+            $code .= '-' . time();
+        }
+
+        $fname = !empty($u['firstname']) ? $u['firstname'] : $u['username'];
+        $lname = !empty($u['lastname']) ? $u['lastname'] : 'Staff';
+        $pos = ucfirst($role ?: 'Staff');
+        $email = !empty($u['email']) ? $u['email'] : null;
+
+        $ins = $pdo->prepare("
+            INSERT INTO employees (user_id, employee_code, firstname, lastname, position, department, email, hire_date, employment_type, status)
+            VALUES (:uid, :code, :fn, :ln, :pos, 'Operations', :email, CURDATE(), 'Full-time', 'active')
+        ");
+        $ins->execute([
+            ':uid' => $userId,
+            ':code' => $code,
+            ':fn' => $fname,
+            ':ln' => $lname,
+            ':pos' => $pos,
+            ':email' => $email
+        ]);
+
+        $newId = (int)$pdo->lastInsertId();
+        $st = $pdo->prepare('SELECT * FROM employees WHERE id = :id');
+        $st->execute([':id' => $newId]);
+        return $st->fetch() ?: null;
+    } catch (Throwable $e) {
+        error_log('get_or_create_user_employee failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/** Return whether a staff member has started today's shift. Admin and supplier are exempt. */
 function user_is_clocked_in(): bool {
+    if (empty($_SESSION['user_id'])) return false;
+
     $role = strtolower(trim($_SESSION['role'] ?? ''));
     $roles = array_map('strtolower', $_SESSION['roles'] ?? []);
-    if ($role !== 'crew' && !in_array('crew', $roles, true)) {
+    if ($role === 'admin' || in_array('admin', $roles, true) || $role === 'supplier' || in_array('supplier', $roles, true)) {
         return true;
     }
 
     try {
         $pdo = get_db();
-        $employee = $pdo->prepare('SELECT id FROM employees WHERE user_id = :user_id AND status = "active" LIMIT 1');
-        $employee->execute([':user_id' => (int)$_SESSION['user_id']]);
-        $employeeId = $employee->fetchColumn();
+        $employee = get_or_create_user_employee($pdo, (int)$_SESSION['user_id']);
+        $employeeId = (int)($employee['id'] ?? 0);
         if (!$employeeId) return false;
 
         $attendance = $pdo->prepare(
             "SELECT 1 FROM attendance
              WHERE employee_id = :employee_id
-               AND attendance_date = CURDATE()
+               AND (
+                   attendance_date = CURDATE()
+                   OR (attendance_date >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND created_at >= NOW() - INTERVAL 18 HOUR)
+               )
                AND time_in IS NOT NULL
                AND time_out IS NULL
                AND status IN ('present', 'late', 'half_day')
+             ORDER BY id DESC
              LIMIT 1"
         );
-        $attendance->execute([':employee_id' => (int)$employeeId]);
+        $attendance->execute([':employee_id' => $employeeId]);
         return (bool)$attendance->fetchColumn();
     } catch (Throwable $e) {
         error_log('Clock-in check failed: ' . $e->getMessage());
