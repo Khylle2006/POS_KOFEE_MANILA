@@ -4,6 +4,21 @@
    flawlessly across all pages with or without external utilities.
    ============================================================ */
 
+/* ── Sidebar Width Tokens ─────────────────────────────────── */
+:root {
+  --sidebar-w: 256px;
+  --sidebar-w-min: 68px;
+}
+
+html.sidebar-minimized,
+body.sidebar-minimized {
+  --sidebar-w: 68px;
+}
+
+body {
+  overflow-x: hidden;
+}
+
 /* ── Top Bar ─────────────────────────────────────────────── */
 header.kfs-topbar,
 header#kofee-topbar {
@@ -16,10 +31,13 @@ header#kofee-topbar {
   display: flex !important;
   align-items: center !important;
   gap: 12px !important;
-  padding: 0 16px !important;
-  background: var(--espresso, #241A2E) !important;
+  padding: 0 20px !important;
+  background: rgba(36, 26, 46, 0.96) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid rgba(251, 243, 233, 0.08) !important;
   color: var(--cream, #FBF3E9) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14) !important;
   box-sizing: border-box !important;
   margin: 0 !important;
 }
@@ -37,19 +55,47 @@ header#kofee-topbar {
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
-  padding: 7px 12px !important;
-  border-radius: 8px !important;
-  font-size: 13px !important;
+  padding: 6px 14px !important;
+  border-radius: 999px !important;
+  font-size: 12.5px !important;
   font-weight: 600 !important;
   background: rgba(251, 243, 233, 0.08) !important;
+  border: 1px solid rgba(251, 243, 233, 0.14) !important;
   color: var(--cream, #FBF3E9) !important;
-  border: none !important;
   cursor: pointer !important;
-  transition: background 0.15s ease !important;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease !important;
   flex-shrink: 0 !important;
 }
 #sidebar-menu-btn:hover {
   background: rgba(251, 243, 233, 0.16) !important;
+  border-color: rgba(230, 162, 92, 0.4) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Inner Collapse Button (inside sidebar header) */
+.kfs-inner-collapse-btn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 5px 12px !important;
+  border-radius: 999px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  background: rgba(251, 243, 233, 0.08) !important;
+  border: 1px solid rgba(251, 243, 233, 0.16) !important;
+  color: var(--cream, #FBF3E9) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.kfs-inner-collapse-btn:hover {
+  background: rgba(251, 243, 233, 0.18) !important;
+  border-color: rgba(230, 162, 92, 0.45) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
 }
 
 /* ── Notifications Dropdown ───────────────────────────────── */
@@ -131,35 +177,419 @@ header#kofee-topbar {
   pointer-events: auto !important;
 }
 
-/* ── Slide-out Sidebar Drawer ─────────────────────────────── */
+/* ── Fixed Sidebar Core ───────────────────────────────────── */
 #main-sidebar {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
   bottom: 0 !important;
-  height: 100% !important;
   height: 100vh !important;
-  width: 256px !important;
-  max-width: 85vw !important;
   z-index: 230 !important;
   display: flex !important;
   flex-direction: column !important;
-  padding: 16px 14px !important;
-  overflow-y: auto !important;
   box-sizing: border-box !important;
   background: linear-gradient(165deg, var(--espresso, #241A2E) 0%, var(--espresso-deep, #181120) 115%) !important;
   color: var(--cream, #FBF3E9) !important;
-  box-shadow: 10px 0 35px rgba(0, 0, 0, 0.4) !important;
-  transform: translateX(-100%) !important;
-  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s ease !important;
 }
 
-#main-sidebar.translate-x-0,
-#main-sidebar.open {
-  transform: translateX(0) !important;
+#main-sidebar::-webkit-scrollbar {
+  width: 4px;
 }
-#main-sidebar.-translate-x-full {
-  transform: translateX(-100%) !important;
+#main-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(251, 243, 233, 0.18);
+  border-radius: 999px;
+}
+
+/* ── Desktop Layout (>= 1024px): Permanently Fixed & Docked ── */
+@media (min-width: 1024px) {
+  #main-sidebar,
+  #main-sidebar.-translate-x-full,
+  #main-sidebar.translate-x-0 {
+    width: var(--sidebar-w, 256px) !important;
+    max-width: none !important;
+    transform: none !important;
+    translate: 0 0 !important;
+    --tw-translate-x: 0px !important;
+    --tw-translate-y: 0px !important;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.16) !important;
+    padding: 16px 12px !important;
+  }
+
+  /* Desktop Topbar matches sidebar width */
+  header.kfs-topbar,
+  header#kofee-topbar {
+    left: var(--sidebar-w, 256px) !important;
+    width: calc(100% - var(--sidebar-w, 256px)) !important;
+    transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  /* When expanded on desktop, the Collapse button is inside the sidebar header,
+     so hide the topbar button */
+  #sidebar-menu-btn {
+    display: none !important;
+  }
+
+  /* When minimized on desktop, show the topbar button with 'Expand' */
+  html.sidebar-minimized #sidebar-menu-btn,
+  body.sidebar-minimized #sidebar-menu-btn {
+    display: flex !important;
+  }
+
+  /* All page containers offset beside the fixed sidebar */
+  .page, .pages,
+  body > main,
+  main.md\:ml-\[var\(--sidebar-w\,248px\)\] {
+    margin-left: var(--sidebar-w, 256px) !important;
+    width: calc(100% - var(--sidebar-w, 256px)) !important;
+    max-width: calc(100% - var(--sidebar-w, 256px)) !important;
+    transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-sizing: border-box !important;
+  }
+
+  /* No dark backdrop on desktop */
+  #sidebar-backdrop {
+    display: none !important;
+  }
+
+  /* ── Minimized State on Desktop (68px Icon Rail) ── */
+  html.sidebar-minimized #main-sidebar,
+  body.sidebar-minimized #main-sidebar,
+  html.sidebar-minimized #main-sidebar.-translate-x-full,
+  body.sidebar-minimized #main-sidebar.-translate-x-full {
+    width: 68px !important;
+    padding: 14px 10px !important;
+    transform: none !important;
+    translate: 0 0 !important;
+    --tw-translate-x: 0px !important;
+    --tw-translate-y: 0px !important;
+  }
+
+  html.sidebar-minimized .kfs-sidebar-header,
+  body.sidebar-minimized .kfs-sidebar-header {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding-bottom: 10px !important;
+  }
+
+  html.sidebar-minimized .kfs-brand-block,
+  body.sidebar-minimized .kfs-brand-block {
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  html.sidebar-minimized .kfs-brand-text,
+  body.sidebar-minimized .kfs-brand-text {
+    display: none !important;
+  }
+
+  /* Hide the inner collapse button completely when minimized/collapsed */
+  html.sidebar-minimized #sidebar-collapse-btn,
+  body.sidebar-minimized #sidebar-collapse-btn,
+  html.sidebar-minimized .kfs-inner-collapse-btn,
+  body.sidebar-minimized .kfs-inner-collapse-btn,
+  html.sidebar-minimized .kfs-collapse-btn,
+  body.sidebar-minimized .kfs-collapse-btn {
+    display: none !important;
+  }
+
+  /* Category headers in minimized mode */
+  html.sidebar-minimized .kfs-cat-header,
+  body.sidebar-minimized .kfs-cat-header {
+    padding: 8px 0 !important;
+    justify-content: center !important;
+    width: 44px !important;
+    height: 40px !important;
+    margin: 2px auto !important;
+    border-radius: 10px !important;
+    position: relative !important;
+  }
+
+  html.sidebar-minimized .kfs-cat-title,
+  body.sidebar-minimized .kfs-cat-title,
+  html.sidebar-minimized .kfs-cat-chevron,
+  body.sidebar-minimized .kfs-cat-chevron {
+    display: none !important;
+  }
+
+  html.sidebar-minimized .kfs-cat-badge,
+  body.sidebar-minimized .kfs-cat-badge {
+    position: absolute !important;
+    top: 2px !important;
+    right: 2px !important;
+    padding: 1px 4px !important;
+    font-size: 8.5px !important;
+  }
+
+  /* Category content list in minimized mode */
+  html.sidebar-minimized .kfs-cat-content,
+  body.sidebar-minimized .kfs-cat-content {
+    margin-left: 0 !important;
+    border-left: none !important;
+    padding: 2px 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  /* Category items in minimized mode */
+  html.sidebar-minimized .kfs-cat-item,
+  body.sidebar-minimized .kfs-cat-item {
+    width: 44px !important;
+    height: 38px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    margin: 2px auto !important;
+    border-radius: 9px !important;
+    position: relative !important;
+  }
+
+  html.sidebar-minimized .kfs-cat-item span.truncate,
+  body.sidebar-minimized .kfs-cat-item span.truncate {
+    display: none !important;
+  }
+
+  html.sidebar-minimized .kfs-cat-item .kfs-nav-badge,
+  body.sidebar-minimized .kfs-cat-item .kfs-nav-badge {
+    position: absolute !important;
+    top: 2px !important;
+    right: 2px !important;
+    padding: 1px 4px !important;
+    font-size: 8.5px !important;
+  }
+
+  /* User profile card in minimized mode */
+  html.sidebar-minimized .kfs-user-card,
+  body.sidebar-minimized .kfs-user-card {
+    padding: 6px 0 !important;
+    justify-content: center !important;
+    background: transparent !important;
+    margin-bottom: 6px !important;
+  }
+
+  html.sidebar-minimized .kfs-user-info,
+  body.sidebar-minimized .kfs-user-info {
+    display: none !important;
+  }
+
+  /* Logout button in minimized mode */
+  html.sidebar-minimized .kfs-logout-btn,
+  body.sidebar-minimized .kfs-logout-btn {
+    width: 44px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    margin: 0 auto !important;
+  }
+
+  html.sidebar-minimized .kfs-logout-btn span,
+  body.sidebar-minimized .kfs-logout-btn span {
+    display: none !important;
+  }
+}
+
+/* ── Mobile / Tablet (< 1024px): Slide-out Drawer ─────────── */
+@media (max-width: 1023px) {
+  #main-sidebar {
+    width: 256px !important;
+    max-width: 85vw !important;
+    padding: 16px 14px !important;
+    box-shadow: 10px 0 35px rgba(0, 0, 0, 0.4) !important;
+    transform: translateX(-100%) !important;
+    translate: -100% 0 !important;
+    --tw-translate-x: -100% !important;
+  }
+
+  #main-sidebar.translate-x-0,
+  #main-sidebar.open {
+    transform: translateX(0) !important;
+    translate: 0 0 !important;
+    --tw-translate-x: 0px !important;
+  }
+
+  #main-sidebar.-translate-x-full {
+    transform: translateX(-100%) !important;
+    translate: -100% 0 !important;
+    --tw-translate-x: -100% !important;
+  }
+
+  header.kfs-topbar,
+  header#kofee-topbar {
+    left: 0 !important;
+    width: 100% !important;
+  }
+
+  .page, .pages,
+  body > main,
+  main.md\:ml-\[var\(--sidebar-w\,248px\)\] {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ── Print Optimization ───────────────────────────────────── */
+@media print {
+  #main-sidebar,
+  header.kfs-topbar,
+  header#kofee-topbar,
+  .kfs-topbar-spacer,
+  .topbar-spacer,
+  #sidebar-backdrop {
+    display: none !important;
+  }
+
+  .page, .pages,
+  body > main,
+  main.md\:ml-\[var\(--sidebar-w\,248px\)\] {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ── Category Dropdown Accordion Architecture ─────────────── */
+.kfs-cat-group {
+  margin-bottom: 4px;
+}
+
+.kfs-cat-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  padding: 9px 12px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: rgba(251, 243, 233, 0.88) !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  text-align: left !important;
+  user-select: none !important;
+  box-sizing: border-box !important;
+}
+
+.kfs-cat-header:hover {
+  background: rgba(251, 243, 233, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.kfs-cat-group.has-active-child > .kfs-cat-header,
+.kfs-cat-header.is-active-cat {
+  color: var(--caramel-light, #E6A25C) !important;
+}
+
+.kfs-cat-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  flex-shrink: 0 !important;
+  opacity: 0.9 !important;
+}
+
+.kfs-cat-title {
+  flex: 1 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+}
+
+.kfs-cat-badge {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  padding: 1.5px 6.5px !important;
+  border-radius: 999px !important;
+  background: var(--caramel-light, #E6A25C) !important;
+  color: var(--espresso-deep, #181120) !important;
+  line-height: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.kfs-cat-chevron {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: rgba(251, 243, 233, 0.45) !important;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  flex-shrink: 0 !important;
+}
+
+.kfs-cat-group.is-open > .kfs-cat-header .kfs-cat-chevron {
+  transform: rotate(180deg) !important;
+  color: rgba(251, 243, 233, 0.9) !important;
+}
+
+/* Accordion transition via grid-template-rows (modern CSS standard) */
+.kfs-cat-body {
+  display: grid !important;
+  grid-template-rows: 0fr !important;
+  transition: grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  overflow: hidden !important;
+}
+
+.kfs-cat-group.is-open > .kfs-cat-body {
+  grid-template-rows: 1fr !important;
+}
+
+.kfs-cat-content {
+  min-height: 0 !important;
+  padding: 2px 0 4px 10px !important;
+  border-left: 1.5px solid rgba(251, 243, 233, 0.12) !important;
+  margin-left: 19px !important;
+  margin-top: 2px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.kfs-cat-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  text-align: left !important;
+  padding: 7px 10px !important;
+  border-radius: 8px !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  color: rgba(251, 243, 233, 0.78) !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  transition: all 0.12s ease !important;
+  box-sizing: border-box !important;
+}
+
+.kfs-cat-item svg {
+  opacity: 0.8 !important;
+  flex-shrink: 0 !important;
+}
+
+.kfs-cat-item:hover {
+  color: #ffffff !important;
+  background: rgba(251, 243, 233, 0.08) !important;
+  transform: translateX(2px) !important;
+}
+
+.kfs-cat-item.active {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  background: linear-gradient(135deg, var(--caramel, #C97B3D) 0%, var(--espresso-deep, #181120) 100%) !important;
+  box-shadow: 0 4px 12px -4px rgba(201, 123, 61, 0.6) !important;
+}
+
+.kfs-cat-item.active svg {
+  opacity: 1 !important;
 }
 
 /* Group Headers inside Sidebar */

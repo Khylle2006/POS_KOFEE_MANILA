@@ -1,16 +1,14 @@
 <?php
 // ============================================
-// FILE: includes/auth.php (COMPLETE VERSION)
-// Replace your entire auth.php with this
+// FILE: includes/auth.php
 // ============================================
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/permissions.php';
+require_once __DIR__ . '/security.php';
 
+secure_session_start();
+
+require_once __DIR__ . '/permissions.php';
 
 // ═══════════════════════════════════════════════
 //  LOGIN FUNCTION - THIS WAS MISSING!
@@ -22,57 +20,7 @@ require_once __DIR__ . '/permissions.php';
  * @param string $password
  * @return array{ok: bool, error?: string, user?: array}
  */
-function login_user(string $username, string $password): array {
-    try {
-        $pdo = get_db();
-        
-        // Get user with role
-        $stmt = $pdo->prepare("
-            SELECT u.*, r.role_key as role_name 
-            FROM users u
-            LEFT JOIN roles r ON u.role = r.role_key
-            WHERE u.username = :username AND u.status = 'active'
-        ");
-        $stmt->execute([':username' => $username]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$user) {
-            return ['ok' => false, 'error' => 'Invalid username or password'];
-        }
-        
-        // Verify password (adjust based on your password hashing)
-        if (!password_verify($password, $user['password'])) {
-            return ['ok' => false, 'error' => 'Invalid username or password'];
-        }
-        
-        // CRITICAL: Set session data
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username'];
-        $_SESSION['firstname'] = $user['firstname'] ?? '';
-        $_SESSION['lastname'] = $user['lastname'] ?? '';
-        $_SESSION['email'] = $user['email'] ?? '';
-        $_SESSION['role'] = $user['role'] ?? 'staff'; // ← THIS IS CRUCIAL!
-        $_SESSION['status'] = $user['status'] ?? 'active';
-        
-        // Debug: Log successful login
-        error_log("User logged in: {$user['username']} (Role: {$_SESSION['role']})");
-        
-        return [
-            'ok' => true,
-            'user' => [
-                'id' => $user['id'],
-                'username' => $user['username'],
-                'role' => $_SESSION['role'],
-                'firstname' => $_SESSION['firstname'],
-                'lastname' => $_SESSION['lastname'],
-            ]
-        ];
-        
-    } catch (Exception $e) {
-        error_log("Login error: " . $e->getMessage());
-        return ['ok' => false, 'error' => 'Login failed. Please try again.'];
-    }
-}
+
 
 /**
  * Logout user - clear session

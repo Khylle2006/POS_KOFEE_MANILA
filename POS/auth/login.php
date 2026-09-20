@@ -1,8 +1,10 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) session_start();
+require_once '../includes/security.php';
+secure_session_start();
+send_security_headers();
 
 if (!empty($_SESSION['user_id'])) {
-    header('Location: ' . ($_SESSION['role'] === 'admin' ? '../php/dashboard.php' : '../php/menu.php'));
+    header('Location: index.php');
     exit;
 }
 
@@ -15,10 +17,13 @@ if (!empty($_SESSION['login_error'])) {
 $info = match($_GET['reason'] ?? '') {
     'logout'          => 'You have been signed out.',
     'unauthenticated' => 'Please sign in to continue.',
+    'terminated'      => 'This account is no longer active.',
+    'error'           => 'A session error occurred. Please sign in again.',
     default           => '',
 };
 
-$saved_username = htmlspecialchars($_POST['username'] ?? '');
+$saved_username = htmlspecialchars($_SESSION['login_username'] ?? ($_POST['username'] ?? ''));
+unset($_SESSION['login_username']);
 ?>
 <!DOCTYPE html>
 <html lang="tl">
@@ -26,6 +31,7 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kofee Café — Sign In</title>
+<?= csrf_meta() ?>
 <link rel="stylesheet" href="../css/index.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -162,6 +168,7 @@ $saved_username = htmlspecialchars($_POST['username'] ?? '');
       <?php endif; ?>
 
       <form class="space-y-4" method="POST" action="login_process.php">
+        <?= csrf_field() ?>
         <div class="field">
           <label class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Username</label>
           <input type="text" name="username" placeholder="Username" value="<?= $saved_username ?>" required

@@ -262,7 +262,8 @@ function sync_user_session_permissions(): array {
 
     // Admin holds all permissions
     if (in_array('admin', $roles, true)) {
-        $_SESSION['permissions'] = ['*'];
+        $_SESSION['permissions']        = ['*'];
+        $_SESSION['permissions_loaded'] = time();
         return ['*'];
     }
 
@@ -279,7 +280,10 @@ function sync_user_session_permissions(): array {
         error_log("Error syncing permissions for roles: " . $e->getMessage());
     }
 
-    $_SESSION['permissions'] = $allPerms;
+    
+
+    $_SESSION['permissions']        = $allPerms;
+    $_SESSION['permissions_loaded'] = time();
     return $allPerms;
 }
 
@@ -302,8 +306,12 @@ function has_permission(string $perm_key): bool {
         return true;
     }
 
-    // 3. Ensure permissions are cached in $_SESSION
-    if (!isset($_SESSION['permissions']) || !is_array($_SESSION['permissions'])) {
+    // 3. Refresh the cache when it is missing or older than 60s.
+    //    An indefinite cache means revoking a permission has no
+    //    effect until the user logs out, which is a real security
+    //    gap when someone is removed mid-shift.
+    $age = time() - (int)($_SESSION['permissions_loaded'] ?? 0);
+    if (!isset($_SESSION['permissions']) || !is_array($_SESSION['permissions']) || $age > 60) {
         sync_user_session_permissions();
     }
 
@@ -326,16 +334,46 @@ function has_permission(string $perm_key): bool {
 
 /**
  * Redirect away if the current user lacks a permission.
+ *
+ * Sends the user to no_access.php, NOT dashboard.php. Redirecting
+ * to dashboard.php loops forever for anyone who also lacks
+ * dashboard.view, which is exactly the case this guard exists for.
  */
 function require_permission(string $perm_key): void {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    if (!isset($_SESSION['user_id'])) {
-        header('Location: ../auth/login.php');
+    if (session_status() === PHP_SESSION_NONE) {
+        require_once __DIR__ . '/security.php';
+        secure_session_start();
+    }
+
+    if (empty($_SESSION['user_id'])) {
+        header('Location: ../auth/login.php?reason=unauthenticated');
         exit;
     }
 
     if (!has_permission($perm_key)) {
-        header('Location: dashboard.php?error=unauthorized');
+        header('Location: no_access.php?perm=' . urlencode($perm_key));
+        exit;
+    }
+}
+
+/** JSON-endpoint equivalent. */
+function require_permission_json(string $perm_key): void {
+    if (session_status() === PHP_SESSION_NONE) {
+        require_once __DIR__ . '/security.php';
+        secure_session_start();
+    }
+
+    if (empty($_SESSION['user_id'])) {
+        http_response_code(401);
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => false, 'error' => 'Authentication required.']);
+        exit;
+    }
+
+    if (!has_permission($perm_key)) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => false, 'error' => 'You do not have permission to do that.']);
         exit;
     }
 }
@@ -409,11 +447,7 @@ function get_current_user_permissions(): array {
  * Clear the permission cache (useful after updating permissions)
  */
 function clear_permission_cache(): void {
-    // Clear static cache (can't clear static directly, will be rebuilt)
-    // Just unset session cache
-    if (isset($_SESSION['permissions'])) {
-        unset($_SESSION['permissions']);
-    }
+    unset($_SESSION['permissions'], $_SESSION['permissions_loaded']);
 }
 
 // ═══════════════════════════════════════════════

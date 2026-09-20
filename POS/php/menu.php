@@ -107,6 +107,11 @@ require_permission('orders.new');
         <div class="rt-row"><span>Subtotal (VAT-ex)</span><span id="r-subtotal">₱0.00</span></div>
         <div class="rt-row"><span>VAT (12%)</span><span id="r-tax">₱0.00</span></div>
         <div class="rt-row grand"><span>Total</span><span id="r-total">₱0.00</span></div>
+        <div class="rt-divider"></div>
+        <div class="rt-row" id="r-row-payment"><span>Payment Method</span><span id="r-payment-method">Cash</span></div>
+        <div class="rt-row" id="r-row-tendered"><span>Cash Tendered</span><span id="r-tendered">₱0.00</span></div>
+        <div class="rt-row" id="r-row-change"><span>Change</span><span id="r-change">₱0.00</span></div>
+        <div class="rt-row" id="r-row-ref" style="display:none;"><span>Reference / ID</span><span id="r-ref" class="r-ref-code">-</span></div>
       </div>
     </div>
 
@@ -118,33 +123,154 @@ require_permission('orders.new');
   </div>
 </div>
 
+<!-- Payment & Confirm Modal -->
 <div class="modal-overlay" id="confirm-overlay">
-  <div class="receipt-modal" style="max-width:360px">
-    <div class="receipt-head" style="padding:24px 24px 18px">
-      <div class="receipt-check" style="background:#8B5E3C"><?= icon('help', 24) ?></div>
-      <h2>Confirm Order?</h2>
+  <div class="receipt-modal payment-modal">
+    <div class="receipt-head payment-modal-head">
+      <div class="receipt-check" style="background:var(--caramel);"><?= icon('credit-card', 22) ?></div>
+      <h2>Payment & Confirmation</h2>
+      <p>Review items and select payment method</p>
     </div>
-    <div class="receipt-body" style="padding:18px 24px">
-      <div id="confirm-items-list" style="border-top:1px solid #ecddc8;border-bottom:1px solid #ecddc8;padding:8px 0;margin-bottom:12px;max-height:200px;overflow-y:auto"></div>
-      <div style="display:flex;justify-content:space-between;font-weight:800;font-size:16px;color:#2c1a0e">
-        <span>Total</span><span id="confirm-total" style="color:#c47d3e">₱0.00</span>
+
+    <div class="receipt-body payment-modal-body">
+      <div class="checkout-summary-card">
+        <div class="csc-left">
+          <span class="csc-type" id="confirm-type">Dine In</span>
+          <span class="csc-count" id="confirm-count">0 items</span>
+        </div>
+        <div class="csc-right">
+          <span class="csc-label">Total to Pay</span>
+          <span class="csc-total" id="confirm-total">₱0.00</span>
+        </div>
       </div>
-      <div style="font-size:12px;color:#9a7e65;margin-top:6px" id="confirm-type"></div>
-      <div style="margin-top:14px;text-align:left">
-        <div style="font-size:12px;font-weight:800;color:#2c1a0e;margin-bottom:7px">Payment Method</div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:7px;cursor:pointer">
-          <input type="radio" name="checkout-payment" value="cash" checked onchange="selectPaymentMethod(this.value)">
-          Cash
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="radio" name="checkout-payment" value="paymongo" onchange="selectPaymentMethod(this.value)">
-          PayMongo (GCash, Maya, Card)
-        </label>
+
+      <details class="checkout-items-toggle">
+        <summary><span><?= icon('menu-lines', 13) ?> View Order Items</span></summary>
+        <div id="confirm-items-list" class="checkout-items-dropdown"></div>
+      </details>
+
+      <div class="pm-section-title">Select Payment Method</div>
+      <div class="payment-methods-grid">
+        <button type="button" class="pay-method-card active" data-method="cash" onclick="selectPaymentMethod('cash')">
+          <span class="pmc-icon"><?= icon('coin', 18) ?></span>
+          <span class="pmc-name">Cash</span>
+          <span class="pmc-desc">Cash & Change</span>
+        </button>
+
+        <button type="button" class="pay-method-card" data-method="paymongo" onclick="selectPaymentMethod('paymongo')">
+          <span class="pmc-icon"><?= icon('qr', 18) ?></span>
+          <span class="pmc-name">PayMongo QR</span>
+          <span class="pmc-desc">GCash / Maya / Card</span>
+        </button>
+
+        <button type="button" class="pay-method-card" data-method="ewallet" onclick="selectPaymentMethod('ewallet')">
+          <span class="pmc-icon"><?= icon('smartphone', 18) ?></span>
+          <span class="pmc-name">Manual E-Wallet</span>
+          <span class="pmc-desc">OTC GCash / Maya</span>
+        </button>
+
+        <button type="button" class="pay-method-card" data-method="card" onclick="selectPaymentMethod('card')">
+          <span class="pmc-icon"><?= icon('card', 18) ?></span>
+          <span class="pmc-name">Card Terminal</span>
+          <span class="pmc-desc">POS Slip Approval</span>
+        </button>
       </div>
+
+      <!-- Detail Panels per Method -->
+      <!-- 1. CASH -->
+      <div id="pm-panel-cash" class="pm-panel active">
+        <label class="pm-label" for="cash-tendered">Cash Tendered (₱)</label>
+        <div class="tendered-input-wrap">
+          <span class="t-prefix">₱</span>
+          <input type="number" step="any" min="0" id="cash-tendered" placeholder="0.00" oninput="onTenderedInput(this.value)">
+          <button type="button" class="btn-clear-t" onclick="clearTendered()" title="Clear">✕</button>
+        </div>
+
+        <div class="quick-bills-bar">
+          <button type="button" class="quick-bill-pill exact" onclick="applyQuickBill('exact')">Exact</button>
+          <button type="button" class="quick-bill-pill" onclick="applyQuickBill(100)">₱100</button>
+          <button type="button" class="quick-bill-pill" onclick="applyQuickBill(200)">₱200</button>
+          <button type="button" class="quick-bill-pill" onclick="applyQuickBill(500)">₱500</button>
+          <button type="button" class="quick-bill-pill" onclick="applyQuickBill(1000)">₱1,000</button>
+        </div>
+
+        <div class="change-display-card" id="change-display-card">
+          <div class="cdc-header">
+            <span class="cdc-title">Change Due:</span>
+            <span class="cdc-amount" id="cash-change">₱0.00</span>
+          </div>
+          <div class="cdc-note" id="cash-change-msg">Enter amount received from customer</div>
+        </div>
+      </div>
+
+      <!-- 2. PAYMONGO -->
+      <div id="pm-panel-paymongo" class="pm-panel">
+        <div class="paymongo-box">
+          <div id="pm-init-box" class="pm-init-state">
+            <div class="pm-init-icon"><?= icon('qr', 36) ?></div>
+            <h4>Dynamic PayMongo QR</h4>
+            <p>Generate a secure PayMongo checkout session supporting GCash, Maya, and credit/debit cards.</p>
+            <button type="button" class="btn-pm-generate" onclick="startPayMongoSession()">
+              <?= icon('zap', 14) ?> Generate QR & Checkout
+            </button>
+          </div>
+
+          <div id="pm-live-box" class="pm-live-state" style="display:none;">
+            <div class="pm-qr-frame">
+              <img id="pm-qr-img" src="" alt="Scan QR Code" />
+              <div class="pm-qr-spinner-badge">
+                <span class="pm-pulse-dot"></span> Waiting for payment...
+              </div>
+            </div>
+            <div class="pm-live-details">
+              <div class="pm-status-line" id="pm-status-text">Awaiting customer payment confirmation...</div>
+              <div class="pm-actions-line">
+                <a href="#" target="_blank" id="pm-ext-link" class="pm-btn-secondary">
+                  <?= icon('external-link', 13) ?> Open Customer Checkout Screen
+                </a>
+                <button type="button" class="pm-btn-secondary" onclick="checkPayMongoStatusManual()">
+                  <?= icon('refresh', 13) ?> Check Now
+                </button>
+              </div>
+              <div id="pm-demo-actions" style="display:none; margin-top:8px;">
+                <button type="button" class="pm-btn-simulate" onclick="simulatePayMongoPayment()">
+                  <?= icon('shield-check', 13) ?> Simulate Customer Paid (Dev / Demo)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. DIRECT E-WALLET -->
+      <div id="pm-panel-ewallet" class="pm-panel">
+        <div class="provider-pill-selector">
+          <label class="provider-pill">
+            <input type="radio" name="ewallet_vendor" value="GCash" checked onchange="setWalletVendor('GCash')">
+            <span>GCash OTC</span>
+          </label>
+          <label class="provider-pill">
+            <input type="radio" name="ewallet_vendor" value="Maya" onchange="setWalletVendor('Maya')">
+            <span>Maya OTC</span>
+          </label>
+        </div>
+        <label class="pm-label" for="ewallet-ref">Transaction / Reference Number <span style="color:#d9534f">*</span></label>
+        <input type="text" id="ewallet-ref" class="pm-text-field" placeholder="Enter reference number (e.g. 1029384756)" maxlength="50">
+        <div class="pm-field-hint">Customer scans your store QR code or sends payment directly. Enter the reference number here.</div>
+      </div>
+
+      <!-- 4. CARD TERMINAL -->
+      <div id="pm-panel-card" class="pm-panel">
+        <label class="pm-label" for="card-approval">Terminal Approval / Trace Number <span style="color:#d9534f">*</span></label>
+        <input type="text" id="card-approval" class="pm-text-field" placeholder="Enter approval code (e.g. APP-9481)" maxlength="50">
+        <div class="pm-field-hint">Swipe / tap customer card on physical terminal and input the approval code from the terminal printout.</div>
+      </div>
+
     </div>
-    <div class="receipt-footer">
+
+    <div class="receipt-footer payment-modal-footer">
       <button class="btn-print" onclick="closeConfirmOrder()">Cancel</button>
-      <button class="btn-new-order" id="confirm-order-btn" onclick="submitConfirmedOrder()"><?= icon('check', 14) ?> Confirm & Place Order</button>
+      <button class="btn-new-order" id="confirm-order-btn" onclick="submitConfirmedOrder()"><?= icon('check', 14) ?> Confirm & Complete</button>
     </div>
   </div>
 </div>

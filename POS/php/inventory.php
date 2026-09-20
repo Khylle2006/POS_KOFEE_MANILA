@@ -392,7 +392,7 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
         <option value="">All categories</option>
         <?php foreach ($cats as $c): ?>
         <option value="<?= (int)$c['id'] ?>" <?= $filter_cat === (int)$c['id'] ? 'selected' : '' ?>>
-          <?= htmlspecialchars($c['icon'] . ' ' . $c['name']) ?>
+          <?= htmlspecialchars($c['name']) ?>
         </option>
         <?php endforeach; ?>
       </select>
@@ -471,7 +471,10 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
             </td>
 
             <td class="px-4 py-3 text-[12px] text-[var(--text-muted,#8b7c88)]">
-              <?= htmlspecialchars($i['cat_icon'] . ' ' . $i['cat_name']) ?>
+              <span class="inline-flex items-center gap-1.5">
+                <?= icon($i['cat_icon'] ?: 'package', 14) ?>
+                <span><?= htmlspecialchars($i['cat_name']) ?></span>
+              </span>
             </td>
 
             <td class="px-4 py-3 text-right font-bold tabular-nums">
@@ -542,7 +545,7 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
   <div class="w-full max-w-[440px] rounded-2xl bg-white shadow-2xl overflow-hidden">
     <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
       <strong class="text-[15px]">Add Ingredient</strong>
-      <button onclick="closeModal('modal-add')" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+      <button type="button" onclick="closeModal('modal-add')" class="text-[var(--text-muted,#8b7c88)] hover:text-[var(--espresso,#3a2417)] transition-colors p-1" aria-label="Close"><?= icon('x', 18) ?></button>
     </div>
     <form method="POST" class="px-5 py-4 space-y-3">
       <input type="hidden" name="action" value="add">
@@ -567,7 +570,7 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
           <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Category *</span>
           <select name="cat_id" required class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
             <?php foreach ($cats as $c): ?>
-            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['icon'].' '.$c['name']) ?> — <?= (int)$c['shelf_life_days'] ?>d shelf life</option>
+            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['name']) ?> — <?= (int)$c['shelf_life_days'] ?>d shelf life</option>
             <?php endforeach; ?>
           </select>
         </label>
@@ -615,7 +618,7 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
   <div class="w-full max-w-[440px] rounded-2xl bg-white shadow-2xl overflow-hidden">
     <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
       <strong class="text-[15px]">Edit Item</strong>
-      <button onclick="closeModal('modal-edit')" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+      <button type="button" onclick="closeModal('modal-edit')" class="text-[var(--text-muted,#8b7c88)] hover:text-[var(--espresso,#3a2417)] transition-colors p-1" aria-label="Close"><?= icon('x', 18) ?></button>
     </div>
     <form method="POST" class="px-5 py-4 space-y-3">
       <input type="hidden" name="action" value="edit">
@@ -640,7 +643,7 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
           <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Category</span>
           <select name="cat_id" id="e-cat" class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)] bg-white">
             <?php foreach ($cats as $c): ?>
-            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['icon'].' '.$c['name']) ?></option>
+            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
             <?php endforeach; ?>
           </select>
         </label>
@@ -684,7 +687,7 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
   <div class="w-full max-w-[380px] rounded-2xl bg-white shadow-2xl overflow-hidden">
     <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
       <strong class="text-[15px]">Restock <span id="r-title" class="font-normal"></span></strong>
-      <button onclick="closeModal('modal-restock')" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+      <button type="button" onclick="closeModal('modal-restock')" class="text-[var(--text-muted,#8b7c88)] hover:text-[var(--espresso,#3a2417)] transition-colors p-1" aria-label="Close"><?= icon('x', 18) ?></button>
     </div>
     <form method="POST" class="px-5 py-4 space-y-3">
       <input type="hidden" name="action" value="restock">
@@ -748,7 +751,7 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
   <div class="w-full max-w-[640px] rounded-2xl bg-white shadow-2xl overflow-hidden">
     <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
       <strong class="text-[15px]">Batches — <span id="b-title" class="font-normal"></span></strong>
-      <button onclick="closeModal('modal-batches')" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+      <button type="button" onclick="closeModal('modal-batches')" class="text-[var(--text-muted,#8b7c88)] hover:text-[var(--espresso,#3a2417)] transition-colors p-1" aria-label="Close"><?= icon('x', 18) ?></button>
     </div>
     <div id="b-body" class="px-5 py-4 max-h-[60vh] overflow-y-auto text-[13px]">
       <p class="text-center py-8 text-[var(--text-muted,#8b7c88)]">Loading…</p>

@@ -84,10 +84,10 @@ $initials = strtoupper(substr($fname, 0, 1));
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>My Dashboard — Kofee Manila</title>
   <link rel="stylesheet" href="../css/style.css"/>
-  <link rel="stylesheet" href="../css/sidebar.css"/>
   <link rel="stylesheet" href="../css/home.css"/>
   <link rel="stylesheet" href="../css/employee_dashboard.css"/>
   <link rel="stylesheet" href="../css/index.css">
+  <link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__ . '/../css/sidebar.css') ?>"/>
   <style>
     .item-row { display:grid; grid-template-columns:minmax(0,2fr) 90px 70px 120px 32px; gap:8px; margin-bottom:8px; align-items:center; }
     .item-row input, .item-row select { min-width:0; width:100%; }
@@ -134,15 +134,18 @@ $initials = strtoupper(substr($fname, 0, 1));
     <!-- Stat cards -->
     <div class="home-grid">
       <div class="stat-card">
-        <div class="stat-icon" style="background:var(--accent-lt)"><?= icon('attendance') ?></div>
+        <div class="stat-card-top">
+          <div class="stat-icon stat-icon-status"><?= icon('attendance', 20) ?></div>
+          <span class="stat-badge-tag">Shift</span>
+        </div>
         <div class="stat-label">Today's Status</div>
-        <div class="stat-value" id="today-status-val" style="font-size:16px">
+        <div class="stat-value-wrap" id="today-status-val">
           <?php if ($today_att && $today_att['time_in'] && !$today_att['time_out']): ?>
-            Clocked In
+            <span class="status-pill status-pill-in"><span class="status-pulse"></span>Clocked In</span>
           <?php elseif ($today_att && $today_att['time_out']): ?>
-            Clocked Out
+            <span class="status-pill status-pill-out"><span class="status-dot"></span>Clocked Out</span>
           <?php else: ?>
-            Not Clocked In
+            <span class="status-pill status-pill-none"><span class="status-dot"></span>Not Clocked In</span>
           <?php endif; ?>
         </div>
         <div class="stat-sub" id="today-status-sub">
@@ -150,19 +153,28 @@ $initials = strtoupper(substr($fname, 0, 1));
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="background:var(--green-lt);color:var(--green)"><?= icon('order') ?></div>
+        <div class="stat-card-top">
+          <div class="stat-icon stat-icon-green"><?= icon('order', 20) ?></div>
+          <span class="stat-badge-tag tag-green">Attendance</span>
+        </div>
         <div class="stat-label">Present Days</div>
         <div class="stat-value"><?= $metrics['present'] ?></div>
         <div class="stat-sub">This month</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="background:var(--red-lt);color:var(--red)"><?= icon('pending') ?></div>
+        <div class="stat-card-top">
+          <div class="stat-icon stat-icon-red"><?= icon('pending', 20) ?></div>
+          <span class="stat-badge-tag tag-red">Missed</span>
+        </div>
         <div class="stat-label">Absent Days</div>
         <div class="stat-value"><?= $metrics['absent'] ?></div>
         <div class="stat-sub">This month</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="background:var(--blue-lt);color:var(--blue)"><?= icon('leave') ?></div>
+        <div class="stat-card-top">
+          <div class="stat-icon stat-icon-blue"><?= icon('leave', 20) ?></div>
+          <span class="stat-badge-tag tag-blue">Allowance</span>
+        </div>
         <div class="stat-label">Leave Balance</div>
         <div class="stat-value"><?= $metrics['leave_balance'] ?></div>
         <div class="stat-sub">Days remaining</div>
@@ -170,36 +182,57 @@ $initials = strtoupper(substr($fname, 0, 1));
     </div>
 
     <!-- Quick access -->
-    <div>
-      <div class="section-title">Quick Access</div>
+    <div class="shortcuts-section">
+      <div class="section-title">
+        <span>Quick Access</span>
+        <span class="section-subtitle">Common daily actions</span>
+      </div>
       <div class="home-shortcuts">
-        <button type="button" class="shortcut-card" id="btn-clockin"
+        <button type="button" class="shortcut-card shortcut-clockin" id="btn-clockin"
                 onclick="openCamera('clock_in')" <?= (!$my_employee || ($today_att && $today_att['time_in'])) ? 'disabled' : '' ?>>
-          <div class="shortcut-icon"><?= icon('attendance') ?></div>
-          <div><h3>Clock In</h3><p>Snap a photo to start your shift</p></div>
+          <div class="shortcut-icon"><?= icon('attendance', 22) ?></div>
+          <div class="shortcut-meta">
+            <h3>Clock In</h3>
+            <p>Snap a photo to start your shift</p>
+          </div>
+          <div class="shortcut-arrow"><?= icon('chevron', 16) ?></div>
         </button>
-        <button type="button" class="shortcut-card" id="btn-clockout"
+        <button type="button" class="shortcut-card shortcut-clockout" id="btn-clockout"
                 onclick="openCamera('clock_out')" <?= (!$my_employee || !$today_att || !$today_att['time_in'] || $today_att['time_out']) ? 'disabled' : '' ?>>
-          <div class="shortcut-icon"><?= icon('attendance') ?></div>
-          <div><h3>Clock Out</h3><p>Snap a photo to end your shift</p></div>
+          <div class="shortcut-icon"><?= icon('attendance', 22) ?></div>
+          <div class="shortcut-meta">
+            <h3>Clock Out</h3>
+            <p>Snap a photo to end your shift</p>
+          </div>
+          <div class="shortcut-arrow"><?= icon('chevron', 16) ?></div>
         </button>
-        <button type="button" class="shortcut-card" onclick="openLeaveModal()" <?= !$my_employee ? 'disabled' : '' ?>>
-          <div class="shortcut-icon"><?= icon('leave') ?></div>
-          <div><h3>File Leave Request</h3><p>Submit a new leave application</p></div>
+        <button type="button" class="shortcut-card shortcut-leave" onclick="openLeaveModal()" <?= !$my_employee ? 'disabled' : '' ?>>
+          <div class="shortcut-icon"><?= icon('leave', 22) ?></div>
+          <div class="shortcut-meta">
+            <h3>File Leave Request</h3>
+            <p>Submit a new leave application</p>
+          </div>
+          <div class="shortcut-arrow"><?= icon('chevron', 16) ?></div>
         </button>
 
-        <button type="button" class="shortcut-card" onclick="openCreate()">
-          <div class="shortcut-icon"><?= icon('rfq') ?></div>
-          <div><h3>File Requisition</h3><p>Submit a new purchase requisition</p></div>
+        <button type="button" class="shortcut-card shortcut-requisition" onclick="openCreate()">
+          <div class="shortcut-icon"><?= icon('rfq', 22) ?></div>
+          <div class="shortcut-meta">
+            <h3>File Requisition</h3>
+            <p>Submit a purchase requisition</p>
+          </div>
+          <div class="shortcut-arrow"><?= icon('chevron', 16) ?></div>
         </button>
-
       </div>
     </div>
 
     <!-- Attendance table -->
     <div class="recent-section">
       <div class="recent-header">
-        <h2>My Attendance</h2>
+        <div class="recent-header-title">
+          <h2>My Attendance</h2>
+          <span class="recent-count-badge"><?= count($att_rows) ?> records</span>
+        </div>
       </div>
       <div class="table-scroll-wrapper">
         <table class="recent-table" id="attendance-table">
@@ -218,10 +251,10 @@ $initials = strtoupper(substr($fname, 0, 1));
                 <td>
                   <div class="proof-thumbs">
                     <?php if ($r['time_in_photo']): ?>
-                      <img src="../<?= htmlspecialchars($r['time_in_photo']) ?>" class="proof-thumb" onclick="openPhotoPreview('../<?= htmlspecialchars($r['time_in_photo']) ?>')" title="Clock-in photo"/>
+                      <img src="../<?= htmlspecialchars($r['time_in_photo']) ?>" class="proof-thumb" onclick="openPhotoPreview('../<?= htmlspecialchars($r['time_in_photo']) ?>')" title="Clock-in photo" onerror="this.style.display='none'"/>
                     <?php endif; ?>
                     <?php if ($r['time_out_photo']): ?>
-                      <img src="../<?= htmlspecialchars($r['time_out_photo']) ?>" class="proof-thumb" onclick="openPhotoPreview('../<?= htmlspecialchars($r['time_out_photo']) ?>')" title="Clock-out photo"/>
+                      <img src="../<?= htmlspecialchars($r['time_out_photo']) ?>" class="proof-thumb" onclick="openPhotoPreview('../<?= htmlspecialchars($r['time_out_photo']) ?>')" title="Clock-out photo" onerror="this.style.display='none'"/>
                     <?php endif; ?>
                     <?php if (!$r['time_in_photo'] && !$r['time_out_photo']): ?>—<?php endif; ?>
                   </div>
@@ -235,7 +268,12 @@ $initials = strtoupper(substr($fname, 0, 1));
 
     <!-- Leave requests list -->
     <div class="recent-section">
-      <div class="recent-header"><h2>My Leave Requests</h2></div>
+      <div class="recent-header">
+        <div class="recent-header-title">
+          <h2>My Leave Requests</h2>
+          <span class="recent-count-badge"><?= count($leaves) ?> requests</span>
+        </div>
+      </div>
       <div class="table-scroll-wrapper">
         <table class="recent-table" id="leave-table">
           <thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th></tr></thead>

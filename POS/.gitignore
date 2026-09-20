@@ -1,0 +1,4 @@
+includes/config.local.php
+uploads/resumes/*
+uploads/attendance/*
+node_modules/

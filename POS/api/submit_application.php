@@ -73,21 +73,36 @@ try {
     if (!$privacy)           $errors[] = 'You must agree to the Privacy Notice to submit your application.';
 
     // ── Validate Resume File ──
+    // ── Validate Resume File ──
     if (!isset($_FILES['resume']) || $_FILES['resume']['error'] === UPLOAD_ERR_NO_FILE) {
         $errors[] = 'Resume file is required (PDF or DOCX, maximum 5 MB).';
     } else {
         $file = $_FILES['resume'];
+
         if ($file['error'] !== UPLOAD_ERR_OK) {
-            $errors[] = 'Error uploading file (code ' . $file['error'] . '). Please try again.';
+            $errors[] = 'Error uploading file (code ' . (int)$file['error'] . '). Please try again.';
+        } elseif (!is_uploaded_file($file['tmp_name'])) {
+            $errors[] = 'Invalid upload.';
         } else {
-            $maxBytes = 5 * 1024 * 1024; // 5MB
-            if ($file['size'] > $maxBytes) {
+            if ($file['size'] > 5 * 1024 * 1024) {
                 $errors[] = 'Resume file size exceeds the 5 MB limit.';
             }
-            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            $allowedExts = ['pdf', 'doc', 'docx'];
-            if (!in_array($ext, $allowedExts, true)) {
-                $errors[] = 'Resume must be in PDF or DOCX format.';
+
+            // Trust the file's magic bytes, not its name. An extension
+            // check alone lets an attacker upload anything they like.
+            require_once __DIR__ . '/../includes/security.php';
+            $mime = detect_upload_mime($file['tmp_name']);
+
+            $mime_to_ext = [
+                'application/pdf' => 'pdf',
+                'application/msword' => 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            ];
+
+            if (!isset($mime_to_ext[$mime])) {
+                $errors[] = 'Resume must be a real PDF or Word document.';
+            } else {
+                $ext = $mime_to_ext[$mime];   // derived from content, never from the filename
             }
         }
     }
@@ -114,14 +129,18 @@ try {
     }
 
     // ── Handle Resume Upload Storage ──
+    // 0755, not 0777. Files here are never web-readable
+    // (see uploads/.htaccess); php/download_file.php serves them.
     $uploadDir = __DIR__ . '/../uploads/resumes';
-    if (!is_dir($uploadDir)) {
-        @mkdir($uploadDir, 0777, true);
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Storage unavailable. Please try again.']);
+        exit;
     }
 
-    $cleanOrigName = preg_replace('/[^a-zA-Z0-9_\.-]/', '_', $file['name']);
-    $uniqueFilename = 'resume_' . strtolower(str_replace('-', '_', $trackingCode)) . '_' . time() . '.' . $ext;
-    $targetPath = $uploadDir . '/' . $uniqueFilename;
+    // Filename is fully generated — nothing from the client survives.
+    $uniqueFilename = 'resume_' . bin2hex(random_bytes(12)) . '.' . $ext;
+    $targetPath     = $uploadDir . '/' . $uniqueFilename;
     $relativeDbPath = 'uploads/resumes/' . $uniqueFilename;
 
     if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
@@ -129,6 +148,7 @@ try {
         echo json_encode(['success' => false, 'error' => 'Failed to save resume file. Please try again.']);
         exit;
     }
+    @chmod($targetPath, 0644);
 
     // ── Insert into Database ──
     $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';

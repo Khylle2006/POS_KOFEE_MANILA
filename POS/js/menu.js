@@ -381,17 +381,99 @@ async function clearOrder() {
 }
 
 // ── Checkout ──────────────────────────────────
-// ── Checkout ──────────────────────────────────
+// ── Checkout & Modern Payments ────────────────
 let pendingCheckout = null;
 let selectedPaymentMethod = 'cash';
+let payMongoOrderId = null;
+let payMongoPollTimer = null;
+let currentWalletVendor = 'GCash';
 
 function selectPaymentMethod(method) {
-    selectedPaymentMethod = method === 'paymongo' ? 'paymongo' : 'cash';
-    const button = document.getElementById('confirm-order-btn');
-    if (button) {
-        button.innerHTML = selectedPaymentMethod === 'paymongo'
-            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg> Continue to PayMongo'
-            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg> Confirm & Place Order';
+    selectedPaymentMethod = ['cash', 'paymongo', 'ewallet', 'card'].includes(method) ? method : 'cash';
+
+    // Update active state on method selection cards
+    document.querySelectorAll('.pay-method-card').forEach(card => {
+        card.classList.toggle('active', card.dataset.method === selectedPaymentMethod);
+    });
+
+    // Toggle panels
+    document.querySelectorAll('.pm-panel').forEach(panel => {
+        panel.classList.remove('active');
+    });
+    const activePanel = document.getElementById(`pm-panel-${selectedPaymentMethod}`);
+    if (activePanel) activePanel.classList.add('active');
+
+    // Update confirm button label
+    const btn = document.getElementById('confirm-order-btn');
+    if (!btn) return;
+
+    if (selectedPaymentMethod === 'cash') {
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg> Complete Cash Order';
+        setTimeout(() => document.getElementById('cash-tendered')?.focus(), 100);
+    } else if (selectedPaymentMethod === 'paymongo') {
+        btn.innerHTML = payMongoOrderId
+            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/><polyline points="23 4 23 10 17 10"/></svg> Check Payment Status'
+            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate PayMongo QR';
+    } else if (selectedPaymentMethod === 'ewallet') {
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg> Confirm E-Wallet Payment';
+        setTimeout(() => document.getElementById('ewallet-ref')?.focus(), 100);
+    } else if (selectedPaymentMethod === 'card') {
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg> Confirm Card Payment';
+        setTimeout(() => document.getElementById('card-approval')?.focus(), 100);
+    }
+}
+
+function setWalletVendor(vendor) {
+    currentWalletVendor = vendor || 'GCash';
+}
+
+function onTenderedInput(val) {
+    if (!pendingCheckout) return;
+    const total = pendingCheckout.total;
+    const tendered = parseFloat(val) || 0;
+    const change = tendered - total;
+
+    const changeCard = document.getElementById('change-display-card');
+    const changeAmt = document.getElementById('cash-change');
+    const changeMsg = document.getElementById('cash-change-msg');
+
+    if (val === '' || isNaN(parseFloat(val))) {
+        changeCard.classList.remove('insufficient');
+        changeAmt.textContent = '₱0.00';
+        changeMsg.textContent = 'Enter amount received from customer';
+        return;
+    }
+
+    if (change >= 0) {
+        changeCard.classList.remove('insufficient');
+        changeAmt.textContent = '₱' + change.toFixed(2);
+        changeMsg.textContent = change === 0 ? 'Exact amount received.' : `Change due: ₱${change.toFixed(2)}`;
+    } else {
+        changeCard.classList.add('insufficient');
+        changeAmt.textContent = '-₱' + Math.abs(change).toFixed(2);
+        changeMsg.textContent = `Insufficient by ₱${Math.abs(change).toFixed(2)}`;
+    }
+}
+
+function applyQuickBill(amount) {
+    if (!pendingCheckout) return;
+    const input = document.getElementById('cash-tendered');
+    if (!input) return;
+
+    if (amount === 'exact') {
+        input.value = pendingCheckout.total.toFixed(2);
+    } else {
+        input.value = Number(amount).toFixed(2);
+    }
+    onTenderedInput(input.value);
+}
+
+function clearTendered() {
+    const input = document.getElementById('cash-tendered');
+    if (input) {
+        input.value = '';
+        onTenderedInput('');
+        input.focus();
     }
 }
 
@@ -408,19 +490,37 @@ function checkout() {
 
     pendingCheckout = { subtotal, vat, total, snapshot, typeMap };
 
+    // Render preview item list
     const itemsListHtml = orderItems.map(o => `
-        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0">
-            <span>${o.name} (${o.size}) ×${o.qty}</span>
+        <div class="cid-row">
+            <span><strong>${escapeHtml(o.name)}</strong> (${o.size.charAt(0).toUpperCase() + o.size.slice(1)}) ×${o.qty}</span>
             <span>₱${(o.price * o.qty).toFixed(2)}</span>
         </div>
     `).join('');
 
+    const itemsCount = orderItems.reduce((sum, it) => sum + it.qty, 0);
     document.getElementById('confirm-items-list').innerHTML = itemsListHtml;
     document.getElementById('confirm-total').textContent    = '₱' + total.toFixed(2);
     document.getElementById('confirm-type').textContent     = typeMap[orderType] || "Dine In";
+    document.getElementById('confirm-count').textContent    = `${itemsCount} item${itemsCount > 1 ? 's' : ''}`;
 
-    document.getElementById('confirm-order-btn').disabled = false;
-    document.querySelector('input[name="checkout-payment"][value="cash"]').checked = true;
+    // Reset payment states
+    clearTendered();
+    const ewalletRef = document.getElementById('ewallet-ref');
+    if (ewalletRef) ewalletRef.value = '';
+    const cardAppr = document.getElementById('card-approval');
+    if (cardAppr) cardAppr.value = '';
+
+    // Reset PayMongo state
+    document.getElementById('pm-live-box').style.display = 'none';
+    document.getElementById('pm-init-box').style.display = 'block';
+    if (payMongoPollTimer) {
+        clearInterval(payMongoPollTimer);
+        payMongoPollTimer = null;
+    }
+    payMongoOrderId = null;
+
+    // Default to cash
     selectPaymentMethod('cash');
 
     document.getElementById('confirm-overlay').classList.add('open');
@@ -430,22 +530,289 @@ function closeNoItems() {
     document.getElementById('noitems-overlay').classList.remove('open');
 }
 
-function closeConfirmOrder() {
-    document.getElementById('confirm-overlay').classList.remove('open');
+function closeConfirmOrder(cancelPendingServerOrder = true) {
+    if (payMongoPollTimer) {
+        clearInterval(payMongoPollTimer);
+        payMongoPollTimer = null;
+    }
+
+    if (cancelPendingServerOrder && payMongoOrderId) {
+        fetch('../api/cancel_paymongo_order.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id: payMongoOrderId })
+        }).catch(err => console.warn('Cancel order error:', err));
+    }
+
+    payMongoOrderId = null;
     pendingCheckout = null;
+    document.getElementById('confirm-overlay').classList.remove('open');
 }
 
-function submitConfirmedOrder() {
+// ── PayMongo Dynamic QR & Real-time Status Polling ──────────
+async function startPayMongoSession() {
     if (!pendingCheckout) return;
+
+    const { total, snapshot, typeMap } = pendingCheckout;
+    const btn = document.getElementById('btn-create-paymongo') || document.getElementById('confirm-order-btn');
+    if (btn) btn.disabled = true;
+
+    try {
+        const payload = {
+            total,
+            order_type: typeMap[orderType] || "Dine In",
+            items: snapshot.map(o => ({
+                id:    o.id,
+                qty:   o.qty,
+                price: o.price,
+                size:  o.size,
+                name:  o.name
+            }))
+        };
+
+        const res = await fetch('../api/create_paymongo_checkout.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+            showSimpleError(data.error || 'Failed to initialize PayMongo checkout.');
+            return;
+        }
+
+        payMongoOrderId = data.order_id;
+        const checkoutUrl = data.checkout_url;
+
+        // Render QR Code using reliable SVG/PNG QR Generator
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=6&data=${encodeURIComponent(checkoutUrl)}`;
+        const qrImg = document.getElementById('pm-qr-img');
+        if (qrImg) qrImg.src = qrUrl;
+
+        const extLink = document.getElementById('pm-ext-link');
+        if (extLink) extLink.href = checkoutUrl;
+
+        // Switch panel states
+        document.getElementById('pm-init-box').style.display = 'none';
+        document.getElementById('pm-live-box').style.display = 'block';
+
+        // Show demo simulation button if in demo or dev environment
+        const demoBox = document.getElementById('pm-demo-actions');
+        if (demoBox) {
+            demoBox.style.display = (data.is_demo || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'block' : 'none';
+        }
+
+        selectPaymentMethod('paymongo');
+
+        // Start live polling every 2.5s
+        startPayMongoPolling(payMongoOrderId);
+
+    } catch (err) {
+        console.error('PayMongo creation error:', err);
+        showSimpleError('Unable to connect to payment processor. Please check your connection.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function startPayMongoPolling(orderId) {
+    if (payMongoPollTimer) clearInterval(payMongoPollTimer);
+
+    const checkStatus = async () => {
+        if (!payMongoOrderId || payMongoOrderId !== orderId) {
+            clearInterval(payMongoPollTimer);
+            return;
+        }
+
+        try {
+            const res = await fetch(`../api/check_paymongo_status.php?order_id=${encodeURIComponent(orderId)}`);
+            const data = await res.json();
+
+            if (data.success && data.paid) {
+                clearInterval(payMongoPollTimer);
+                payMongoPollTimer = null;
+                const paidOrder = data.order || {};
+
+                orderSubmitted = true;
+                closeConfirmOrder(false); // Do not cancel in DB
+
+                Swal.fire({
+                    title: 'Payment Received!',
+                    text: `PayMongo transaction confirmed for Order #${orderId}.`,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false,
+                    customClass: {
+                        popup: 'swal-cafe-popup',
+                        title: 'swal-cafe-title',
+                        htmlContainer: 'swal-cafe-text'
+                    }
+                });
+
+                showReceipt(
+                    paidOrder.id || orderId,
+                    paidOrder.total ? (paidOrder.total / 1.12) : pendingCheckout?.subtotal,
+                    paidOrder.total ? (paidOrder.total - (paidOrder.total / 1.12)) : pendingCheckout?.vat,
+                    paidOrder.total || pendingCheckout?.total,
+                    paidOrder.items || pendingCheckout?.snapshot,
+                    {
+                        method: 'PayMongo QR (GCash/Maya/Card)',
+                        reference: paidOrder.payment_reference || ('PM-' + orderId)
+                    }
+                );
+            }
+        } catch (err) {
+            console.warn('PayMongo status poll error:', err);
+        }
+    };
+
+    payMongoPollTimer = setInterval(checkStatus, 2500);
+}
+
+function checkPayMongoStatusManual() {
+    if (!payMongoOrderId) {
+        startPayMongoSession();
+        return;
+    }
+    const statusText = document.getElementById('pm-status-text');
+    if (statusText) statusText.textContent = 'Checking payment status...';
+
+    fetch(`../api/check_paymongo_status.php?order_id=${encodeURIComponent(payMongoOrderId)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.paid) {
+                if (payMongoPollTimer) clearInterval(payMongoPollTimer);
+                orderSubmitted = true;
+                closeConfirmOrder(false);
+                const o = data.order || {};
+                showReceipt(
+                    o.id || payMongoOrderId,
+                    o.total ? (o.total / 1.12) : pendingCheckout?.subtotal,
+                    o.total ? (o.total - (o.total / 1.12)) : pendingCheckout?.vat,
+                    o.total || pendingCheckout?.total,
+                    o.items || pendingCheckout?.snapshot,
+                    {
+                        method: 'PayMongo QR',
+                        reference: o.payment_reference || ('PM-' + payMongoOrderId)
+                    }
+                );
+            } else {
+                if (statusText) statusText.textContent = 'Payment not received yet. Waiting for customer...';
+            }
+        })
+        .catch(() => {
+            if (statusText) statusText.textContent = 'Network check failed. Re-trying...';
+        });
+}
+
+function simulatePayMongoPayment() {
+    if (!payMongoOrderId) return;
+    const statusText = document.getElementById('pm-status-text');
+    if (statusText) statusText.textContent = 'Simulating customer payment...';
+
+    fetch(`../api/check_paymongo_status.php?order_id=${encodeURIComponent(payMongoOrderId)}&simulate=1`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.paid) {
+                if (payMongoPollTimer) clearInterval(payMongoPollTimer);
+                orderSubmitted = true;
+                closeConfirmOrder(false);
+                const o = data.order || {};
+                showReceipt(
+                    o.id || payMongoOrderId,
+                    o.total ? (o.total / 1.12) : pendingCheckout?.subtotal,
+                    o.total ? (o.total - (o.total / 1.12)) : pendingCheckout?.vat,
+                    o.total || pendingCheckout?.total,
+                    o.items || pendingCheckout?.snapshot,
+                    {
+                        method: 'PayMongo QR (Demo Simulated)',
+                        reference: o.payment_reference || ('DEMO-' + payMongoOrderId)
+                    }
+                );
+            } else {
+                showSimpleError(data.error || 'Failed to simulate payment.');
+            }
+        })
+        .catch(err => showSimpleError(err.message));
+}
+
+// ── Submit Confirmed Order ────────────────────
+async function submitConfirmedOrder() {
+    if (!pendingCheckout) return;
+
+    if (selectedPaymentMethod === 'paymongo') {
+        if (!payMongoOrderId) {
+            await startPayMongoSession();
+        } else {
+            checkPayMongoStatusManual();
+        }
+        return;
+    }
 
     const { subtotal, vat, total, snapshot, typeMap } = pendingCheckout;
     const btn = document.getElementById('confirm-order-btn');
-    btn.disabled = true;
-    btn.textContent = selectedPaymentMethod === 'paymongo' ? 'Opening PayMongo…' : 'Placing order…';
+    let tendered = null;
+    let change = null;
+    let paymentRef = '';
+
+    if (selectedPaymentMethod === 'cash') {
+        const inputVal = document.getElementById('cash-tendered')?.value || '';
+        tendered = parseFloat(inputVal) || 0;
+        if (tendered < total) {
+            Swal.fire({
+                title: 'Insufficient Cash',
+                text: `Amount tendered (₱${tendered.toFixed(2)}) is less than the total (₱${total.toFixed(2)}).`,
+                icon: 'warning',
+                confirmButtonColor: '#C97B3D'
+            });
+            document.getElementById('cash-tendered')?.focus();
+            return;
+        }
+        change = tendered - total;
+    } else if (selectedPaymentMethod === 'ewallet') {
+        const refVal = (document.getElementById('ewallet-ref')?.value || '').trim();
+        if (!refVal) {
+            Swal.fire({
+                title: 'Reference Code Required',
+                text: `Please enter the transaction reference number from the customer's ${currentWalletVendor} payment.`,
+                icon: 'warning',
+                confirmButtonColor: '#C97B3D'
+            });
+            document.getElementById('ewallet-ref')?.focus();
+            return;
+        }
+        tendered = total;
+        change = 0;
+        paymentRef = `${currentWalletVendor} Ref: ${refVal}`;
+    } else if (selectedPaymentMethod === 'card') {
+        const approvalVal = (document.getElementById('card-approval')?.value || '').trim();
+        if (!approvalVal) {
+            Swal.fire({
+                title: 'Approval Code Required',
+                text: 'Please enter the terminal approval code from the POS slip.',
+                icon: 'warning',
+                confirmButtonColor: '#C97B3D'
+            });
+            document.getElementById('card-approval')?.focus();
+            return;
+        }
+        tendered = total;
+        change = 0;
+        paymentRef = `Card Appr: ${approvalVal}`;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Processing Order…';
+    }
 
     const payload = {
         total,
         payment_method: selectedPaymentMethod,
+        amount_tendered: tendered,
+        change_amount: change,
+        payment_reference: paymentRef,
         order_type: typeMap[orderType] || "Dine In",
         items: snapshot.map(o => ({
             id:    o.id,
@@ -456,48 +823,48 @@ function submitConfirmedOrder() {
         }))
     };
 
-    const endpoint = selectedPaymentMethod === 'paymongo'
-        ? '../api/create_paymongo_checkout.php'
-        : '../api/checkout.php';
-    if (selectedPaymentMethod === 'paymongo') {
-        sessionStorage.setItem('paymongo_pending', JSON.stringify({ subtotal, vat, total, snapshot, orderType }));
-    }
+    try {
+        const res = await fetch('../api/checkout.php', {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify(payload)
+        });
+        const text = await res.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseErr) {
+            console.error('Server raw output:', text);
+            throw new Error('Server returned an invalid response.');
+        }
 
-    fetch(endpoint, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(payload)
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (!res.success) {
-            sessionStorage.removeItem('paymongo_pending');
-            btn.disabled = false;
-            selectPaymentMethod(selectedPaymentMethod);
-            showSimpleError(res.error ?? "Unknown error");
+        if (!data.success) {
+            if (btn) btn.disabled = false;
+            showSimpleError(data.error ?? "Failed to complete order.");
             return;
         }
 
-        if (selectedPaymentMethod === 'paymongo') {
-            window.location.href = res.checkout_url;
-            return;
-        }
-
-        closeConfirmOrder();
         orderSubmitted = true;
-        showReceipt(res.order_id, subtotal, vat, total, snapshot);
-    })
-    .catch(err => {
-        sessionStorage.removeItem('paymongo_pending');
-        closeConfirmOrder();
-        showSimpleError(err.message);
-    });
+        closeConfirmOrder(false);
+
+        showReceipt(data.order_id, subtotal, vat, total, snapshot, {
+            method: selectedPaymentMethod === 'cash' ? 'Cash' : (selectedPaymentMethod === 'ewallet' ? currentWalletVendor : 'Card POS'),
+            tendered,
+            change,
+            reference: paymentRef
+        });
+
+    } catch (err) {
+        console.error('Checkout error:', err);
+        showSimpleError(err.message || 'Error communicating with server.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 function showSimpleError(message) {
-    document.getElementById('confirm-total').textContent; // no-op safeguard
     Swal.fire({
-        title: "Error!",
+        title: "Notice",
         text: message,
         icon: "error",
         customClass: {
@@ -512,14 +879,14 @@ function showSimpleError(message) {
 }
 
 // ── Receipt Modal ─────────────────────────────
-function showReceipt(orderId, subtotal, vat, total, items) {
+function showReceipt(orderId, subtotal, vat, total, items, paymentInfo = {}) {
     const typeLabels = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
 
-    document.getElementById('r-order-num').textContent =
-        '#' + String(orderId).padStart(4, '0');
+    const orderNumEl = document.getElementById('r-order-num');
+    if (orderNumEl) orderNumEl.textContent = '#' + String(orderId).padStart(4, '0');
 
-    document.getElementById('r-type').textContent =
-        typeLabels[orderType] || 'Dine In';
+    const typeEl = document.getElementById('r-type');
+    if (typeEl) typeEl.textContent = typeLabels[orderType] || 'Dine In';
 
     const now = new Date();
     const timeStr = now.toLocaleString('en-PH', {
@@ -529,33 +896,71 @@ function showReceipt(orderId, subtotal, vat, total, items) {
     const dateEl = document.getElementById('r-time');
     if (dateEl) dateEl.textContent = timeStr;
 
-    document.getElementById('r-items').innerHTML = items.map(o => `
-        <div class="receipt-item">
-            <div class="ri-thumb">
-                <img src="${escapeHtml(o.imageSrc || DEFAULT_DRINK_IMAGE)}" alt="" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
+    // Itemized receipt rows
+    const itemsContainer = document.getElementById('r-items');
+    if (itemsContainer) {
+        itemsContainer.innerHTML = items.map(o => `
+            <div class="receipt-item">
+                <div class="ri-thumb">
+                    <img src="${escapeHtml(o.imageSrc || DEFAULT_DRINK_IMAGE)}" alt="" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
+                </div>
+                <div class="ri-info">
+                    <div class="ri-name">${escapeHtml(o.name)}</div>
+                    <div class="ri-size">${o.size ? (o.size.charAt(0).toUpperCase() + o.size.slice(1)) : 'Regular'}</div>
+                </div>
+                <span class="ri-qty">×${o.qty}</span>
+                <div class="ri-price">₱${(parseFloat(o.price) * o.qty).toFixed(2)}</div>
             </div>
-            <div class="ri-info">
-                <div class="ri-name">${escapeHtml(o.name)}</div>
-                <div class="ri-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
-            </div>
-            <span class="ri-qty">×${o.qty}</span>
-            <div class="ri-price">₱${(o.price * o.qty).toFixed(2)}</div>
-        </div>
-    `).join('');
+        `).join('');
+    }
 
-    document.getElementById('r-subtotal').textContent = '₱' + subtotal.toFixed(2);
-    if (document.getElementById('r-tax'))
-        document.getElementById('r-tax').textContent  = '₱' + vat.toFixed(2);
-    document.getElementById('r-total').textContent    = '₱' + total.toFixed(2);
+    const subtotalEl = document.getElementById('r-subtotal');
+    if (subtotalEl) subtotalEl.textContent = '₱' + parseFloat(subtotal).toFixed(2);
 
-    document.getElementById('receipt-overlay').classList.add('open');
+    const taxEl = document.getElementById('r-tax');
+    if (taxEl) taxEl.textContent = '₱' + parseFloat(vat).toFixed(2);
 
+    const totalEl = document.getElementById('r-total');
+    if (totalEl) totalEl.textContent = '₱' + parseFloat(total).toFixed(2);
+
+    // Payment details in receipt
+    const pMethodEl   = document.getElementById('r-payment-method');
+    const rowTendered = document.getElementById('r-row-tendered');
+    const tenderedEl  = document.getElementById('r-tendered');
+    const rowChange   = document.getElementById('r-row-change');
+    const changeEl    = document.getElementById('r-change');
+    const rowRef      = document.getElementById('r-row-ref');
+    const refEl       = document.getElementById('r-ref');
+
+    const method = paymentInfo.method || 'Cash';
+    if (pMethodEl) pMethodEl.textContent = method;
+
+    if (method.toLowerCase().includes('cash') && paymentInfo.tendered !== undefined && paymentInfo.tendered !== null) {
+        if (rowTendered) rowTendered.style.display = 'flex';
+        if (tenderedEl)  tenderedEl.textContent = '₱' + parseFloat(paymentInfo.tendered).toFixed(2);
+        if (rowChange)   rowChange.style.display = 'flex';
+        if (changeEl)    changeEl.textContent = '₱' + parseFloat(paymentInfo.change || 0).toFixed(2);
+        if (rowRef)      rowRef.style.display = 'none';
+    } else {
+        if (rowTendered) rowTendered.style.display = 'none';
+        if (rowChange)   rowChange.style.display = 'none';
+        if (paymentInfo.reference) {
+            if (rowRef) rowRef.style.display = 'flex';
+            if (refEl)  refEl.textContent = paymentInfo.reference;
+        } else {
+            if (rowRef) rowRef.style.display = 'none';
+        }
+    }
+
+    document.getElementById('receipt-overlay')?.classList.add('open');
+
+    // Cart reset
     orderItems = [];
     renderOrder();
 }
 
 function closeReceipt() {
-    document.getElementById('receipt-overlay').classList.remove('open');
+    document.getElementById('receipt-overlay')?.classList.remove('open');
 }
 
 function printReceipt() {
@@ -563,24 +968,36 @@ function printReceipt() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // If redirected back from PayMongo browser payment (legacy or full-page fallback)
     const params = new URLSearchParams(window.location.search);
     const orderId = params.get('order_id');
-    const pending = sessionStorage.getItem('paymongo_pending');
-    if (params.get('paymongo_success') === '1' && orderId && pending) {
-        const receipt = JSON.parse(pending);
-        sessionStorage.removeItem('paymongo_pending');
+    if (params.get('paymongo_success') === '1' && orderId) {
         fetch(`../api/check_paymongo_status.php?order_id=${encodeURIComponent(orderId)}`)
             .then(r => r.json())
             .then(res => {
                 if (res.success && res.paid) {
                     orderSubmitted = true;
-                    showReceipt(res.order_id, receipt.subtotal, receipt.vat, receipt.total, receipt.snapshot);
+                    const o = res.order || {};
+                    showReceipt(
+                        o.id || orderId,
+                        o.total ? (o.total / 1.12) : 0,
+                        o.total ? (o.total - (o.total / 1.12)) : 0,
+                        o.total || 0,
+                        o.items || [],
+                        {
+                            method: 'PayMongo QR',
+                            reference: o.payment_reference || ('PM-' + orderId)
+                        }
+                    );
+                    // Clean URL query params without reloading
+                    window.history.replaceState({}, document.title, window.location.pathname);
                 } else {
-                    showSimpleError('PayMongo has not confirmed this payment yet.');
+                    showSimpleError('Payment is pending confirmation. Please check with customer.');
                 }
             })
-            .catch(() => showSimpleError('Unable to verify the PayMongo payment.'));
+            .catch(() => showSimpleError('Unable to verify PayMongo payment status.'));
     }
+
     document.getElementById('receipt-overlay')?.addEventListener('click', function(e) {
         if (e.target === this) closeReceipt();
     });
@@ -596,23 +1013,34 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeReceipt(); closeConfirmOrder(); closeNoItems(); }
+    if (e.key === 'Escape') {
+        closeReceipt();
+        closeConfirmOrder();
+        closeNoItems();
+    }
 });
 
+// ── Window Exports ────────────────────────────
+window.closeConfirmOrder          = closeConfirmOrder;
+window.submitConfirmedOrder       = submitConfirmedOrder;
+window.closeNoItems               = closeNoItems;
+window.clearOrder                 = clearOrder;
+window.checkout                   = checkout;
+window.selectPaymentMethod        = selectPaymentMethod;
+window.setWalletVendor            = setWalletVendor;
+window.onTenderedInput            = onTenderedInput;
+window.applyQuickBill             = applyQuickBill;
+window.clearTendered              = clearTendered;
+window.startPayMongoSession       = startPayMongoSession;
+window.checkPayMongoStatusManual  = checkPayMongoStatusManual;
+window.simulatePayMongoPayment    = simulatePayMongoPayment;
+window.closeReceipt               = closeReceipt;
+window.printReceipt               = printReceipt;
+window.addToOrder                 = addToOrder;
+window.switchCat                  = switchCat;
+window.switchSize                 = switchSize;
+window.switchOrderType            = switchOrderType;
+window.filterProducts             = filterProducts;
+window.changeQty                  = changeQty;
+window.removeItem                 = removeItem;
 
-// ── Exports ───────────────────────────────────
-window.closeConfirmOrder    = closeConfirmOrder;
-window.submitConfirmedOrder = submitConfirmedOrder;
-window.closeNoItems         = closeNoItems;
-window.clearOrder      = clearOrder;
-window.checkout        = checkout;
-window.selectPaymentMethod = selectPaymentMethod;
-window.closeReceipt    = closeReceipt;
-window.printReceipt    = printReceipt;
-window.addToOrder      = addToOrder;
-window.switchCat       = switchCat;
-window.switchSize      = switchSize;
-window.switchOrderType = switchOrderType;
-window.filterProducts  = filterProducts;
-window.changeQty       = changeQty;
-window.removeItem      = removeItem;

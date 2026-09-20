@@ -10,20 +10,38 @@ if ($raw === '') {
     exit;
 }
 
-if (PAYMONGO_WEBHOOK_SECRET !== '') {
-    $parts = [];
-    foreach (explode(',', $_SERVER['HTTP_PAYMONGO_SIGNATURE'] ?? '') as $part) {
-        [$key, $value] = array_pad(explode('=', trim($part), 2), 2, '');
-        $parts[$key] = $value;
-    }
-    $timestamp = $parts['t'] ?? '';
-    $provided = $parts['li'] ?? ($parts['te'] ?? '');
-    $expected = hash_hmac('sha256', $timestamp . '.' . $raw, PAYMONGO_WEBHOOK_SECRET);
-    if ($timestamp === '' || $provided === '' || !hash_equals($expected, $provided)) {
-        http_response_code(401);
-        echo json_encode(['error' => 'Invalid signature']);
-        exit;
-    }
+// ── Signature verification ────────────────────
+// Fail CLOSED. The previous version skipped verification entirely
+// when PAYMONGO_WEBHOOK_SECRET was unset, which is the default.
+// That let anyone POST here and mark any order as paid.
+if (PAYMONGO_WEBHOOK_SECRET === '') {
+    error_log('paymongo_webhook: rejected — PAYMONGO_WEBHOOK_SECRET is not configured.');
+    http_response_code(503);
+    echo json_encode(['error' => 'Webhook not configured']);
+    exit;
+}
+
+$parts = [];
+foreach (explode(',', $_SERVER['HTTP_PAYMONGO_SIGNATURE'] ?? '') as $part) {
+    [$key, $value] = array_pad(explode('=', trim($part), 2), 2, '');
+    $parts[$key] = $value;
+}
+
+$timestamp = $parts['t'] ?? '';
+$provided  = $parts['li'] ?? ($parts['te'] ?? '');
+$expected  = hash_hmac('sha256', $timestamp . '.' . $raw, PAYMONGO_WEBHOOK_SECRET);
+
+if ($timestamp === '' || $provided === '' || !hash_equals($expected, $provided)) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Invalid signature']);
+    exit;
+}
+
+// Reject replays of old events (5-minute tolerance).
+if (abs(time() - (int)$timestamp) > 300) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Signature timestamp out of range']);
+    exit;
 }
 
 $event = json_decode($raw, true);

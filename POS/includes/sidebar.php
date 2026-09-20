@@ -38,6 +38,9 @@ if (!function_exists('icon')) {
             'star'        => '<path d="M12 2l3 6.5 7 .9-5 5 1.3 7-6.3-3.6L5.7 21.4 7 14.4l-5-5 7-.9z"/>',
             'portal'      => '<path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/>',
             'bell'        => '<path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
+            'briefcase'   => '<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+            'file-text'   => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+            'users'       => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
         ];
         $body = $paths[$name] ?? $paths['home'];
         return '<svg width="'.$size.'" height="'.$size.'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'.$body.'</svg>';
@@ -51,6 +54,7 @@ $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
     'dashboard'          => has_permission('dashboard.view'),
+    'employee_dashboard' => has_permission('employee_dashboard.view'),
     'new_order'          => has_permission('orders.new'),
     'pending'            => has_permission('orders.pending'),
     'history'            => has_permission('orders.history'),
@@ -62,6 +66,8 @@ $access = [
     'recruitment'        => has_permission('recruitment.manage') || has_permission('users.manage'),
     'hr_attendance'      => has_permission('attendance.view'),
     'hr_leave'           => has_permission('leave.view'),
+        'payroll'            => has_permission('payroll.view'),
+    'payroll_own'        => has_permission('payroll.own') && !has_permission('payroll.view'),
     'hr_requests'        => has_permission('leave.view') || in_array('admin', $roles, true),
     'manage_permissions' => has_permission('permissions.manage'),
 
@@ -134,9 +140,16 @@ if (!function_exists('navBtnClasses')) {
 
 $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
 ?>
+<script>
+  try {
+    if (localStorage.getItem('kfs_sidebar_minimized') === 'true' && window.innerWidth >= 1024) {
+      document.documentElement.classList.add('sidebar-minimized');
+    }
+  } catch(e) {}
+</script>
 <!-- ── Required Stylesheets for Topbar & Navigation ── -->
-<link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__ . '/../css/sidebar.css') ?>">
 <link rel="stylesheet" href="../css/index.css?v=<?= filemtime(__DIR__ . '/../css/index.css') ?>">
+<link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__ . '/../css/sidebar.css') ?>">
 
 <!-- ── Kofee Manila Smooth Page Transition & Loader ── -->
 <style>
@@ -290,15 +303,13 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 <header id="kofee-topbar" class="kfs-topbar fixed top-0 inset-x-0 h-14 z-[200] flex items-center gap-3 px-4
                bg-[var(--espresso,#2c1a0e)] text-[var(--cream,#fbf3e9)] shadow-md">
 
-    <button id="sidebar-menu-btn" onclick="toggleSidebar()"
+    <button id="sidebar-menu-btn" onclick="toggleSidebarOrMinimize()"
         class="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-semibold
                bg-[rgba(251,243,233,0.08)] hover:bg-[rgba(251,243,233,0.16)] transition-colors duration-150"
         aria-expanded="false" aria-controls="main-sidebar">
         <svg id="menu-icon-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-        <svg id="menu-icon-close" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" class="hidden"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        <span>Menu</span>
+        <span id="menu-btn-label">Expand</span>
     </button>
 
     <div class="flex items-center gap-2.5 min-w-0">
@@ -342,16 +353,33 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     $actor = $n['actor_id']
                         ? trim(($n['firstname'] ?? '') . ' ' . ($n['lastname'] ?? '')) ?: ($n['username'] ?? 'Unknown')
                         : 'System';
+
+                    $n_type = strtolower(($n['action_type'] ?? '') . ' ' . ($n['type'] ?? ''));
+                    $n_icon = match (true) {
+                        str_contains($n_type, 'ship') || str_contains($n_type, 'truck') || str_contains($n_type, 'receive') => 'truck',
+                        str_contains($n_type, 'rfq') || str_contains($n_type, 'bid') || str_contains($n_type, 'quote')     => 'rfq',
+                        str_contains($n_type, 'req')                                                                        => 'requests',
+                        str_contains($n_type, 'pay') || str_contains($n_type, 'invoice') || str_contains($n_type, 'coin')  => 'coin',
+                        str_contains($n_type, 'batch') || str_contains($n_type, 'stock') || str_contains($n_type, 'item')   => 'package',
+                        str_contains($n_type, 'user') || str_contains($n_type, 'employee')                                  => 'users',
+                        default => 'bell',
+                    };
+                    $clean_title = trim(preg_replace('/^[\x{1F000}-\x{1FFFF}\x{2600}-\x{27BF}\x{2300}-\x{23FF}\x{2B50}\s]+/u', '', $n['title']));
                 ?>
                 <button type="button"
                    class="notification-item w-full text-left px-4 py-3 border-b border-[var(--latte,#efe0cc)]
                           hover:bg-[var(--accent-lt,#fcefe1)] <?= !$n['is_read'] ? 'bg-[var(--accent-lt,#fcefe1)]' : '' ?>"
                    data-notification-id="<?= (int)$n['id'] ?>"
                    onclick="openNotificationDetail(<?= (int)$n['id'] ?>)">
-                    <div class="flex items-start gap-2">
-                        <span class="notification-dot mt-1.5 w-2 h-2 rounded-full flex-shrink-0 <?= $n['is_read'] ? 'opacity-0' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-7 h-7 rounded-lg bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <?= icon($n_icon, 14) ?>
+                        </span>
                         <span class="min-w-0 flex-1">
-                            <strong class="block text-[12px] leading-4"><?= htmlspecialchars($n['title']) ?></strong>
+                            <div class="flex items-center justify-between gap-1">
+                                <strong class="block text-[12px] leading-4 truncate"><?= htmlspecialchars($clean_title) ?></strong>
+                                <span class="notification-dot w-2 h-2 rounded-full flex-shrink-0 <?= $n['is_read'] ? 'opacity-0' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
+                            </div>
                             <?php if ($n['message']): ?>
                             <span class="block mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)] line-clamp-2">
                                 <?= htmlspecialchars($n['message']) ?>
@@ -359,7 +387,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                             <?php endif; ?>
                             <span class="flex items-center gap-1.5 mt-1 text-[10px] text-[var(--text-muted,#8b7c88)]">
                                 <span class="font-semibold"><?= htmlspecialchars($actor) ?></span>
-                                <span>·</span>
+                                <span>&middot;</span>
                                 <time><?= htmlspecialchars(relative_time($n['created_at'])) ?></time>
                             </span>
                         </span>
@@ -368,11 +396,11 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                 <?php endforeach; endif; ?>
             </div>
             <div id="notif-detail-modal"
-     class="modal-overlay hidden fixed inset-0 z-[800] bg-black/50 items-center justify-center p-4">
+      class="modal-overlay hidden fixed inset-0 z-[800] bg-black/50 items-center justify-center p-4">
   <div class="w-full max-w-[420px] rounded-2xl bg-white shadow-2xl overflow-hidden">
     <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
       <strong class="text-[14px] text-[var(--text-main,#2b2130)]">Activity detail</strong>
-      <button onclick="closeNotificationDetail()" class="text-[18px] text-[var(--text-muted,#8b7c88)]">&times;</button>
+      <button onclick="closeNotificationDetail()" class="text-[var(--text-muted,#8b7c88)] hover:text-[var(--text-main,#2b2130)] p-1 rounded-lg flex items-center justify-center"><?= icon('x', 16) ?></button>
     </div>
     <div id="notif-detail-body" class="px-5 py-5 text-[13px] text-[var(--text-main,#2b2130)]">
       <p class="text-center py-6 text-[var(--text-muted,#8b7c88)]">Loading…</p>
@@ -398,17 +426,19 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 
 <!-- ── Sidebar popover panel ── -->
 <nav id="main-sidebar"
-     class="fixed top-0 left-0 h-full w-[248px] z-[230] flex flex-col
+     class="fixed top-0 left-0 h-full w-[256px] z-[230] flex flex-col
             px-3.5 pt-4 pb-4 overflow-y-auto
             bg-[linear-gradient(165deg,var(--espresso,#2c1a0e)_0%,var(--espresso-deep,#1c1108)_115%)]
             text-[var(--cream,#fbf3e9)]
-            -translate-x-full transition-transform duration-300 ease-out">
+            transition-transform duration-300 ease-out">
 
-    <div class="flex items-center justify-between pb-4 mb-2 border-b border-[rgba(251,243,233,0.10)]">
-        <div class="flex items-center gap-2.5 min-w-0">
+    <div class="kfs-sidebar-header flex items-center justify-between pb-3.5 mb-2 border-b border-[rgba(251,243,233,0.10)]">
+        <div class="flex items-center gap-2.5 min-w-0 kfs-brand-block cursor-pointer"
+             onclick="if (window.innerWidth >= 1024 && document.documentElement.classList.contains('sidebar-minimized')) toggleSidebarMinimize();">
             <div class="w-9 h-9 rounded-[11px] flex items-center justify-center flex-shrink-0
                         bg-[linear-gradient(150deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_140%)]
-                        shadow-[0_6px_14px_-4px_rgba(201,123,61,0.6)]">
+                        shadow-[0_6px_14px_-4px_rgba(201,123,61,0.6)]"
+                 title="Kofee Manila">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cream,#fbf3e9)"
                      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z"/>
@@ -416,194 +446,339 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2"/>
                 </svg>
             </div>
-            <div class="leading-tight overflow-hidden">
+            <div class="leading-tight overflow-hidden kfs-brand-text">
                 <div class="font-['Playfair_Display',serif] font-bold text-[15.5px] truncate">Kofee Manila</div>
                 <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] tracking-wide truncate">Coffee &amp; Bites</div>
             </div>
         </div>
-        <button onclick="toggleSidebar(false)" aria-label="Close menu"
-            class="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0
-                   text-[rgba(251,243,233,0.6)] hover:bg-[rgba(251,243,233,0.08)] hover:text-[var(--cream,#fbf3e9)]">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+
+        <!-- Inner Sidebar Collapse Button (Visible when expanded, Gone when collapsed) -->
+        <button type="button" id="sidebar-collapse-btn" onclick="toggleSidebarOrMinimize()"
+            aria-label="Collapse sidebar" title="Collapse sidebar"
+            class="kfs-inner-collapse-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold
+                   bg-[rgba(251,243,233,0.08)] hover:bg-[rgba(251,243,233,0.16)] border border-[rgba(251,243,233,0.14)]
+                   hover:border-[rgba(230,162,92,0.4)] text-[var(--cream,#fbf3e9)] transition-all flex-shrink-0 cursor-pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M3 6h18M3 12h18M3 18h18"/>
+            </svg>
+            <span>Collapse</span>
         </button>
     </div>
 
-    <?php if ($access['dashboard']): ?>
-    <div class="<?= $groupLabel ?> pt-1.5">Main</div>
-    <button class="<?= navBtnClasses($current === 'dashboard.php') ?>" onclick="window.location.href='dashboard.php'">
-        <?= icon('home') ?><span class="flex-1 truncate">Dashboard</span>
-    </button>
-    <?php endif; ?>
+    <?php
+    $categories = [
+        'main' => [
+            'title' => 'Main',
+            'icon'  => 'dashboard',
+            'badge' => 0,
+            'items' => [
+                [
+                    'label'  => 'Dashboard',
+                    'url'    => 'dashboard.php',
+                    'icon'   => 'dashboard',
+                    'access' => $access['dashboard'],
+                    'active' => ($current === 'dashboard.php'),
+                ],
+                [
+                    'label'  => 'Employee Dashboard',
+                    'url'    => 'employee_dashboard.php',
+                    'icon'   => 'home',
+                    'access' => $access['employee_dashboard'],
+                    'active' => ($current === 'employee_dashboard.php'),
+                ],
+            ],
+        ],
+        'operations' => [
+            'title' => 'Operations',
+            'icon'  => 'order',
+            'badge' => $pending_count,
+            'items' => [
+                [
+                    'label'  => 'POS',
+                    'url'    => 'menu.php',
+                    'icon'   => 'order',
+                    'access' => $access['new_order'],
+                    'active' => ($current === 'menu.php'),
+                ],
+                [
+                    'label'  => 'Pending Orders',
+                    'url'    => 'pending_orders.php',
+                    'icon'   => 'pending',
+                    'badge'  => $pending_count,
+                    'access' => $access['pending'],
+                    'active' => ($current === 'pending_orders.php'),
+                ],
+                [
+                    'label'  => 'Inventory',
+                    'url'    => 'inventory.php',
+                    'icon'   => 'inventory',
+                    'access' => $access['inventory'],
+                    'active' => ($current === 'inventory.php'),
+                ],
+                [
+                    'label'  => 'Menu',
+                    'url'    => 'add_item.php',
+                    'icon'   => 'menu',
+                    'access' => $access['menu_manager'],
+                    'active' => ($current === 'add_item.php'),
+                ],
+                [
+                    'label'  => 'Order History',
+                    'url'    => 'history.php',
+                    'icon'   => 'history',
+                    'access' => $access['history'],
+                    'active' => ($current === 'history.php'),
+                ],
+            ],
+        ],
+        'finance' => [
+            'title' => 'Finance',
+            'icon'  => 'coin',
+            'badge' => 0,
+            'items' => [
+                [
+                    'label'  => 'Payroll',
+                    'url'    => 'payroll.php',
+                    'icon'   => 'coin',
+                    'access' => $access['payroll'],
+                    'active' => in_array($current, ['payroll.php', 'payroll_run.php', 'payroll_reports.php', 'payroll_settings.php'], true) || ($current === 'payslip.php' && $access['payroll']),
+                ],
+                [
+                    'label'  => 'My Payslips',
+                    'url'    => 'my_payslips.php',
+                    'icon'   => 'file-text',
+                    'access' => $access['payroll_own'],
+                    'active' => ($current === 'my_payslips.php') || ($current === 'payslip.php' && !$access['payroll']),
+                ],
+                [
+                    'label'  => 'Invoices',
+                    'url'    => 'invoices.php',
+                    'icon'   => 'invoice',
+                    'access' => $access['procurement_invoices'],
+                    'active' => ($current === 'invoices.php'),
+                ],
+                [
+                    'label'  => 'Supplier Payments',
+                    'url'    => 'payments.php',
+                    'icon'   => 'card',
+                    'access' => $access['procurement_payments'],
+                    'active' => ($current === 'payments.php'),
+                ],
+            ],
+        ],
+        'procurement' => [
+            'title' => 'Procurement',
+            'icon'  => 'truck',
+            'badge' => 0,
+            'items' => [
+                [
+                    'label'  => 'Overview',
+                    'url'    => 'procurement_dashboard.php',
+                    'icon'   => 'portal',
+                    'access' => $access['procurement_view'],
+                    'active' => ($current === 'procurement_dashboard.php'),
+                ],
+                [
+                    'label'  => 'Requisitions',
+                    'url'    => 'requisitions.php',
+                    'icon'   => 'requests',
+                    'access' => $access['procurement_requisitions'],
+                    'active' => ($current === 'requisitions.php'),
+                ],
+                [
+                    'label'  => 'RFQs & Bids',
+                    'url'    => 'rfq.php',
+                    'icon'   => 'rfq',
+                    'access' => $access['procurement_rfq'],
+                    'active' => ($current === 'rfq.php'),
+                ],
+                [
+                    'label'  => 'Purchase Orders',
+                    'url'    => 'purchase_orders.php',
+                    'icon'   => 'truck',
+                    'access' => $access['procurement_po'],
+                    'active' => ($current === 'purchase_orders.php'),
+                ],
+                [
+                    'label'  => 'Goods Receipts',
+                    'url'    => 'goods_receipts.php',
+                    'icon'   => 'truck',
+                    'access' => $access['procurement_receiving'],
+                    'active' => ($current === 'goods_receipts.php'),
+                ],
+                [
+                    'label'  => '3-Way Match',
+                    'url'    => 'three_way_match.php',
+                    'icon'   => 'scale',
+                    'access' => $access['procurement_match'],
+                    'active' => ($current === 'three_way_match.php'),
+                ],
+                [
+                    'label'  => 'Suppliers',
+                    'url'    => 'suppliers.php',
+                    'icon'   => 'employees',
+                    'access' => $access['procurement_suppliers'],
+                    'active' => ($current === 'suppliers.php'),
+                ],
+                [
+                    'label'  => 'Supplier Ratings',
+                    'url'    => 'supplier_performace.php',
+                    'icon'   => 'star',
+                    'access' => $access['procurement_performance'],
+                    'active' => ($current === 'supplier_performace.php'),
+                ],
+                [
+                    'label'  => 'Procurement Reports',
+                    'url'    => 'procurement_reports.php',
+                    'icon'   => 'analytics',
+                    'access' => $access['procurement_reports'],
+                    'active' => ($current === 'procurement_reports.php'),
+                ],
+            ],
+        ],
+        'hr' => [
+            'title' => 'HR',
+            'icon'  => 'users',
+            'badge' => $requests_count,
+            'items' => [
+                [
+                    'label'  => 'Staff Requests',
+                    'url'    => 'hr_requests.php',
+                    'icon'   => 'requests',
+                    'badge'  => $requests_count,
+                    'access' => $access['hr_requests'],
+                    'active' => ($current === 'hr_requests.php'),
+                ],
+                [
+                    'label'  => 'Manage Employees',
+                    'url'    => 'manage_users.php',
+                    'icon'   => 'employees',
+                    'access' => $access['users'],
+                    'active' => ($current === 'manage_users.php'),
+                ],
+                [
+                    'label'  => 'Recruitment',
+                    'url'    => 'recruitment.php',
+                    'icon'   => 'briefcase',
+                    'access' => $access['recruitment'],
+                    'active' => ($current === 'recruitment.php'),
+                ],
+                [
+                    'label'  => 'Attendance',
+                    'url'    => 'attendance.php',
+                    'icon'   => 'attendance',
+                    'access' => $access['hr_attendance'],
+                    'active' => ($current === 'attendance.php'),
+                ],
+                [
+                    'label'  => 'Leave',
+                    'url'    => 'leave_requests.php',
+                    'icon'   => 'leave',
+                    'access' => $access['hr_leave'],
+                    'active' => ($current === 'leave_requests.php'),
+                ],
+            ],
+        ],
+        'admin' => [
+            'title' => 'Admin',
+            'icon'  => 'permissions',
+            'badge' => 0,
+            'items' => [
+                [
+                    'label'  => 'Permissions',
+                    'url'    => 'manage_permissions.php',
+                    'icon'   => 'permissions',
+                    'access' => $access['manage_permissions'],
+                    'active' => ($current === 'manage_permissions.php'),
+                ],
+                [
+                    'label'  => 'Business Analytics',
+                    'url'    => 'analytics.php',
+                    'icon'   => 'analytics',
+                    'access' => $access['analytics'],
+                    'active' => ($current === 'analytics.php'),
+                ],
+            ],
+        ],
+    ];
 
-    <?php if ($access['new_order'] || $access['pending'] || $access['inventory'] || $access['menu_manager'] || $access['history']): ?>
-    <div class="<?= $groupLabel ?>">Operations</div>
-    <?php endif; ?>
+    $anyCategoryActive = false;
+    foreach ($categories as $cat) {
+        foreach ($cat['items'] as $item) {
+            if (!empty($item['access']) && !empty($item['active'])) {
+                $anyCategoryActive = true;
+                break 2;
+            }
+        }
+    }
+    ?>
 
-    <?php if ($access['new_order']): ?>
-    <button class="<?= navBtnClasses($current === 'menu.php') ?>" onclick="window.location.href='menu.php'">
-        <?= icon('order') ?><span class="flex-1 truncate">POS</span>
-    </button>
-    <?php endif; ?>
+    <div class="kfs-sidebar-nav flex-1 py-1 flex flex-col gap-1">
+    <?php foreach ($categories as $catKey => $cat): ?>
+        <?php
+        $visibleItems = array_values(array_filter($cat['items'], fn($it) => !empty($it['access'])));
+        if (empty($visibleItems)) continue;
 
-    <?php if ($access['pending']): ?>
-    <button class="<?= navBtnClasses($current === 'pending_orders.php') ?>" onclick="window.location.href='pending_orders.php'">
-        <?= icon('pending') ?><span class="flex-1 truncate">Pending</span>
-        <?php if ($pending_count > 0): ?>
-        <span class="flex-shrink-0 text-[10px] font-extrabold px-[7px] py-[1px] rounded-full
-                     bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)]"><?= $pending_count ?></span>
-        <?php endif; ?>
-    </button>
-    <?php endif; ?>
+        $hasActiveChild = false;
+        foreach ($visibleItems as $it) {
+            if (!empty($it['active'])) {
+                $hasActiveChild = true;
+                break;
+            }
+        }
 
-    <?php if ($access['inventory']): ?>
-    <button class="<?= navBtnClasses($current === 'inventory.php') ?>" onclick="window.location.href='inventory.php'">
-        <?= icon('inventory') ?><span class="flex-1 truncate">Inventory</span>
-    </button>
-    <?php endif; ?>
+        // Keep open if this category contains the active page, or if no active page anywhere default main
+        $isOpen = $hasActiveChild || (!$anyCategoryActive && $catKey === 'main');
+        $groupClass = 'kfs-cat-group' . ($isOpen ? ' is-open' : '') . ($hasActiveChild ? ' has-active-child' : '');
+        ?>
+        <div class="<?= $groupClass ?>" id="cat-group-<?= $catKey ?>">
+            <button type="button" class="kfs-cat-header <?= $hasActiveChild ? 'is-active-cat' : '' ?>"
+                    aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
+                    aria-controls="cat-body-<?= $catKey ?>"
+                    title="<?= htmlspecialchars($cat['title']) ?>"
+                    onclick="toggleSidebarCategory('<?= $catKey ?>')">
+                <span class="kfs-cat-icon"><?= icon($cat['icon'], 18) ?></span>
+                <span class="kfs-cat-title"><?= htmlspecialchars($cat['title']) ?></span>
+                <?php if (!empty($cat['badge']) && (int)$cat['badge'] > 0): ?>
+                <span class="kfs-cat-badge"><?= (int)$cat['badge'] ?></span>
+                <?php endif; ?>
+                <span class="kfs-cat-chevron">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </span>
+            </button>
 
-    <?php if ($access['menu_manager']): ?>
-    <button class="<?= navBtnClasses($current === 'add_item.php') ?>" onclick="window.location.href='add_item.php'">
-        <?= icon('menu') ?><span class="flex-1 truncate">Menu</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['history']): ?>
-    <button class="<?= navBtnClasses($current === 'history.php') ?>" onclick="window.location.href='history.php'">
-        <?= icon('history') ?><span class="flex-1 truncate">History</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['analytics']): ?>
-    <div class="<?= $groupLabel ?>">Reports</div>
-    <button class="<?= navBtnClasses($current === 'analytics.php') ?>" onclick="window.location.href='analytics.php'">
-        <?= icon('analytics') ?><span class="flex-1 truncate">Analytics</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_view'] || $access['procurement_requisitions'] || $access['procurement_rfq'] || $access['procurement_po'] || $access['procurement_receiving'] || $access['procurement_invoices'] || $access['procurement_match'] || $access['procurement_payments'] || $access['procurement_suppliers'] || $access['procurement_performance'] || $access['procurement_reports']): ?>
-    <div class="<?= $groupLabel ?>">Procurement</div>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_view']): ?>
-    <button class="<?= navBtnClasses($current === 'procurement_dashboard.php') ?>" onclick="window.location.href='procurement_dashboard.php'">
-        <?= icon('portal') ?><span class="flex-1 truncate">Procurement</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_requisitions']): ?>
-    <button class="<?= navBtnClasses($current === 'requisitions.php') ?>" onclick="window.location.href='requisitions.php'">
-        <?= icon('requests') ?><span class="flex-1 truncate">Requisitions</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_rfq']): ?>
-    <button class="<?= navBtnClasses($current === 'rfq.php') ?>" onclick="window.location.href='rfq.php'">
-        <?= icon('rfq') ?><span class="flex-1 truncate">RFQs &amp; Bids</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_po']): ?>
-    <button class="<?= navBtnClasses($current === 'purchase_orders.php') ?>" onclick="window.location.href='purchase_orders.php'">
-        <?= icon('truck') ?><span class="flex-1 truncate">Purchase Orders</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_receiving']): ?>
-    <button class="<?= navBtnClasses($current === 'goods_receipts.php') ?>" onclick="window.location.href='goods_receipts.php'">
-        <?= icon('truck') ?><span class="flex-1 truncate">Goods Receipts</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_invoices']): ?>
-    <button class="<?= navBtnClasses($current === 'invoices.php') ?>" onclick="window.location.href='invoices.php'">
-        <?= icon('invoice') ?><span class="flex-1 truncate">Invoices</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_match']): ?>
-    <button class="<?= navBtnClasses($current === 'three_way_match.php') ?>" onclick="window.location.href='three_way_match.php'">
-        <?= icon('scale') ?><span class="flex-1 truncate">3-Way Match</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_payments']): ?>
-    <button class="<?= navBtnClasses($current === 'payments.php') ?>" onclick="window.location.href='payments.php'">
-        <?= icon('coin') ?><span class="flex-1 truncate">Supplier Payments</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_suppliers']): ?>
-    <button class="<?= navBtnClasses($current === 'suppliers.php') ?>" onclick="window.location.href='suppliers.php'">
-        <?= icon('employees') ?><span class="flex-1 truncate">Suppliers</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_performance']): ?>
-    <button class="<?= navBtnClasses($current === 'supplier_performace.php') ?>" onclick="window.location.href='supplier_performace.php'">
-        <?= icon('star') ?><span class="flex-1 truncate">Supplier Ratings</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['procurement_reports']): ?>
-    <button class="<?= navBtnClasses($current === 'procurement_reports.php') ?>" onclick="window.location.href='procurement_reports.php'">
-        <?= icon('analytics') ?><span class="flex-1 truncate">Procurement Reports</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['hr_requests'] || $access['hr_leave'] || $access['users'] || $access['hr_employees'] || $access['hr_attendance'] || $access['manage_permissions']): ?>
-    <div class="<?= $groupLabel ?>">Admin</div>
-    <?php endif; ?>
-
-    <?php if ($access['hr_requests']): ?>
-    <button class="<?= navBtnClasses($current === 'hr_requests.php') ?>" onclick="window.location.href='hr_requests.php'">
-        <?= icon('requests') ?><span class="flex-1 truncate">Requests</span>
-        <?php if ($requests_count > 0): ?>
-        <span class="flex-shrink-0 text-[10px] font-extrabold px-[7px] py-[1px] rounded-full
-                     bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)]"><?= $requests_count ?></span>
-        <?php endif; ?>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['users']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_users.php') ?>" onclick="window.location.href='manage_users.php'">
-        <?= icon('employees') ?><span class="flex-1 truncate">Manage Employees</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['recruitment']): ?>
-    <button class="<?= navBtnClasses($current === 'recruitment.php') ?>" onclick="window.location.href='recruitment.php'">
-        <?= icon('briefcase') ?><span class="flex-1 truncate">Recruitment &amp; Careers</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['hr_attendance']): ?>
-    <button class="<?= navBtnClasses($current === 'attendance.php') ?>" onclick="window.location.href='attendance.php'">
-        <?= icon('attendance') ?><span class="flex-1 truncate">Attendance</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['hr_leave']): ?>
-    <button class="<?= navBtnClasses($current === 'leave_requests.php') ?>" onclick="window.location.href='leave_requests.php'">
-        <?= icon('leave') ?><span class="flex-1 truncate">Leave</span>
-    </button>
-    <?php endif; ?>
-
-    <?php if ($access['manage_permissions']): ?>
-    <button class="<?= navBtnClasses($current === 'manage_permissions.php') ?>" onclick="window.location.href='manage_permissions.php'">
-        <?= icon('permissions') ?><span class="flex-1 truncate">Manage Permission</span>
-    </button>
-    <?php endif; ?>
+            <div class="kfs-cat-body" id="cat-body-<?= $catKey ?>" role="region" aria-label="<?= htmlspecialchars($cat['title']) ?> Submenu">
+                <div class="kfs-cat-content">
+                    <?php foreach ($visibleItems as $item): ?>
+                    <button type="button"
+                            class="kfs-cat-item <?= !empty($item['active']) ? 'active' : '' ?>"
+                            title="<?= htmlspecialchars($item['label']) ?>"
+                            onclick="window.location.href='<?= htmlspecialchars($item['url']) ?>'">
+                        <?= icon($item['icon'], 16) ?>
+                        <span class="flex-1 truncate"><?= htmlspecialchars($item['label']) ?></span>
+                        <?php if (!empty($item['badge']) && (int)$item['badge'] > 0): ?>
+                        <span class="kfs-nav-badge"><?= (int)$item['badge'] ?></span>
+                        <?php endif; ?>
+                    </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+    </div>
 
     <div class="flex-1"></div>
 
-    <div class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2">
+    <div class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2"
+         title="<?= htmlspecialchars($user['firstname'] ?: $user['username']) ?> (<?= htmlspecialchars(implode(', ', $roles)) ?>)">
         <div class="kfs-user-avatar w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                     bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                     text-[var(--espresso-deep,#1c1108)]">
             <?= htmlspecialchars($initials) ?>
         </div>
-        <div class="leading-tight overflow-hidden">
+        <div class="leading-tight overflow-hidden kfs-user-info">
             <div class="text-[12.5px] font-semibold text-[var(--cream,#fbf3e9)] truncate">
                 <?= htmlspecialchars($user['firstname'] ?: $user['username']) ?>
             </div>
@@ -615,6 +790,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 
     <button class="kfs-logout-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
                    bg-[rgba(198,40,40,0.14)] text-[#f2a9a9] hover:bg-[rgba(198,40,40,0.24)] transition-colors duration-150"
+        title="Logout"
         onclick="window.location.href='../auth/logout.php'">
         <?= icon('logout') ?><span>Logout</span>
     </button>
@@ -758,29 +934,123 @@ document.addEventListener('click', event => {
     if (wrap && !wrap.contains(event.target)) document.getElementById('notification-panel')?.classList.add('hidden');
 });
 
+function toggleSidebarOrMinimize() {
+    if (window.innerWidth >= 1024) {
+        toggleSidebarMinimize();
+    } else {
+        toggleSidebar();
+    }
+}
+
 function toggleSidebar(force) {
+    if (window.innerWidth >= 1024) {
+        toggleSidebarMinimize();
+        return;
+    }
+
     const panel    = document.getElementById('main-sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');
     const btn      = document.getElementById('sidebar-menu-btn');
-    const iconOpen  = document.getElementById('menu-icon-open');
-    const iconClose = document.getElementById('menu-icon-close');
 
-    const willOpen = typeof force === 'boolean' ? force : panel.classList.contains('-translate-x-full');
+    const willOpen = typeof force === 'boolean' ? force : !panel.classList.contains('open');
 
-    panel.classList.toggle('-translate-x-full', !willOpen);
+    panel.classList.toggle('open', willOpen);
     panel.classList.toggle('translate-x-0', willOpen);
+    panel.classList.toggle('-translate-x-full', !willOpen);
 
     backdrop.classList.toggle('opacity-0', !willOpen);
     backdrop.classList.toggle('pointer-events-none', !willOpen);
     backdrop.classList.toggle('opacity-100', willOpen);
     backdrop.classList.toggle('pointer-events-auto', willOpen);
 
-    btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-    iconOpen.classList.toggle('hidden', willOpen);
-    iconClose.classList.toggle('hidden', !willOpen);
+    if (btn) {
+        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    }
 
     document.body.classList.toggle('overflow-hidden', willOpen);
 }
+
+function toggleSidebarMinimize() {
+    const docEl = document.documentElement;
+    const isMin = docEl.classList.toggle('sidebar-minimized');
+    document.body.classList.toggle('sidebar-minimized', isMin);
+
+    try {
+        localStorage.setItem('kfs_sidebar_minimized', isMin ? 'true' : 'false');
+    } catch(e) {}
+
+    updateCollapseButtonState(isMin);
+}
+
+function updateCollapseButtonState(isMin) {
+    const label = document.getElementById('menu-btn-label');
+    if (label) {
+        if (window.innerWidth >= 1024) {
+            label.textContent = 'Expand';
+        } else {
+            label.textContent = 'Menu';
+        }
+    }
+}
+
+// Initial sync on script load & resize
+(function initSidebarMinimizeState() {
+    const isMin = document.documentElement.classList.contains('sidebar-minimized');
+    if (isMin && document.body) {
+        document.body.classList.add('sidebar-minimized');
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            const min = document.documentElement.classList.contains('sidebar-minimized');
+            if (min) document.body.classList.add('sidebar-minimized');
+            updateCollapseButtonState(min);
+        });
+    } else {
+        updateCollapseButtonState(isMin);
+    }
+
+    window.addEventListener('resize', () => {
+        const min = document.documentElement.classList.contains('sidebar-minimized');
+        updateCollapseButtonState(min);
+    });
+})();
+
+function toggleSidebarCategory(catId) {
+    const group = document.getElementById('cat-group-' + catId);
+    if (!group) return;
+    const btn = group.querySelector('.kfs-cat-header');
+    const willOpen = !group.classList.contains('is-open');
+
+    group.classList.toggle('is-open', willOpen);
+    if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+
+    try {
+        const saved = JSON.parse(localStorage.getItem('kfs_open_cats') || '{}');
+        saved[catId] = willOpen;
+        localStorage.setItem('kfs_open_cats', JSON.stringify(saved));
+    } catch(e) {}
+}
+
+(function restoreCategoryState() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('kfs_open_cats') || '{}');
+        Object.keys(saved).forEach(catId => {
+            const group = document.getElementById('cat-group-' + catId);
+            if (!group) return;
+            // Retain active category open state if it has the current page
+            if (group.classList.contains('has-active-child')) return;
+
+            const btn = group.querySelector('.kfs-cat-header');
+            if (saved[catId] === true) {
+                group.classList.add('is-open');
+                if (btn) btn.setAttribute('aria-expanded', 'true');
+            } else if (saved[catId] === false) {
+                group.classList.remove('is-open');
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    } catch(e) {}
+})();
 
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') toggleSidebar(false);
@@ -848,8 +1118,8 @@ document.addEventListener('keydown', e => {
         }
     }, true);
 
-    // Intercept sidebar navigation buttons and logout
-    document.querySelectorAll('.kfs-nav-btn, .kfs-logout-btn').forEach(btn => {
+    // Intercept sidebar navigation buttons, category items, and logout
+    document.querySelectorAll('.kfs-nav-btn, .kfs-cat-item, .kfs-logout-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             showKofeeLoader();
         });

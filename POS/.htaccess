@@ -1,0 +1,16 @@
+# Block version-control and dependency metadata from the web.
+RedirectMatch 404 /\.git
+RedirectMatch 404 /node_modules
+RedirectMatch 404 /(package|package-lock)\.json$
+RedirectMatch 404 /vite\.config\.js$
+
+<FilesMatch "\.(sql|md|log|lock|example)$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always unset X-Powered-By
+</IfModule>
