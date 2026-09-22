@@ -269,3 +269,238 @@ function status_badge(string $status): string {
     ];
     return $map[$status] ?? ucfirst($status);
 }
+
+// ═══════════════════════════════════════════════
+//  PROCUREMENT LETTERS & E-SIGNATURE WORKFLOW
+// ═══════════════════════════════════════════════
+
+/**
+ * Ensures the procurement_letters table and requisition foreign reference exist.
+ */
+function ensure_procurement_letters_table(): void {
+    static $ensured = false;
+    if ($ensured) return;
+    $pdo = get_db();
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS procurement_letters (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                letter_ref VARCHAR(50) NOT NULL UNIQUE,
+                requisition_id INT NOT NULL,
+                supplier_id INT NOT NULL,
+                approver_id INT NOT NULL,
+                approver_name VARCHAR(150) NOT NULL,
+                approver_title VARCHAR(100) NOT NULL,
+                approver_signature LONGTEXT NOT NULL,
+                subject VARCHAR(255) NOT NULL,
+                delivery_terms VARCHAR(255) NULL,
+                payment_terms VARCHAR(255) NULL,
+                special_instructions TEXT NULL,
+                status ENUM('sent', 'acknowledged') DEFAULT 'sent',
+                sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                acknowledged_at DATETIME NULL,
+                acknowledgement_notes TEXT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX (requisition_id),
+                INDEX (supplier_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+
+        $cols = $pdo->query("SHOW COLUMNS FROM purchase_requisitions LIKE 'supplier_id'")->fetchAll();
+        if (empty($cols)) {
+            $pdo->exec("ALTER TABLE purchase_requisitions ADD COLUMN supplier_id INT NULL AFTER reviewed_by");
+        }
+        $ensured = true;
+    } catch (Throwable $e) {
+        error_log('ensure_procurement_letters_table failed: ' . $e->getMessage());
+    }
+}
+
+// Ensure schema is active on include
+ensure_procurement_letters_table();
+
+/**
+ * Creates and dispatches a formal procurement letter directly to the awarded supplier.
+ */
+function create_procurement_letter(
+    int $requisition_id,
+    int $supplier_id,
+    int $approver_id,
+    string $approver_name,
+    string $approver_title,
+    string $approver_signature,
+    string $delivery_terms,
+    string $payment_terms,
+    ?string $special_instructions = null
+): array {
+    ensure_procurement_letters_table();
+    $pdo = get_db();
+
+    $req_stmt = $pdo->prepare('SELECT * FROM purchase_requisitions WHERE id = :id');
+    $req_stmt->execute([':id' => $requisition_id]);
+    $req = $req_stmt->fetch();
+    if (!$req) {
+        return ['ok' => false, 'error' => 'Requisition not found.'];
+    }
+
+    $sup_stmt = $pdo->prepare('SELECT * FROM suppliers WHERE id = :id');
+    $sup_stmt->execute([':id' => $supplier_id]);
+    $supplier = $sup_stmt->fetch();
+    if (!$supplier) {
+        return ['ok' => false, 'error' => 'Supplier not found.'];
+    }
+
+    // Generate clean reference: KM-LTR-YYYY-XXXX
+    $year = date('Y');
+    $base_ref = sprintf('KM-LTR-%s-%04d', $year, $requisition_id);
+    $letter_ref = $base_ref;
+    $suffix = 1;
+    while (true) {
+        $chk = $pdo->prepare('SELECT id FROM procurement_letters WHERE letter_ref = :ref');
+        $chk->execute([':ref' => $letter_ref]);
+        if (!$chk->fetch()) break;
+        $suffix++;
+        $letter_ref = $base_ref . '-' . $suffix;
+    }
+
+    $subject = sprintf('Procurement Award & Purchase Authorization — %s (#%04d)', $req['title'], $requisition_id);
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare("
+            INSERT INTO procurement_letters
+                (letter_ref, requisition_id, supplier_id, approver_id, approver_name, approver_title,
+                 approver_signature, subject, delivery_terms, payment_terms, special_instructions, status, sent_at)
+            VALUES
+                (:ref, :req_id, :sup_id, :app_id, :app_name, :app_title,
+                 (:sig), :subj, :deliv, :pay, :inst, 'sent', NOW())
+        ");
+        $stmt->execute([
+            ':ref'       => $letter_ref,
+            ':req_id'    => $requisition_id,
+            ':sup_id'    => $supplier_id,
+            ':app_id'    => $approver_id,
+            ':app_name'  => $approver_name,
+            ':app_title' => $approver_title,
+            ':sig'       => $approver_signature,
+            ':subj'      => $subject,
+            ':deliv'     => $delivery_terms,
+            ':pay'       => $payment_terms,
+            ':inst'      => $special_instructions,
+        ]);
+        $letter_id = (int)$pdo->lastInsertId();
+
+        // Update purchase_requisitions supplier_id
+        $pdo->prepare('UPDATE purchase_requisitions SET supplier_id = :sid WHERE id = :id')
+            ->execute([':sid' => $supplier_id, ':id' => $requisition_id]);
+
+        $pdo->commit();
+
+        // In-system notification to the supplier's portal account (if linked)
+        if (!empty($supplier['user_id'])) {
+            notify_user(
+                (int)$supplier['user_id'],
+                'procurement_letter',
+                'New Procurement Award Letter Issued',
+                "Kofee Manila has issued official Procurement Letter {$letter_ref} for {$req['title']} (" . php_currency((float)$req['estimated_total']) . '). Please review and acknowledge.',
+                'procurement_letter.php?id=' . $letter_id
+            );
+        }
+
+        audit_log('requisition', $requisition_id, 'letter_issued', "Official procurement letter {$letter_ref} dispatched to supplier {$supplier['name']}");
+
+        return ['ok' => true, 'letter_id' => $letter_id, 'letter_ref' => $letter_ref];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('create_procurement_letter error: ' . $e->getMessage());
+        return ['ok' => false, 'error' => $e->getMessage()];
+    }
+}
+
+/**
+ * Fetches full details of a procurement letter, including supplier, approver, and requisition line items.
+ */
+function get_procurement_letter(int $id, bool $by_requisition = false): ?array {
+    ensure_procurement_letters_table();
+    $pdo = get_db();
+
+    $where = $by_requisition ? 'pl.requisition_id = :id' : 'pl.id = :id';
+    $stmt = $pdo->prepare("
+        SELECT pl.*,
+               pr.title AS req_title, pr.department AS req_department, pr.estimated_total AS req_total,
+               pr.notes AS req_notes, pr.created_at AS req_created_at, pr.reviewed_at AS req_reviewed_at,
+               pr.requested_by,
+               s.name AS supplier_name, s.contact_person AS supplier_contact,
+               s.email AS supplier_email, s.phone AS supplier_phone, s.address AS supplier_address,
+               s.user_id AS supplier_user_id,
+               ru.firstname AS requester_fname, ru.lastname AS requester_lname, ru.username AS requester_uname
+        FROM procurement_letters pl
+        JOIN purchase_requisitions pr ON pr.id = pl.requisition_id
+        JOIN suppliers s ON s.id = pl.supplier_id
+        LEFT JOIN users ru ON ru.id = pr.requested_by
+        WHERE $where
+        ORDER BY pl.id DESC
+        LIMIT 1
+    ");
+    $stmt->execute([':id' => $id]);
+    $letter = $stmt->fetch();
+    if (!$letter) return null;
+
+    // Fetch line items
+    $it_stmt = $pdo->prepare('SELECT * FROM requisition_items WHERE requisition_id = :rid ORDER BY id ASC');
+    $it_stmt->execute([':rid' => $letter['requisition_id']]);
+    $letter['items'] = $it_stmt->fetchAll();
+
+    return $letter;
+}
+
+/**
+ * Acknowledges receipt of a procurement letter by the supplier.
+ */
+function acknowledge_procurement_letter(int $letter_id, int $supplier_id, ?string $notes = null): array {
+    ensure_procurement_letters_table();
+    $pdo = get_db();
+
+    $stmt = $pdo->prepare("
+        SELECT pl.*, s.name AS supplier_name, pr.title AS req_title
+        FROM procurement_letters pl
+        JOIN suppliers s ON s.id = pl.supplier_id
+        JOIN purchase_requisitions pr ON pr.id = pl.requisition_id
+        WHERE pl.id = :id AND pl.supplier_id = :sid
+    ");
+    $stmt->execute([':id' => $letter_id, ':sid' => $supplier_id]);
+    $letter = $stmt->fetch();
+    if (!$letter) {
+        return ['ok' => false, 'error' => 'Letter not found or not assigned to your supplier profile.'];
+    }
+
+    if ($letter['status'] === 'acknowledged') {
+        return ['ok' => true, 'already' => true, 'message' => 'This letter has already been acknowledged.'];
+    }
+
+    try {
+        $upd = $pdo->prepare("
+            UPDATE procurement_letters
+            SET status = 'acknowledged', acknowledged_at = NOW(), acknowledgement_notes = :notes
+            WHERE id = :id
+        ");
+        $upd->execute([':notes' => $notes, ':id' => $letter_id]);
+
+        // Notify procurement officers
+        notify_role_by_permission(
+            'procurement.requisition.review',
+            'letter_acknowledged',
+            'Procurement Letter Acknowledged',
+            "{$letter['supplier_name']} has formally acknowledged receipt of {$letter['letter_ref']}" . ($notes ? ": \"{$notes}\"" : '.'),
+            'procurement_letter.php?id=' . $letter_id
+        );
+
+        audit_log('procurement_letter', $letter_id, 'acknowledged', "Supplier {$letter['supplier_name']} acknowledged letter {$letter['letter_ref']}");
+
+        return ['ok' => true, 'message' => 'Procurement letter successfully acknowledged!'];
+    } catch (Throwable $e) {
+        error_log('acknowledge_procurement_letter error: ' . $e->getMessage());
+        return ['ok' => false, 'error' => $e->getMessage()];
+    }
+}

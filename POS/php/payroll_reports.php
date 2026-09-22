@@ -104,15 +104,11 @@ $labour_pct = $sales_in_period > 0 ? ($totals['gross'] / $sales_in_period) * 100
       <p>Summary registers, bank advice disbursements, statutory schedules, and CSV exports</p>
     </div>
     <div style="display:flex;gap:9px;flex-wrap:wrap">
-      <a class="btn-ghost" href="payroll.php"><?= icon('chevron', 15) ?> <span>Back to Payroll</span></a>
       <button class="btn-ghost" onclick="window.print()"><?= icon('printer', 15) ?> <span>Print Report</span></button>
       <?php if ($period): ?>
       <div style="display:inline-flex;gap:6px">
         <a class="btn-add" href="../api/payroll.php?action=export_csv&period_id=<?= (int)$period['id'] ?>&type=register">
           <?= icon('download', 15) ?> <span>Export Register CSV</span>
-        </a>
-        <a class="btn-ghost" href="../api/payroll.php?action=export_csv&period_id=<?= (int)$period['id'] ?>&type=bank_advice">
-          <?= icon('credit-card', 15) ?> <span>Bank Advice CSV</span>
         </a>
       </div>
       <?php endif; ?>

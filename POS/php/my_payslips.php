@@ -101,9 +101,6 @@ $method_labels = [
         <?= icon('plus', 15) ?> <span>Request Cash Advance</span>
       </button>
       <?php endif; ?>
-      <?php if (has_permission('payroll.view')): ?>
-      <a class="btn-ghost" href="payroll.php"><?= icon('coin', 15) ?> <span>Payroll Management</span></a>
-      <?php endif; ?>
     </div>
   </div>
 

@@ -80,10 +80,6 @@ $audits = $pdo->query(
       <h1>Payroll Settings</h1>
       <p>Working standards, rate multipliers, statutory reference, and loan management</p>
     </div>
-    <div style="display:flex;gap:9px;flex-wrap:wrap">
-      <a class="btn-ghost" href="payroll.php"><?= icon('chevron', 15) ?> <span>Back to Payroll</span></a>
-      <a class="btn-ghost" href="payroll_reports.php"><?= icon('bar-chart', 15) ?> <span>Reports</span></a>
-    </div>
   </div>
 
   <div class="page-body">

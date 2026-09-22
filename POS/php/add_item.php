@@ -178,6 +178,7 @@ if (empty($categories) || !isset($categories[0]['category_name'])) {
 </div>
 
 <!-- ── Progressive Multi-Step "Add / Edit Item" Modal (Warm Cafe Theme) ── -->
+<div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="prog-modal-overlay">
 <div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="prog-modal-overlay opacity-0 pointer-events-none">
   <div id="progressive-modal-dialog" class="prog-modal-dialog">
     

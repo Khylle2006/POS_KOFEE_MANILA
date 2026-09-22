@@ -54,7 +54,7 @@ $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
     'dashboard'          => has_permission('dashboard.view'),
-    'employee_dashboard' => has_permission('employee_dashboard.view') || !empty($_SESSION['user_id']),
+    'employee_dashboard' => has_permission('employee_dashboard.view'),
     'new_order'          => has_permission('orders.new'),
     'pending'            => has_permission('orders.pending'),
     'history'            => has_permission('orders.history'),
@@ -66,8 +66,9 @@ $access = [
     'recruitment'        => has_permission('recruitment.manage') || has_permission('users.manage'),
     'hr_attendance'      => has_permission('attendance.view'),
     'hr_leave'           => has_permission('leave.view'),
+    
         'payroll'            => has_permission('payroll.view'),
-    'payroll_own'        => has_permission('payroll.own') || !empty($_SESSION['user_id']),
+    'payroll_own'        => has_permission('payroll.own'),
     'hr_requests'        => has_permission('leave.view') || in_array('admin', $roles, true),
     'manage_permissions' => has_permission('permissions.manage') || in_array('admin', $roles, true) || in_array('hr', $roles, true),
 
@@ -83,6 +84,7 @@ $access = [
     'procurement_suppliers'    => has_permission('procurement.suppliers.manage'),
     'procurement_performance'  => has_permission('procurement.performance.rate'),
     'procurement_reports'      => has_permission('procurement.reports.view'),
+    'supplier_portal'     => has_permission('procurement.supplier.portal'),
 ];
 
 // ── Live badge counts (best-effort; never break the sidebar if a
@@ -702,6 +704,20 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'icon'   => 'analytics',
                     'access' => $access['analytics'],
                     'active' => ($current === 'analytics.php'),
+                ],
+            ],
+        ],
+        'Supplier' => [
+            'title' => 'Supplier Portal',
+            'icon'  => 'briefcase',
+            'badge' => 0,
+            'items' => [
+                [
+                    'label'  => 'Supplier Portal',
+                    'url'    => 'supplier_portal.php',
+                    'icon'   => 'briefcase',
+                    'access' => $access['supplier_portal'],
+                    'active' => ($current === 'supplier_portal.php'),
                 ],
             ],
         ],
