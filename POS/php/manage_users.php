@@ -10,15 +10,28 @@ $user  = current_user();
 $toast = '';
 $toast_type = 'success';
 
-// Shared role list — the account "Roles" checkboxes below draw from this,
-// and it also stocks the employee "Department" dropdown.
-$roles = [
-    'hr'      => 'HR',
-    'finance' => 'Finance',
-    'crew'    => 'Crew',
-    'manager' => 'Manager',
-    'admin'   => 'Admin',
-];
+// Shared role list — dynamically loaded from the roles table so ALL made roles
+// (both system and custom roles) appear for selection without collision.
+$all_roles_db = get_all_roles();
+$system_roles = [];
+foreach ($all_roles_db as $r) {
+    $system_roles[$r['role_key']] = $r['label'];
+}
+if (empty($system_roles)) {
+    $system_roles = [
+        'admin'       => 'Admin',
+        'manager'     => 'Manager',
+        'hr'          => 'HR',
+        'finance'     => 'Finance',
+        'cashier'     => 'Cashier',
+        'staff'       => 'Crew / Barista',
+        'crew'        => 'Crew',
+        'ops'         => 'Ops',
+        'procurement' => 'Procurement Officer',
+        'warehouse'   => 'Warehouse / Receiving Officer',
+        'supplier'    => 'Supplier',
+    ];
+}
 $emp_types = ['Full-time', 'Part-time', 'Contract'];
 
 // ── Multi-role support ────────────────────────
@@ -58,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email     = trim($_POST['email']     ?? '');
 
         // Multiple account roles — sanitize against the allowed list
-        $roles_selected = array_values(array_intersect($_POST['roles'] ?? [], array_keys($roles)));
+        $roles_selected = array_values(array_intersect($_POST['roles'] ?? [], array_keys($system_roles)));
         $primary_role   = $roles_selected[0] ?? 'crew'; // legacy single-role column
 
         // Account-only fields
@@ -69,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Employee-only fields
         $code       = trim($_POST['employee_code']  ?? '');
         $pos        = trim($_POST['position']       ?? '');
-        $department = array_key_exists($_POST['department'] ?? '', $roles) ? $_POST['department'] : $primary_role;
+        $department = array_key_exists($_POST['department'] ?? '', $system_roles) ? $_POST['department'] : $primary_role;
         $phone      = trim($_POST['contact_number'] ?? '');
         $hire       = $_POST['hire_date']           ?? null;
         $etype      = in_array($_POST['employment_type'] ?? '', $emp_types) ? $_POST['employment_type'] : 'Full-time';
@@ -123,6 +136,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $ins_role = $pdo->prepare('INSERT IGNORE INTO user_roles (user_id, role) VALUES (:u, :r)');
                     foreach ($roles_selected as $rl) {
                         $ins_role->execute([':u' => $user_id, ':r' => $rl]);
+                    }
+
+                    // If currently logged-in user edited their own profile, sync session immediately
+                    if ($user_id === (int)($_SESSION['user_id'] ?? 0)) {
+                        $_SESSION['roles'] = $roles_selected;
+                        $_SESSION['role']  = $primary_role;
+                        clear_permission_cache();
                     }
                 }
 
@@ -250,13 +270,13 @@ unset($r);
 $search = trim($_GET['search'] ?? '');
 $filter = $_GET['filter'] ?? 'all';
 
-$filtered = array_filter($roster, function ($r) use ($search, $filter) {
+$filtered = array_filter($roster, function ($r) use ($search, $filter, $system_roles) {
     if ($search) {
         $hay = strtolower($r['fn'].' '.$r['ln'].' '.$r['username'].' '.$r['employee_code'].' '.$r['position']);
         if (!str_contains($hay, strtolower($search))) return false;
     }
     if ($filter !== 'all') {
-        if (in_array($filter, ['hr','finance','crew','manager','admin'])
+        if (array_key_exists($filter, $system_roles)
             && !in_array($filter, $r['role_array'])
             && $r['department'] !== $filter) return false;
         if ($filter === 'no_account'  && $r['user_id']) return false;
@@ -331,8 +351,8 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
             <div class="toolbar-filters">
               <select class="filter-select" name="filter" onchange="this.form.submit()">
                 <option value="all"        <?= $filter==='all'?'selected':'' ?>>All</option>
-                <?php foreach ($roles as $val=>$label): ?>
-                  <option value="<?= $val ?>" <?= $filter===$val?'selected':'' ?>><?= $label ?></option>
+                <?php foreach ($system_roles as $val=>$label): ?>
+                  <option value="<?= htmlspecialchars($val) ?>" <?= $filter===$val?'selected':'' ?>><?= htmlspecialchars($label) ?></option>
                 <?php endforeach; ?>
                 <option value="no_account"  <?= $filter==='no_account'?'selected':'' ?>>No Login Account</option>
                 <option value="no_profile"  <?= $filter==='no_profile'?'selected':'' ?>>No Employee Profile</option>
@@ -366,7 +386,19 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
             <?php else:
               // Avatar tint matches the role badge colors — a glance at the
               // left edge of the table now tells you who's what.
-              $role_colors = ['hr'=>'#6a3fa0','finance'=>'#00695c','crew'=>'#1565c0','manager'=>'#e65100','admin'=>'#c47d3e'];
+              $role_colors = [
+                'admin'       => '#c47d3e',
+                'manager'     => '#e65100',
+                'hr'          => '#6a3fa0',
+                'finance'     => '#00695c',
+                'cashier'     => '#2e7d32',
+                'crew'        => '#1565c0',
+                'staff'       => '#1565c0',
+                'ops'         => '#d84315',
+                'procurement' => '#0277bd',
+                'warehouse'   => '#455a64',
+                'supplier'    => '#4e342e',
+              ];
               foreach ($filtered as $r):
                 $full     = $r['fn'].' '.$r['ln'];
                 $full_esc = htmlspecialchars($full);
@@ -393,9 +425,9 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
                 <td><?= htmlspecialchars($r['position'] ?: '—') ?></td>
                 <td>
                   <?php if ($primary): ?>
-                    <span class="role-text" style="color:<?= $color ?>"><?= htmlspecialchars(strtoupper($roles[$primary] ?? $primary)) ?></span>
+                    <span class="role-text" style="color:<?= $color ?>"><?= htmlspecialchars(strtoupper($system_roles[$primary] ?? $primary)) ?></span>
                     <?php if (count($r['role_array']) > 1): ?>
-                      <span class="muted-cell" title="<?= htmlspecialchars(implode(', ', array_map(fn($rl) => $roles[$rl] ?? $rl, array_slice($r['role_array'],1)))) ?>">+<?= count($r['role_array']) - 1 ?></span>
+                      <span class="muted-cell" title="<?= htmlspecialchars(implode(', ', array_map(fn($rl) => $system_roles[$rl] ?? $rl, array_slice($r['role_array'],1)))) ?>">+<?= count($r['role_array']) - 1 ?></span>
                     <?php endif; ?>
                   <?php else: ?>
                     <span class="muted-cell">—</span>
@@ -508,9 +540,9 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
             <span class="field-hint"> — select all that apply</span>
           </label>
           <div class="role-checks" id="f-roles">
-            <?php foreach ($roles as $val=>$label): ?>
+            <?php foreach ($system_roles as $val=>$label): ?>
               <label class="role-check-opt">
-                <input type="checkbox" name="roles[]" value="<?= $val ?>"/> <?= $label ?>
+                <input type="checkbox" name="roles[]" value="<?= htmlspecialchars($val) ?>"/> <?= htmlspecialchars($label) ?>
               </label>
             <?php endforeach; ?>
           </div>
@@ -557,8 +589,8 @@ $active_acct = count(array_filter($roster, fn($r) => $r['account_status'] === 'a
         <div class="field-group mg-b">
           <label class="field-label">Department</label>
           <select class="field-input" name="department" id="f-department">
-            <?php foreach ($roles as $val=>$label): ?>
-              <option value="<?= $val ?>"><?= $label ?></option>
+            <?php foreach ($system_roles as $val=>$label): ?>
+              <option value="<?= htmlspecialchars($val) ?>"><?= htmlspecialchars($label) ?></option>
             <?php endforeach; ?>
           </select>
         </div>

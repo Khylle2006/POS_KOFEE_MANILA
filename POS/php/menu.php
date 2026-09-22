@@ -37,7 +37,7 @@ require_permission('orders.new');
             <span class="p-sep">&rarr;</span>
             <span class="p-crumb">Size &amp; Add-ons</span>
             <span class="p-sep">&rarr;</span>
-            <span class="p-crumb">Order Ticket</span>
+            <span class="p-crumb">Order Receipt</span>
             <span class="p-sep">&rarr;</span>
             <span class="p-crumb">Checkout &amp; Receipt</span>
           </div>
@@ -61,7 +61,7 @@ require_permission('orders.new');
           <div class="ppc-icon"><?= icon('coffee', 20) ?></div>
           <div class="ppc-info">
             <strong>Order Workflow</strong>
-            <p>Tap drinks to add to ticket, choose size, review, and complete payment</p>
+            <p>Tap drinks to add to Receipt, choose size, review, and complete payment</p>
           </div>
         </div>
         <div class="ppc-steps">
@@ -77,7 +77,7 @@ require_permission('orders.new');
           </div>
           <div class="ppc-step">
             <span class="ppc-step-icon"><?= icon('shopping-bag', 13) ?></span>
-            <span>3. Ticket</span>
+            <span>3. Receipt</span>
             <span class="ppc-step-arrow">&rsaquo;</span>
           </div>
           <div class="ppc-step">
@@ -129,7 +129,7 @@ require_permission('orders.new');
         <div class="op-drag-handle"></div>
         <div class="op-mobile-head">
           <div class="op-mobile-title">
-            <strong>Order Ticket</strong>
+            <strong>Order Receipt</strong>
             <span class="op-mobile-count" id="mobile-ticket-count">0 items</span>
           </div>
           <button type="button" class="op-mobile-close-btn" onclick="closeMobileCart()">
@@ -179,7 +179,7 @@ require_permission('orders.new');
         </div>
       </div>
       <button type="button" class="mcb-btn">
-        <span>View Ticket &amp; Pay</span>
+        <span>View Receipt &amp; Pay</span>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </button>
     </div>

@@ -242,31 +242,26 @@ function sync_user_session_permissions(): array {
     if (empty($_SESSION['user_id'])) return [];
 
     $roles = [];
-    if (!empty($_SESSION['roles']) && is_array($_SESSION['roles'])) {
-        $roles = $_SESSION['roles'];
-    } elseif (!empty($_SESSION['role'])) {
-        $roles = [$_SESSION['role']];
-    }
-
-    if (empty($roles)) {
-        try {
-            $pdo = get_db();
-            $stmt = $pdo->prepare("SELECT role FROM user_roles WHERE user_id = ?");
-            $stmt->execute([$_SESSION['user_id']]);
-            $roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
-            if (empty($roles)) {
-                $uStmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
-                $uStmt->execute([$_SESSION['user_id']]);
-                $single = $uStmt->fetchColumn();
-                if ($single) $roles = [$single];
-            }
-            if ($roles) {
-                $_SESSION['roles'] = $roles;
-                $_SESSION['role']  = $roles[0];
-            }
-        } catch (Exception $e) {
-            error_log("Error syncing user roles: " . $e->getMessage());
+    try {
+        $pdo = get_db();
+        $stmt = $pdo->prepare("SELECT role FROM user_roles WHERE user_id = ? ORDER BY role");
+        $stmt->execute([$_SESSION['user_id']]);
+        $roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        if (empty($roles)) {
+            $uStmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+            $uStmt->execute([$_SESSION['user_id']]);
+            $single = $uStmt->fetchColumn();
+            if ($single) $roles = [$single];
         }
+        if ($roles) {
+            $_SESSION['roles'] = $roles;
+            $_SESSION['role']  = $roles[0];
+        }
+    } catch (Exception $e) {
+        error_log("Error syncing user roles: " . $e->getMessage());
+        $roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
+            ? $_SESSION['roles']
+            : (!empty($_SESSION['role']) ? [$_SESSION['role']] : []);
     }
 
     // Admin holds all permissions
@@ -518,6 +513,10 @@ function install_default_permissions(): void {
             ['payroll.settings', 'Configure Payroll Standards & Multipliers', 'Payroll', 'Configure working hours, overtime/holiday/night multipliers, tip distribution rules, and statutory schedules'],
             ['payroll.own', 'My Compensation & Payslips (Staff)', 'Payroll', 'Employee self-service: view personal compensation, released payslips, and loan/advance ledger'],
             ['payroll.advance.request', 'Request Cash Advance (Staff)', 'Payroll', 'Staff self-service: submit salary advance or emergency cash requests for management review'],
+            ['employee_dashboard.view', 'View Employee Dashboard', 'General', 'Personal staff dashboard to clock in, request leave, and view metrics'],
+            ['inventory.expiry.manage', 'Manage Batch Expiry Dates', 'Inventory', 'Track and manage perishable batch expiration dates'],
+            ['requests.manage', 'Manage HR Requests', 'HR', 'Review and process employee HR requests and inquiries'],
+            ['files.download', 'Download Secured Files', 'Settings', 'Download secure files, payslips, and exports'],
         ];
         
         $pStmt = $pdo->prepare("INSERT INTO permissions (perm_key, label, category, description) VALUES (?, ?, ?, ?)
@@ -555,15 +554,15 @@ function install_default_permissions(): void {
         
         // Default role grants
         $default_grants = [
-            'manager'     => ['dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'inventory.view', 'inventory.manage', 'menu.manage', 'menu.edit', 'analytics.view', 'attendance.view', 'leave.view', 'payroll.view', 'payroll.manage', 'payroll.approve', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review'],
-            'hr'          => ['dashboard.view', 'users.manage', 'recruitment.manage', 'attendance.view', 'leave.view', 'payroll.view', 'payroll.manage', 'payroll.loans', 'payroll.settings', 'payroll.own'],
-            'finance'     => ['dashboard.view', 'analytics.view', 'payroll.view', 'payroll.release', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.invoice.create', 'procurement.invoice.match', 'procurement.payment.process', 'procurement.budget.manage', 'procurement.reports.view', 'procurement.audit.view'],
-            'cashier'     => ['dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'payroll.own', 'payroll.advance.request'],
-            'staff'       => ['dashboard.view', 'orders.pending', 'attendance.view', 'payroll.own', 'payroll.advance.request'],
-            'crew'        => ['dashboard.view', 'orders.new', 'orders.pending', 'attendance.view', 'payroll.own', 'payroll.advance.request'],
-            'ops'         => ['dashboard.view', 'attendance.view', 'leave.view', 'payroll.own', 'payroll.advance.request'],
-            'procurement' => ['dashboard.view', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review', 'procurement.rfq.manage', 'procurement.bidding.review', 'procurement.negotiation', 'procurement.po.manage', 'procurement.close', 'procurement.reports.view', 'procurement.suppliers.manage', 'procurement.performance.rate', 'procurement.attachments.manage', 'payroll.own', 'payroll.advance.request'],
-            'warehouse'   => ['dashboard.view', 'inventory.view', 'inventory.manage', 'procurement.view', 'procurement.receiving', 'procurement.grn.discrepancy.manage', 'payroll.own', 'payroll.advance.request'],
+            'manager'     => ['dashboard.view', 'employee_dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'inventory.view', 'inventory.manage', 'menu.manage', 'menu.edit', 'analytics.view', 'attendance.view', 'leave.view', 'payroll.view', 'payroll.manage', 'payroll.approve', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review'],
+            'hr'          => ['dashboard.view', 'employee_dashboard.view', 'permissions.manage', 'users.manage', 'recruitment.manage', 'attendance.view', 'leave.view', 'requests.manage', 'payroll.view', 'payroll.manage', 'payroll.loans', 'payroll.settings', 'payroll.own', 'files.download'],
+            'finance'     => ['dashboard.view', 'employee_dashboard.view', 'analytics.view', 'payroll.view', 'payroll.release', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.invoice.create', 'procurement.invoice.match', 'procurement.payment.process', 'procurement.budget.manage', 'procurement.reports.view', 'procurement.audit.view'],
+            'cashier'     => ['dashboard.view', 'employee_dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'payroll.own', 'payroll.advance.request'],
+            'staff'       => ['dashboard.view', 'employee_dashboard.view', 'orders.pending', 'attendance.view', 'payroll.own', 'payroll.advance.request'],
+            'crew'        => ['dashboard.view', 'employee_dashboard.view', 'orders.new', 'orders.pending', 'attendance.view', 'payroll.own', 'payroll.advance.request'],
+            'ops'         => ['dashboard.view', 'employee_dashboard.view', 'attendance.view', 'leave.view', 'payroll.own', 'payroll.advance.request'],
+            'procurement' => ['dashboard.view', 'employee_dashboard.view', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review', 'procurement.rfq.manage', 'procurement.bidding.review', 'procurement.negotiation', 'procurement.po.manage', 'procurement.close', 'procurement.reports.view', 'procurement.suppliers.manage', 'procurement.performance.rate', 'procurement.attachments.manage', 'payroll.own', 'payroll.advance.request'],
+            'warehouse'   => ['dashboard.view', 'employee_dashboard.view', 'inventory.view', 'inventory.manage', 'procurement.view', 'procurement.receiving', 'procurement.grn.discrepancy.manage', 'payroll.own', 'payroll.advance.request'],
             'supplier'    => ['procurement.supplier.portal'],
         ];
 

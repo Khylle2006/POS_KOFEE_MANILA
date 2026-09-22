@@ -221,9 +221,6 @@ unset($r);
       <h1>Purchase Requisitions</h1>
       <p>Request supplies and review budget-checked requests</p>
     </div>
-    <?php if (has_permission('procurement.requisition.create')): ?>
-      <button class="btn-add" onclick="openCreate()"><?= icon('plus', 14) ?> New Requisition</button>
-    <?php endif; ?>
   </div>
 
   <div class="page-body">

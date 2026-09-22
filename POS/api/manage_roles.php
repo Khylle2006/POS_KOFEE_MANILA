@@ -6,9 +6,11 @@ require_login();
 header('Content-Type: application/json');
 
 $user = current_user();
-if ($user['role'] !== 'admin') {
+$userRoles = $_SESSION['roles'] ?? (isset($user['roles']) ? $user['roles'] : [$user['role'] ?? '']);
+$canManage = has_permission('permissions.manage') || in_array('admin', $userRoles, true) || ($user['role'] ?? '') === 'admin';
+if (!$canManage) {
     http_response_code(403);
-    echo json_encode(['ok' => false, 'error' => 'Only admins can manage roles.']);
+    echo json_encode(['ok' => false, 'error' => 'You do not have permission to manage roles.']);
     exit;
 }
 

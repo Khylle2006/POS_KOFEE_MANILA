@@ -17,6 +17,7 @@ $landing_pages = [
     'procurement.supplier.portal' => '../php/supplier_portal.php',
     'payroll.view'                => '../php/payroll.php',
     'payroll.own'                 => '../php/my_payslips.php',
+    'permissions.manage'          => '../php/manage_permissions.php',
 ];
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
@@ -96,5 +97,6 @@ foreach ($landing_pages as $perm => $url) {
     }
 }
 
-header('Location: ../php/no_access.php');
+// If user has any permissions but none matched landing_pages, route to employee dashboard
+header('Location: ../php/employee_dashboard.php');
 exit;

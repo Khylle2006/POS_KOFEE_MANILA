@@ -3,7 +3,8 @@ require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 
 require_login();
-require_permission('employee_dashboard.view');
+// Employee Dashboard is the employee personal self-service portal (clock-in/out, shifts, payslips, leave).
+// Any authenticated staff member has access to their own dashboard.
 
 
 $pdo   = get_db();

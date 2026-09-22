@@ -210,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
 
       <p class="text-[12px] text-stone-600 mb-5 leading-relaxed">
-        Enter your account username or email address and we'll send a secure reset link via PHPMailer.
+        Enter your account username or email address and we'll send a secure reset link.
       </p>
 
       <?php if ($error): ?>

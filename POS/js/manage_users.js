@@ -76,9 +76,9 @@ function openEdit(r) {
     document.getElementById('pw-hint').textContent = '— leave blank to keep current';
 
     // Check every role box this account currently holds
-    const currentRoles = (r.role_array || []);
+    const currentRoles = (r.role_array || []).map(x => String(x).toLowerCase().trim());
     document.querySelectorAll('#f-roles input[type=checkbox]').forEach(cb => {
-      cb.checked = currentRoles.includes(cb.value);
+      cb.checked = currentRoles.includes(String(cb.value).toLowerCase().trim());
     });
   }
   toggleSection('account');

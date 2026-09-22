@@ -54,7 +54,7 @@ $current = basename($_SERVER['PHP_SELF']);
 
 $access = [
     'dashboard'          => has_permission('dashboard.view'),
-    'employee_dashboard' => has_permission('employee_dashboard.view'),
+    'employee_dashboard' => has_permission('employee_dashboard.view') || !empty($_SESSION['user_id']),
     'new_order'          => has_permission('orders.new'),
     'pending'            => has_permission('orders.pending'),
     'history'            => has_permission('orders.history'),
@@ -69,7 +69,7 @@ $access = [
         'payroll'            => has_permission('payroll.view'),
     'payroll_own'        => has_permission('payroll.own') || !empty($_SESSION['user_id']),
     'hr_requests'        => has_permission('leave.view') || in_array('admin', $roles, true),
-    'manage_permissions' => has_permission('permissions.manage'),
+    'manage_permissions' => has_permission('permissions.manage') || in_array('admin', $roles, true) || in_array('hr', $roles, true),
 
     // Procurement Module Access
     'procurement_view'         => has_permission('procurement.view'),
@@ -470,7 +470,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     </div>
 
     <?php
-    $categories = [
+    $sidebar_nav_categories = [
         'main' => [
             'title' => 'Main',
             'icon'  => 'dashboard',
@@ -708,7 +708,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     ];
 
     $anyCategoryActive = false;
-    foreach ($categories as $cat) {
+    foreach ($sidebar_nav_categories as $cat) {
         foreach ($cat['items'] as $item) {
             if (!empty($item['access']) && !empty($item['active'])) {
                 $anyCategoryActive = true;
@@ -719,7 +719,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     ?>
 
     <div class="kfs-sidebar-nav flex-1 py-1 flex flex-col gap-1">
-    <?php foreach ($categories as $catKey => $cat): ?>
+    <?php foreach ($sidebar_nav_categories as $catKey => $cat): ?>
         <?php
         $visibleItems = array_values(array_filter($cat['items'], fn($it) => !empty($it['access'])));
         if (empty($visibleItems)) continue;

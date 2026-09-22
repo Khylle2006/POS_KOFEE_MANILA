@@ -681,8 +681,7 @@ tbody tr:hover td { background: #FEFAF4; }
   padding: 20px;
   box-sizing: border-box;
 }
-.prog-modal-overlay.open,
-.prog-modal-overlay:not(.pointer-events-none) {
+.prog-modal-overlay.open {
   opacity: 1;
   pointer-events: auto;
 }
@@ -702,8 +701,7 @@ tbody tr:hover td { background: #FEFAF4; }
   max-height: 88vh;
   box-sizing: border-box;
 }
-.prog-modal-overlay.open .prog-modal-dialog,
-.prog-modal-overlay:not(.pointer-events-none) .prog-modal-dialog {
+.prog-modal-overlay.open .prog-modal-dialog {
   transform: scale(1) translateY(0);
 }
 

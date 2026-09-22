@@ -180,7 +180,6 @@ unset($_SESSION['login_username']);
         <div class="field">
           <div class="flex items-center justify-between mb-1">
             <label class="block text-[11px] font-semibold uppercase tracking-wide" style="color:var(--espresso)">Password</label>
-            <a href="forgot_password.php" class="text-[11px] font-semibold hover:underline" style="color:var(--caramel)">Forgot?</a>
           </div>
           <input type="password" name="password" placeholder="••••••••" required
             class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
@@ -193,7 +192,7 @@ unset($_SESSION['login_username']);
         </button>
 
         <p class="text-center text-[11px] text-stone-500 pt-1">
-          Trouble signing in? <a href="forgot_password.php" class="font-semibold hover:underline" style="color:var(--caramel)">Reset password</a>
+          Trouble signing in? <a href="forgot_password.php" class="font-semibold hover:underline" style="color:var(--caramel)">Forgot password</a>
         </p>
       </form>
     </div>

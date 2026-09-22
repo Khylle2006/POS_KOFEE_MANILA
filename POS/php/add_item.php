@@ -31,7 +31,12 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
 </head>
 <body>
 
-<?php include("../includes/sidebar.php"); ?>
+<?php 
+include("../includes/sidebar.php"); 
+if (empty($categories) || !isset($categories[0]['category_name'])) {
+    $categories = $pdo->query('SELECT id, category_name FROM categories ORDER BY category_name')->fetchAll(PDO::FETCH_ASSOC);
+}
+?>
 
 <div id="page-menu-manager" class="page active">
   <div class="page-header">
@@ -173,7 +178,7 @@ $existingProductNames = array_values(array_filter(array_map(fn($p) => strtolower
 </div>
 
 <!-- ── Progressive Multi-Step "Add / Edit Item" Modal (Warm Cafe Theme) ── -->
-<div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="prog-modal-overlay">
+<div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="prog-modal-overlay opacity-0 pointer-events-none">
   <div id="progressive-modal-dialog" class="prog-modal-dialog">
     
     <!-- Hidden input to store item ID in edit mode -->
