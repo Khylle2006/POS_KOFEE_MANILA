@@ -503,4 +503,4 @@ function acknowledge_procurement_letter(int $letter_id, int $supplier_id, ?strin
         error_log('acknowledge_procurement_letter error: ' . $e->getMessage());
         return ['ok' => false, 'error' => $e->getMessage()];
     }
-}
+}

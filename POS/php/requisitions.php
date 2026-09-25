@@ -94,32 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $req = $req->fetch();
 
             if ($req && $req['status'] === 'pending') {
-                $budget_check  = null;
                 $override_note = trim($_POST['budget_override_note'] ?? '');
 
                 if ($status === 'approved') {
-                    $supplier_id          = (int)($_POST['supplier_id'] ?? 0);
-                    $approver_signature   = trim($_POST['approver_signature'] ?? '');
-                    $delivery_terms       = trim($_POST['delivery_terms'] ?? 'Within 5-7 business days upon receipt of order');
-                    $payment_terms        = trim($_POST['payment_terms'] ?? 'Net 30 Days upon delivery and three-way invoice matching');
-                    $special_instructions = trim($_POST['special_instructions'] ?? '');
-                    $approver_title       = trim($_POST['approver_title'] ?? ($user['role'] === 'admin' ? 'Procurement Director' : 'Procurement Officer'));
-                    $approver_name        = trim(($user['firstname'] ?? '') . ' ' . ($user['lastname'] ?? '')) ?: $user['username'];
-
-                    if (!$supplier_id) {
-                        $toast = 'Please select an awarded supplier to approve this requisition and issue the procurement letter.';
-                        $toast_type = 'error';
-                        header('Location: requisitions.php?toast=' . urlencode($toast) . '&type=error');
-                        exit;
-                    }
-
-                    if (!$approver_signature) {
-                        $toast = 'An authorized approver e-signature is required to issue the procurement letter.';
-                        $toast_type = 'error';
-                        header('Location: requisitions.php?toast=' . urlencode($toast) . '&type=error');
-                        exit;
-                    }
-
                     $budget_check = check_budget_availability($req['department'], (float)$req['estimated_total'], $period_label);
 
                     if (!$budget_check['ok'] && !$override_note) {
@@ -131,17 +108,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
 
-                    // Update requisition status and awarded supplier
+                    // Approve: just records the reviewer, timestamp, decision, and
+                    // optional reason. Supplier selection, RFQ invitations, and any
+                    // contract paperwork happen later, starting at the RFQ stage.
                     $pdo->prepare('
                         UPDATE purchase_requisitions
-                        SET status=:s, reviewed_by=:u, reviewed_at=NOW(), review_notes=:n, supplier_id=:sup
+                        SET status=:s, reviewed_by=:u, reviewed_at=NOW(), review_notes=:n
                         WHERE id=:id
                     ')->execute([
-                        ':s'   => $status,
-                        ':u'   => $user['id'],
-                        ':n'   => $notes,
-                        ':sup' => $supplier_id,
-                        ':id'  => $id
+                        ':s' => $status, ':u' => $user['id'], ':n' => $notes, ':id' => $id,
                     ]);
 
                     // Consume budget immediately
@@ -150,25 +125,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         audit_log('requisition', $id, 'approved_over_budget', $override_note);
                     }
 
-                    // Generate formal procurement letter with approver e-signature
-                    $letterRes = create_procurement_letter(
-                        $id,
-                        $supplier_id,
-                        (int)$user['id'],
-                        $approver_name,
-                        $approver_title,
-                        $approver_signature,
-                        $delivery_terms,
-                        $payment_terms,
-                        $special_instructions ?: null
+                    notify_role_by_permission(
+                        'procurement.rfq.manage', 'requisition_approved',
+                        'Requisition approved — ready for RFQ',
+                        htmlspecialchars($req['title']) . ' can now go out for supplier quotes.',
+                        'rfq.php?requisition_id=' . $id, $user['id']
                     );
 
-                    if ($letterRes['ok']) {
-                        $toast = "Requisition approved & Procurement Letter (" . $letterRes['letter_ref'] . ") dispatched to Supplier Portal!";
-                    } else {
-                        $toast = 'Requisition approved, but letter creation encountered an error: ' . ($letterRes['error'] ?? 'unknown');
-                        $toast_type = 'error';
-                    }
+                    $toast = 'Requisition approved. Start an RFQ to invite suppliers.';
                 } else {
                     // Rejected
                     $pdo->prepare('
@@ -191,14 +155,6 @@ if (isset($_GET['toast'])) {
     $toast      = htmlspecialchars($_GET['toast']);
     $toast_type = $_GET['type'] ?? 'success';
 }
-
-// ── Active suppliers for awarding & procurement letters ────────
-$active_suppliers = $pdo->query("
-    SELECT id, name, contact_person, email, phone, address
-    FROM suppliers
-    WHERE status = 'active'
-    ORDER BY name ASC
-")->fetchAll();
 
 // ── Budget strip ───────────────────────────────
 // Reviewers see every department; everyone else sees just their own.
@@ -223,13 +179,9 @@ if (in_array($filter, ['pending','approved','rejected','sourcing','awarded','clo
 unset($params[':p']); // not used in this query — keep param list clean
 
 $stmt = $pdo->prepare("
-    SELECT pr.*, u.firstname, u.lastname,
-           pl.id AS letter_id, pl.letter_ref, pl.status AS letter_status, pl.acknowledged_at,
-           s.name AS supplier_name, s.contact_person AS supplier_contact
+    SELECT pr.*, u.firstname, u.lastname
     FROM purchase_requisitions pr
     JOIN users u ON u.id = pr.requested_by
-    LEFT JOIN procurement_letters pl ON pl.requisition_id = pr.id
-    LEFT JOIN suppliers s ON s.id = pr.supplier_id OR s.id = pl.supplier_id
     WHERE $where
     ORDER BY FIELD(pr.status,'pending','approved','sourcing','awarded','rejected','closed'), pr.created_at DESC
 ");
@@ -318,7 +270,7 @@ unset($r);
     </div>
 
     <div class="table-scroll-hint">
-      <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
+      <span><?= icon('chevron-right', 12) ?> Swipe to view all 6 columns</span>
     </div>
 
     <div class="table-scroll-wrapper">
@@ -335,23 +287,11 @@ unset($r);
             <td><?= htmlspecialchars($departments[$r['department']] ?? $r['department']) ?></td>
             <td><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?></td>
             <td style="font-weight:700">₱<?= number_format($r['estimated_total'],2) ?></td>
-            <td>
-              <span class="status-badge status-<?= $r['status'] ?>"><?= ucfirst($r['status']) ?></span>
-              <?php if (!empty($r['letter_ref'])): ?>
-                <div style="font-size:11px;color:<?= $r['letter_status'] === 'acknowledged' ? 'var(--green)' : 'var(--caramel)' ?>;font-weight:700;margin-top:3px;display:flex;align-items:center;gap:3px">
-                  <?= icon('check', 11) ?> <?= $r['letter_status'] === 'acknowledged' ? 'Acknowledged' : 'Letter Sent' ?>
-                </div>
-              <?php endif; ?>
-            </td>
+            <td><span class="status-badge status-<?= $r['status'] ?>"><?= ucfirst($r['status']) ?></span></td>
             <td class="muted-cell"><?= date('M d, Y', strtotime($r['created_at'])) ?></td>
             <td>
               <div class="act-group">
                 <button class="act-btn" onclick='openView(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)'><?= icon('eye', 13) ?> View</button>
-                <?php if (!empty($r['letter_id'])): ?>
-                  <a href="procurement_letter.php?id=<?= $r['letter_id'] ?>" target="_blank" class="act-btn" style="color:var(--caramel);text-decoration:none;display:inline-flex;align-items:center;gap:4px">
-                    <?= icon('file-text', 13) ?> Letter
-                  </a>
-                <?php endif; ?>
                 <?php if ($r['status'] === 'approved' && has_permission('procurement.rfq.manage')): ?>
                   <button class="act-btn act-activate" onclick="window.location.href='rfq.php?requisition_id=<?= $r['id'] ?>'"><?= icon('send', 13) ?> Start RFQ</button>
                 <?php endif; ?>
@@ -412,7 +352,7 @@ unset($r);
 
 <!-- View / Review modal -->
 <div class="modal-overlay" id="view-modal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:580px">
     <div class="modal-header">
       <h3 id="v-title">Requisition</h3>
       <button class="modal-close" onclick="closeView()"><?= icon('x', 14) ?></button>
@@ -423,10 +363,11 @@ unset($r);
       <p style="font-weight:800;text-align:right;margin-bottom:10px" id="v-total"></p>
       <p id="v-notes" style="font-size:12.5px;color:var(--text-muted);font-style:italic;margin-bottom:10px"></p>
 
-       <div id="v-review-block" style="display:none">
+      <div id="v-review-block" style="display:none">
         <p id="v-budget-info" style="font-size:12.5px;font-weight:700;margin-bottom:10px;display:none"></p>
+
         <div class="field-group">
-          <label class="field-label">Review Notes</label>
+          <label class="field-label">Review / Internal Notes</label>
           <textarea class="field-input" id="v-review-notes" rows="2" placeholder="Optional — reason for approval/rejection"></textarea>
         </div>
         <div class="field-group" id="v-override-group" style="display:none">
@@ -506,6 +447,7 @@ function openView(r) {
   const actions        = document.getElementById('v-actions');
   const budgetInfo     = document.getElementById('v-budget-info');
   const overrideGroup  = document.getElementById('v-override-group');
+
   reviewBlock.style.display = 'none';
   reviewedBlock.style.display = 'none';
   budgetInfo.style.display = 'none';
@@ -625,12 +567,14 @@ function submitReview(id, status) {
     document.getElementById('v-budget-override').focus();
     return;
   }
+
   const fd = new FormData();
   fd.append('action', 'review');
   fd.append('id', id);
   fd.append('status', status);
   fd.append('review_notes', document.getElementById('v-review-notes').value);
   fd.append('budget_override_note', overrideNote);
+
   const form = document.createElement('form');
   form.method = 'POST';
   for (const [k,v] of fd.entries()) {

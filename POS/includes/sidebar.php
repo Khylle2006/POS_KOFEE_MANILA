@@ -452,10 +452,6 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2"/>
                 </svg>
             </div>
-            <div class="leading-tight overflow-hidden kfs-brand-text">
-                <div class="font-['Playfair_Display',serif] font-bold text-[15.5px] truncate">Kofee Manila</div>
-                <div class="text-[10.5px] text-[var(--caramel-light,#d9a06b)] tracking-wide truncate">Coffee &amp; Bites</div>
-            </div>
         </div>
 
         <!-- Inner Sidebar Collapse Button (Visible when expanded, Gone when collapsed) -->

@@ -53,6 +53,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
         }
     }
 
+    if ($action === 'acknowledge_letter') {
+        $letter_id = (int)($_POST['letter_id'] ?? 0);
+        $notes     = trim($_POST['acknowledgement_notes'] ?? '');
+        $res       = acknowledge_procurement_letter($letter_id, (int)$supplier['id'], $notes);
+        if ($res['ok']) {
+            $toast = $res['message'] ?? 'Letter acknowledged.';
+        } else {
+            $toast = $res['error'] ?? 'Could not acknowledge letter.';
+            $toast_type = 'error';
+        }
+    }
+
     if ($action === 'acknowledge_po') {
         $po_id = (int)($_POST['po_id'] ?? 0);
         $upd = $pdo->prepare("UPDATE purchase_orders SET status='acknowledged', acknowledged_at=NOW() WHERE id=:id AND supplier_id=:sid AND status='sent'");
@@ -191,10 +203,22 @@ if (isset($_GET['toast'])) {
 $open_invites = [];
 $my_bids = [];
 $my_pos = [];
+$my_letters = [];
 $breakdown = null;
 $ratings = [];
 
 if ($supplier) {
+    // Official procurement letters issued to this supplier
+    $let_stmt = $pdo->prepare("
+        SELECT pl.*, pr.title AS req_title, pr.department, pr.estimated_total
+        FROM procurement_letters pl
+        JOIN purchase_requisitions pr ON pr.id = pl.requisition_id
+        WHERE pl.supplier_id = :s
+        ORDER BY FIELD(pl.status, 'sent', 'acknowledged'), pl.sent_at DESC
+    ");
+    $let_stmt->execute([':s' => $supplier['id']]);
+    $my_letters = $let_stmt->fetchAll();
+
     // RFQs this supplier is invited to and still open for a quote
     $inv_stmt = $pdo->prepare("
         SELECT rfqs.id AS rfq_id, rfqs.due_date, rfqs.status AS rfq_status,
@@ -309,6 +333,89 @@ if ($supplier) {
       </div>
 
     <?php else: ?>
+
+      <!-- ── Official Procurement Letters & Orders ── -->
+      <?php
+      $pending_ack_count = count(array_filter($my_letters, fn($l) => $l['status'] === 'sent'));
+      ?>
+      <h3 class="portal-section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span style="display:inline-flex;align-items:center;gap:6px">
+          <?= icon('file-text', 16, '', 'color:var(--caramel)') ?>
+          Official Procurement Letters &amp; Order Authorizations
+          <?= count($my_letters) ? '(' . count($my_letters) . ')' : '' ?>
+        </span>
+        <?php if ($pending_ack_count > 0): ?>
+          <span class="status-badge status-pending" style="font-size:11px">
+            <?= $pending_ack_count ?> Awaiting Acknowledgment
+          </span>
+        <?php endif; ?>
+      </h3>
+
+      <?php if (empty($my_letters)): ?>
+        <p class="muted-cell" style="margin-bottom:18px">No procurement letters issued to your account yet.</p>
+      <?php else: foreach ($my_letters as $let): ?>
+        <div class="po-card" style="border-color:<?= $let['status']==='sent' ? '#E67E22' : 'var(--border)' ?>;background:<?= $let['status']==='sent' ? '#FDF8F2' : '#FFFFFF' ?>;flex-direction:column;align-items:stretch;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <strong style="font-size:15px;color:var(--espresso)"><?= htmlspecialchars($let['req_title']) ?></strong>
+                <span style="font-family:monospace;font-size:12px;font-weight:700;background:#EFE0CC;padding:2px 6px;border-radius:4px;color:var(--espresso)">
+                  <?= htmlspecialchars($let['letter_ref']) ?>
+                </span>
+                <span class="status-badge <?= $let['status']==='acknowledged' ? 'status-approved' : 'status-pending' ?>">
+                  <?= $let['status']==='acknowledged' ? 'Acknowledged' : 'Pending Acknowledgment' ?>
+                </span>
+              </div>
+
+              <p class="muted-cell" style="margin:4px 0 0">
+                Department: <?= htmlspecialchars($let['department']) ?> ·
+                Authorized Amount: <strong style="color:var(--espresso)"><?= php_currency((float)$let['estimated_total']) ?></strong> ·
+                Issued <?= date('M d, Y', strtotime($let['sent_at'])) ?> by <?= htmlspecialchars($let['approver_name']) ?> (<?= htmlspecialchars($let['approver_title']) ?>)
+              </p>
+
+              <?php if (!empty($let['delivery_terms'])): ?>
+                <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0">
+                  <strong>Delivery Terms:</strong> <?= htmlspecialchars($let['delivery_terms']) ?>
+                </p>
+              <?php endif; ?>
+
+              <?php if ($let['status'] === 'acknowledged'): ?>
+                <p style="font-size:12px;color:#27AE60;margin:6px 0 0;font-weight:600">
+                  <?= icon('check', 12) ?> Formally acknowledged on <?= date('M d, Y H:i', strtotime($let['acknowledged_at'])) ?>
+                  <?= !empty($let['acknowledgement_notes']) ? ' — "' . htmlspecialchars($let['acknowledgement_notes']) . '"' : '' ?>
+                </p>
+              <?php endif; ?>
+            </div>
+
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <a href="procurement_letter.php?id=<?= $let['id'] ?>" target="_blank" class="act-btn act-activate" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+                <?= icon('eye', 13) ?> View Official Letter
+              </a>
+              <?php if ($let['status'] === 'sent'): ?>
+                <button type="button" class="btn-save" style="padding:6px 12px;font-size:12px;background:#27AE60" onclick="toggleAckForm(<?= $let['id'] ?>)">
+                  <?= icon('check', 13) ?> Acknowledge Letter
+                </button>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <?php if ($let['status'] === 'sent'): ?>
+            <form method="POST" id="ack-form-<?= $let['id'] ?>" style="display:none;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)">
+              <input type="hidden" name="action" value="acknowledge_letter"/>
+              <input type="hidden" name="letter_id" value="<?= $let['id'] ?>"/>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                <div class="field-group" style="margin:0;flex:1;min-width:240px">
+                  <label class="field-label">Confirmation / Estimated Delivery Note (optional)</label>
+                  <input class="field-input" type="text" name="acknowledgement_notes" placeholder="e.g. Order received and scheduled for dispatch on Friday"/>
+                </div>
+                <button type="submit" class="btn-save" style="background:#27AE60">
+                  <?= icon('check', 13) ?> Confirm Acknowledgment
+                </button>
+              </div>
+            </form>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; endif; ?>
 
       <!-- ── Open RFQ Invitations ── -->
       <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px"><?= icon('message', 16, '', 'color:var(--caramel)') ?> Open RFQ Invitations <?= count($open_invites) ? '(' . count($open_invites) . ')' : '' ?></h3>
@@ -480,6 +587,10 @@ if ($supplier) {
 </div>
 
 <script>
+function toggleAckForm(id) {
+  const f = document.getElementById('ack-form-' + id);
+  if (f) f.style.display = (f.style.display === 'none' || !f.style.display) ? 'block' : 'none';
+}
 function toggleShipForm(id) {
   const f = document.getElementById('ship-form-' + id);
   if (f) f.style.display = f.style.display === 'none' ? 'flex' : 'none';
