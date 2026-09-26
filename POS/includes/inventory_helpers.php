@@ -274,9 +274,18 @@ function has_active_reorder(int $ingredient_id): bool {
     }
 }
 
-/** Last known unit price for an ingredient, from past requisition lines. */
-function last_known_unit_price(int $ingredient_id, string $item_name): float {
+/** Last known unit price for an ingredient, prioritizing configured unit_cost, then past requisition lines. */
+function last_known_unit_price(int $ingredient_id, string $item_name = ''): float {
     try {
+        // Priority 1: Check unit_cost configured on the ingredient itself
+        $stmt_cost = get_db()->prepare('SELECT unit_cost FROM ingredients WHERE id = :id');
+        $stmt_cost->execute([':id' => $ingredient_id]);
+        $cost = $stmt_cost->fetchColumn();
+        if ($cost !== false && $cost !== null && (float)$cost > 0) {
+            return (float)$cost;
+        }
+
+        // Priority 2: Fall back to past requisition lines
         $stmt = get_db()->prepare(
             'SELECT est_unit_price
                FROM requisition_items
@@ -319,8 +328,12 @@ function check_and_trigger_reorder(int $ingredient_id, ?int $actor_id = null): i
 
         $qty        = (float)$item['reorder_quantity'];
         if ($qty <= 0) $qty = max((float)$item['reorder_at'] * 2, 10);
-        $unit_price = last_known_unit_price($ingredient_id, $item['name']);
+        $unit_price = (float)($item['unit_cost'] ?? 0) > 0 ? (float)$item['unit_cost'] : last_known_unit_price($ingredient_id, $item['name']);
         $total      = $qty * $unit_price;
+
+        $cost_note = $unit_price > 0
+            ? sprintf('Estimated auto-reorder total: ₱%s (₱%s / %s).', number_format($total, 2), number_format($unit_price, 2), $item['cost_unit'] ?: $item['unit'])
+            : 'Estimate unavailable (cost not set).';
 
         $pdo->prepare(
             "INSERT INTO purchase_requisitions
@@ -333,9 +346,10 @@ function check_and_trigger_reorder(int $ingredient_id, ?int $actor_id = null): i
             ':ing'   => $ingredient_id,
             ':title' => 'Auto-reorder — ' . $item['name'],
             ':notes' => sprintf(
-                'Generated automatically. Stock fell to %s %s (threshold %s %s).',
+                'Generated automatically. Stock fell to %s %s (threshold %s %s). %s',
                 rtrim(rtrim(number_format((float)$item['quantity'], 2), '0'), '.'), $item['unit'],
-                rtrim(rtrim(number_format((float)$item['reorder_at'], 2), '0'), '.'), $item['unit']
+                rtrim(rtrim(number_format((float)$item['reorder_at'], 2), '0'), '.'), $item['unit'],
+                $cost_note
             ),
             ':total' => $total,
         ]);

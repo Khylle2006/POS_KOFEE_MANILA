@@ -220,6 +220,8 @@ function get_permission_aliases(string $perm_key): array {
         'procurement.invoice.match'=> ['can_match_invoices', 'procurement.invoice.match'],
         'can_manage_suppliers'     => ['procurement.suppliers.manage', 'can_manage_suppliers'],
         'procurement.suppliers.manage' => ['can_manage_suppliers', 'procurement.suppliers.manage'],
+        'can_review_finance_quotes'=> ['procurement.finance.review', 'can_review_finance_quotes'],
+        'procurement.finance.review'=> ['can_review_finance_quotes', 'procurement.finance.review'],
 
         // Payroll
         'can_view_payroll'         => ['payroll.view', 'can_view_payroll'],
@@ -504,6 +506,7 @@ function install_default_permissions(): void {
             ['procurement.attachments.manage', 'Manage Procurement Attachments', 'Procurement', 'Upload and view supporting documents on procurement records'],
             ['procurement.suppliers.manage', 'Manage Suppliers', 'Procurement', 'Add, edit, or deactivate suppliers in the directory'],
             ['procurement.supplier.portal', 'Supplier Portal Access', 'Procurement', 'Supplier-side access: view RFQ invites, submit bids, acknowledge POs'],
+            ['procurement.finance.review', 'Finance Review of Quotes', 'Procurement', 'Review and authorize or reject high-value purchase quotations exceeding the finance threshold'],
             // Payroll Permissions
             ['payroll.view', 'View Payroll Register & Dashboard', 'Payroll', 'Access payroll summary metrics, period lists, and employee payslip registers'],
             ['payroll.manage', 'Manage Payroll Periods & Calculate', 'Payroll', 'Create pay periods, trigger automated hours/tips/deduction calculations, and add manual adjustments'],
@@ -554,9 +557,9 @@ function install_default_permissions(): void {
         
         // Default role grants
         $default_grants = [
-            'manager'     => ['dashboard.view', 'employee_dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'inventory.view', 'inventory.manage', 'menu.manage', 'menu.edit', 'analytics.view', 'attendance.view', 'leave.view', 'payroll.view', 'payroll.manage', 'payroll.approve', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review'],
+            'manager'     => ['dashboard.view', 'employee_dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'inventory.view', 'inventory.manage', 'menu.manage', 'menu.edit', 'analytics.view', 'attendance.view', 'leave.view', 'payroll.view', 'payroll.manage', 'payroll.approve', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review', 'procurement.finance.review'],
             'hr'          => ['dashboard.view', 'employee_dashboard.view', 'permissions.manage', 'users.manage', 'recruitment.manage', 'attendance.view', 'leave.view', 'requests.manage', 'payroll.view', 'payroll.manage', 'payroll.loans', 'payroll.settings', 'payroll.own', 'files.download'],
-            'finance'     => ['dashboard.view', 'employee_dashboard.view', 'analytics.view', 'payroll.view', 'payroll.release', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.invoice.create', 'procurement.invoice.match', 'procurement.payment.process', 'procurement.budget.manage', 'procurement.reports.view', 'procurement.audit.view'],
+            'finance'     => ['dashboard.view', 'employee_dashboard.view', 'analytics.view', 'payroll.view', 'payroll.release', 'payroll.loans', 'payroll.own', 'procurement.view', 'procurement.finance.review', 'procurement.invoice.create', 'procurement.invoice.match', 'procurement.payment.process', 'procurement.budget.manage', 'procurement.reports.view', 'procurement.audit.view'],
             'cashier'     => ['dashboard.view', 'employee_dashboard.view', 'orders.new', 'orders.pending', 'orders.history', 'payroll.own', 'payroll.advance.request'],
             'staff'       => ['dashboard.view', 'employee_dashboard.view', 'orders.pending', 'attendance.view', 'payroll.own', 'payroll.advance.request'],
             'crew'        => ['dashboard.view', 'employee_dashboard.view', 'orders.new', 'orders.pending', 'attendance.view', 'payroll.own', 'payroll.advance.request'],

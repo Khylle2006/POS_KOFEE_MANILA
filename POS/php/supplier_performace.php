@@ -32,8 +32,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $toast = 'Purchase Order not found.'; $toast_type = 'error';
         } elseif ($po['status'] === 'closed') {
             $toast = 'This order is already closed.'; $toast_type = 'error';
+        } elseif ($po['status'] !== 'delivered') {
+            $toast = 'Cannot close order: Goods have not been confirmed delivered yet.'; $toast_type = 'error';
+        } elseif ($po['issue_status'] === 'open') {
+            $toast = 'Cannot close order: There is an active supplier issue under review that must be resolved first.'; $toast_type = 'error';
         } else {
-            try {
+            // Check that invoice has been paid
+            $inv_paid = !empty($po['paid_at']);
+            if (!$inv_paid) {
+                $chk_inv = $pdo->prepare("SELECT COUNT(*) FROM invoices WHERE po_id = :p AND status = 'paid'");
+                $chk_inv->execute([':p' => $po_id]);
+                $inv_paid = ((int)$chk_inv->fetchColumn()) > 0;
+            }
+
+            if (!$inv_paid) {
+                $toast = 'Cannot close order: Invoice has not been marked as paid yet.'; $toast_type = 'error';
+            } else {
+                try {
                 $pdo->beginTransaction();
 
                 $pdo->prepare(
@@ -75,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+}
 
     $q = $closed_successfully
       ? '?closed=1'
@@ -117,16 +133,23 @@ if ($view_supplier_id) {
     }
 }
 
-// ── Orders ready to close (delivered + invoice paid, not yet closed) ──
-$ready_stmt = $pdo->query("
+// ── Orders ready to close (delivered + invoice paid, no open issues, not yet closed) ──
+$filter_po_id = (int)($_GET['po_id'] ?? 0);
+$ready_where = "po.status = 'delivered' AND (po.issue_status IS NULL OR po.issue_status != 'open') AND (po.paid_at IS NOT NULL OR EXISTS (SELECT 1 FROM invoices i WHERE i.po_id = po.id AND i.status = 'paid'))";
+$ready_params = [];
+if ($filter_po_id > 0) {
+    $ready_where .= " AND po.id = :poid";
+    $ready_params[':poid'] = $filter_po_id;
+}
+$ready_stmt = $pdo->prepare("
     SELECT po.*, s.name AS supplier_name, pr.title AS req_title
     FROM purchase_orders po
     JOIN suppliers s ON s.id = po.supplier_id
     JOIN purchase_requisitions pr ON pr.id = po.requisition_id
-    WHERE po.status = 'delivered'
-      AND EXISTS (SELECT 1 FROM invoices i WHERE i.po_id = po.id AND i.status = 'paid')
+    WHERE $ready_where
     ORDER BY po.delivered_at DESC
 ");
+$ready_stmt->execute($ready_params);
 $ready_pos = $ready_stmt->fetchAll();
 
 // ── Supplier leaderboard ──────────────────────────────

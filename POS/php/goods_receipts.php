@@ -14,7 +14,7 @@ $toast = '';
 $toast_type = 'success';
 
 // ── POST actions ──────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $action = $_POST['action'] ?? '';
     $po_id  = (int)($_POST['po_id'] ?? 0);
 
@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $items = $_POST['items'] ?? []; // [requisition_item_id => ['received_qty'=>.., 'condition'=>.., 'notes'=>..]]
         $grn_notes = trim($_POST['grn_notes'] ?? '');
+        $dn_id = !empty($_POST['delivery_notice_id']) ? (int)$_POST['delivery_notice_id'] : null;
 
         $po_stmt = $pdo->prepare('SELECT * FROM purchase_orders WHERE id = :id');
         $po_stmt->execute([':id' => $po_id]);
@@ -40,10 +41,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $all_complete    = true;
 
                 $grn_stmt = $pdo->prepare(
-                    'INSERT INTO goods_receipts (po_id, received_by, status, notes) VALUES (:po, :u, :st, :n)'
+                    'INSERT INTO goods_receipts (po_id, delivery_notice_id, received_by, status, notes) VALUES (:po, :dn, :u, :st, :n)'
                 );
                 // Placeholder status; corrected after we evaluate items below.
-                $grn_stmt->execute([':po' => $po_id, ':u' => $user['id'], ':st' => 'pending', ':n' => $grn_notes]);
+                $grn_stmt->execute([':po' => $po_id, ':dn' => $dn_id, ':u' => $user['id'], ':st' => 'pending', ':n' => $grn_notes]);
                 $grn_id = (int)$pdo->lastInsertId();
 
                 $item_stmt = $pdo->prepare(
@@ -149,15 +150,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
 
+                    // $prior_stmt was executed after $insert_item, so it contains all good receipts including this line
                     $prior_stmt->execute([':po' => $po_id, ':ri' => $req_item_id]);
-                    $already_good = (float)$prior_stmt->fetchColumn();
-                    $total_good   = $already_good + ($condition === 'good' ? $received : 0);
+                    $total_good = (float)$prior_stmt->fetchColumn();
 
-                    if ($condition !== 'good' || $received != $ri['quantity']) {
+                    // Discrepancy occurs if item condition is damaged/rejected or total good received exceeds ordered quantity
+                    if ($condition !== 'good' || $total_good > (float)$ri['quantity']) {
                         $has_discrepancy = true;
                     }
-                    if ($total_good < (float)$ri['quantity']) {
+                }
+
+                // Verify whether ALL items on this requisition are now completely received in good condition
+                $check_all_stmt = $pdo->prepare("
+                    SELECT ri.id, ri.quantity,
+                           COALESCE((
+                               SELECT SUM(gri.received_qty)
+                               FROM goods_receipt_items gri
+                               JOIN goods_receipts g ON g.id = gri.grn_id
+                               WHERE g.po_id = :po AND gri.requisition_item_id = ri.id AND gri.item_condition = 'good'
+                           ), 0) AS total_good
+                    FROM requisition_items ri
+                    WHERE ri.requisition_id = :rid
+                ");
+                $check_all_stmt->execute([':po' => $po_id, ':rid' => $po['requisition_id']]);
+                $all_po_items = $check_all_stmt->fetchAll();
+
+                $all_complete = true;
+                foreach ($all_po_items as $api) {
+                    if ((float)$api['total_good'] < (float)$api['quantity']) {
                         $all_complete = false;
+                        break;
                     }
                 }
 
@@ -166,8 +188,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([':st' => $grn_status, ':id' => $grn_id]);
 
                 // If everything for the PO is now fully & cleanly received, advance the PO.
-                if ($grn_status === 'complete') {
-                    $pdo->prepare("UPDATE purchase_orders SET status='delivered', delivered_at=NOW() WHERE id=:id")
+                if ($all_complete && !$has_discrepancy) {
+                    $pdo->prepare("UPDATE purchase_orders SET status='delivered', fulfillment_status='delivered', delivered_at=COALESCE(delivered_at, NOW()) WHERE id=:id")
+                        ->execute([':id' => $po_id]);
+                    if ($dn_id) {
+                        $pdo->prepare("UPDATE delivery_notices SET fulfillment_status='delivered' WHERE id=:id")
+                            ->execute([':id' => $dn_id]);
+                    }
+                } elseif ($grn_status === 'partial') {
+                    $pdo->prepare("UPDATE purchase_orders SET fulfillment_status='partially_shipped' WHERE id=:id AND fulfillment_status != 'delivered'")
                         ->execute([':id' => $po_id]);
                 }
 
@@ -194,7 +223,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
 
-                audit_log('grn', $grn_id, 'recorded', "PO #$po_id — status: $grn_status");
+                audit_log('grn', $grn_id, 'recorded', "PO #$po_id — status: $grn_status" . ($dn_id ? " (ASN #$dn_id)" : ''));
+
+                // Notify supplier portal user if one is linked
+                $s_stmt = $pdo->prepare('SELECT user_id, name FROM suppliers WHERE id = :sid');
+                $s_stmt->execute([':sid' => $po['supplier_id']]);
+                $sup_row = $s_stmt->fetch();
+                if (!empty($sup_row['user_id'])) {
+                    if ($grn_status === 'discrepancy') {
+                        notify_user(
+                            (int)$sup_row['user_id'],
+                            'grn_discrepancy',
+                            "Delivery Discrepancy Flagged on PO #{$po['id']}",
+                            "Kofee Manila warehouse flagged an issue or discrepancy while receiving items for PO #{$po['id']}. Please check your portal.",
+                            "supplier_portal.php?tab=orders&po_id={$po_id}"
+                        );
+                    } else {
+                        notify_user(
+                            (int)$sup_row['user_id'],
+                            'grn_confirmed',
+                            "Goods Receipt Confirmed on PO #{$po['id']}",
+                            "Delivery items for PO #{$po['id']}" . ($dn_id ? " (ASN linked)" : "") . " have been physically received and confirmed at Kofee Manila warehouse.",
+                            "supplier_portal.php?tab=orders&po_id={$po_id}"
+                        );
+                    }
+                }
 
                 if ($grn_status === 'discrepancy') {
                     notify_role_by_permission(
@@ -237,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([':st' => $new_status, ':r' => $resolution, ':id' => $grn_id]);
 
                 if ($new_status === 'complete') {
-                    $pdo->prepare("UPDATE purchase_orders SET status='delivered', delivered_at=COALESCE(delivered_at, NOW()) WHERE id=:id")
+                    $pdo->prepare("UPDATE purchase_orders SET status='delivered', fulfillment_status='delivered', delivered_at=COALESCE(delivered_at, NOW()) WHERE id=:id")
                         ->execute([':id' => $grn['po_id']]);
                 }
                 audit_log('grn', $grn_id, 'discrepancy_resolved', $resolution);
@@ -258,7 +311,9 @@ if (isset($_GET['toast'])) {
 
 // ── Detail view: one PO's receiving screen ──────────────────────────
 $view_po_id = (int)($_GET['po_id'] ?? 0);
+$selected_asn_id = (int)($_GET['asn_id'] ?? 0);
 $po = null; $req_items = []; $grns = [];
+$delivery_notices = []; $dn_items_map = [];
 if ($view_po_id) {
     $stmt = $pdo->prepare('
         SELECT po.*, s.name AS supplier_name, pr.title AS req_title, pr.department, pr.id AS requisition_id
@@ -285,14 +340,64 @@ if ($view_po_id) {
         $recv_stmt->execute([':po' => $view_po_id]);
         $received_map = $recv_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
+        $total_remaining = 0;
         foreach ($req_items as &$ri) {
             $ri['received_so_far'] = (float)($received_map[$ri['id']] ?? 0);
+            $total_remaining += max(0, (float)$ri['quantity'] - $ri['received_so_far']);
         }
         unset($ri);
 
+        // Auto-sync: If all items for this PO have already been received, ensure PO status is 'delivered'
+        if ($total_remaining <= 0 && count($req_items) > 0 && in_array($po['status'], ['sent', 'acknowledged', 'partially_shipped'], true)) {
+            $pdo->prepare("UPDATE purchase_orders SET status='delivered', fulfillment_status='delivered', delivered_at=COALESCE(delivered_at, NOW()) WHERE id=:id")
+                ->execute([':id' => $view_po_id]);
+            $po['status'] = 'delivered';
+            $po['fulfillment_status'] = 'delivered';
+        }
+
+        // Fetch delivery notices / ASNs for this PO
+        $dn_stmt = $pdo->prepare('
+            SELECT dn.*, 
+                   (SELECT COUNT(*) FROM delivery_notice_items dni WHERE dni.delivery_notice_id = dn.id) AS item_count,
+                   (SELECT COALESCE(SUM(dni.shipped_qty), 0) FROM delivery_notice_items dni WHERE dni.delivery_notice_id = dn.id) AS total_shipped_qty
+            FROM delivery_notices dn
+            WHERE dn.po_id = :po
+            ORDER BY dn.shipped_date DESC, dn.created_at DESC
+        ');
+        $dn_stmt->execute([':po' => $view_po_id]);
+        $delivery_notices = $dn_stmt->fetchAll();
+
+        if (!empty($delivery_notices)) {
+            $dni_stmt = $pdo->prepare('
+                SELECT dni.* 
+                FROM delivery_notice_items dni 
+                JOIN delivery_notices dn ON dn.id = dni.delivery_notice_id
+                WHERE dn.po_id = :po
+            ');
+            $dni_stmt->execute([':po' => $view_po_id]);
+            $all_dni = $dni_stmt->fetchAll();
+            foreach ($all_dni as $di) {
+                $dn_items_map[$di['delivery_notice_id']][$di['requisition_item_id']] = (float)$di['shipped_qty'];
+            }
+
+            if (!$selected_asn_id) {
+                foreach ($delivery_notices as $dn_cand) {
+                    if ($dn_cand['fulfillment_status'] !== 'delivered') {
+                        $selected_asn_id = (int)$dn_cand['id'];
+                        break;
+                    }
+                }
+                if (!$selected_asn_id) {
+                    $selected_asn_id = (int)$delivery_notices[0]['id'];
+                }
+            }
+        }
+
         $grn_stmt = $pdo->prepare(
-            "SELECT g.*, u.firstname, u.lastname FROM goods_receipts g
+            "SELECT g.*, u.firstname, u.lastname, dn.notice_ref AS asn_ref, dn.carrier_name 
+             FROM goods_receipts g
              LEFT JOIN users u ON u.id = g.received_by
+             LEFT JOIN delivery_notices dn ON dn.id = g.delivery_notice_id
              WHERE g.po_id = :po ORDER BY g.received_at DESC"
         );
         $grn_stmt->execute([':po' => $view_po_id]);
@@ -300,13 +405,45 @@ if ($view_po_id) {
     }
 }
 
-// ── List view: POs ready to receive + recent GRNs ───────────────────
+// ── List view: POs ready to receive + recent GRNs + incoming ASNs ────
+// Auto-sync any POs whose items have been 100% received in good condition
+$pdo->exec("
+    UPDATE purchase_orders po
+    SET po.status = 'delivered',
+        po.fulfillment_status = 'delivered',
+        po.delivered_at = COALESCE(po.delivered_at, NOW())
+    WHERE po.status IN ('sent', 'acknowledged', 'partially_shipped')
+      AND (
+          SELECT COALESCE(SUM(ri.quantity), 0)
+          FROM requisition_items ri
+          WHERE ri.requisition_id = po.requisition_id
+      ) > 0
+      AND (
+          SELECT COALESCE(SUM(ri.quantity), 0)
+          FROM requisition_items ri
+          WHERE ri.requisition_id = po.requisition_id
+      ) <= (
+          SELECT COALESCE(SUM(gri.received_qty), 0)
+          FROM goods_receipt_items gri
+          JOIN goods_receipts g ON g.id = gri.grn_id
+          WHERE g.po_id = po.id AND gri.item_condition = 'good'
+      )
+");
+
 $ready_stmt = $pdo->query("
     SELECT po.*, s.name AS supplier_name, pr.title AS req_title
     FROM purchase_orders po
     JOIN suppliers s ON s.id = po.supplier_id
     JOIN purchase_requisitions pr ON pr.id = po.requisition_id
-    WHERE po.status IN ('sent','acknowledged')
+    WHERE po.status IN ('sent','acknowledged','partially_shipped')
+      AND (
+          SELECT COALESCE(SUM(ri.quantity), 0) FROM requisition_items ri WHERE ri.requisition_id = po.requisition_id
+      ) > (
+          SELECT COALESCE(SUM(gri.received_qty), 0)
+          FROM goods_receipt_items gri
+          JOIN goods_receipts g ON g.id = gri.grn_id
+          WHERE g.po_id = po.id AND gri.item_condition = 'good'
+      )
     ORDER BY po.expected_delivery_date IS NULL, po.expected_delivery_date ASC, po.created_at DESC
 ");
 $ready_pos = $ready_stmt->fetchAll();
@@ -320,6 +457,22 @@ $discrepancy_stmt = $pdo->query("
     ORDER BY g.received_at DESC
 ");
 $open_discrepancies = $discrepancy_stmt->fetchAll();
+
+$asn_list_stmt = $pdo->query("
+    SELECT dn.*, 
+           po.po_number, po.status AS po_status,
+           pr.title AS req_title,
+           s.name AS supplier_name,
+           (SELECT COUNT(*) FROM delivery_notice_items dni WHERE dni.delivery_notice_id = dn.id) AS item_count,
+           (SELECT COALESCE(SUM(dni.shipped_qty), 0) FROM delivery_notice_items dni WHERE dni.delivery_notice_id = dn.id) AS total_shipped_qty
+    FROM delivery_notices dn
+    JOIN purchase_orders po ON po.id = dn.po_id
+    JOIN suppliers s ON s.id = dn.supplier_id
+    JOIN purchase_requisitions pr ON pr.id = po.requisition_id
+    WHERE dn.fulfillment_status != 'delivered' AND po.status IN ('sent','acknowledged')
+    ORDER BY dn.shipped_date DESC, dn.created_at DESC
+");
+$incoming_asns = $asn_list_stmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -361,15 +514,22 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
         <h2><?= htmlspecialchars($po['req_title']) ?></h2>
         <p class="muted-cell" style="margin-bottom:14px">PO #<?= str_pad($po['id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($po['supplier_name']) ?> · <?= htmlspecialchars($po['department']) ?></p>
 
-        <?php if (in_array($po['status'], ['sent','acknowledged'], true) && has_permission('procurement.receiving')): ?>
-        <form method="POST" id="receipt-form">
-          <input type="hidden" name="action" value="record_receipt"/>
-          <input type="hidden" name="po_id" value="<?= $po['id'] ?>"/>
-
-          <div id="receipt-error" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
+        <?php if ($total_remaining <= 0): ?>
+          <div style="background:var(--green-lt, #edf7ed);border:1.5px solid var(--green, #2e7d32);border-radius:var(--radius, 10px);padding:16px 20px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <?= icon('check-circle', 22, '', 'color:var(--green, #2e7d32)') ?>
+              <div>
+                <strong style="color:var(--espresso, #2D1810);font-size:14px">All items under this Purchase Order have been fully received (0.00 remaining).</strong>
+                <div style="font-size:12px;color:var(--text-muted, #718096)">Fulfillment is complete. Detailed receipts and batch entries are listed in the history below.</div>
+              </div>
+            </div>
+            <a href="goods_receipts.php" class="act-btn act-activate" style="text-decoration:none;padding:7px 14px;font-size:12.5px;display:inline-flex;align-items:center;gap:6px">
+              <?= icon('arrow-left', 13) ?> Back to Receipts
+            </a>
+          </div>
 
           <div class="grn-item-row" style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;border-bottom:1.5px solid var(--border)">
-            <div>Item</div><div>Ordered</div><div>Remaining</div><div>Receiving Qty</div><div>Condition / Notes</div>
+            <div>Item</div><div>Ordered</div><div>Received</div><div>Remaining</div><div>Status</div>
           </div>
           <?php foreach ($req_items as $ri): $remaining = max(0, $ri['quantity'] - $ri['received_so_far']); ?>
             <div class="grn-item-row">
@@ -378,16 +538,103 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
                 <div class="grn-item-sub"><?= htmlspecialchars($ri['unit']) ?></div>
               </div>
               <div><?= number_format($ri['quantity'],2) ?></div>
+              <div><strong><?= number_format($ri['received_so_far'],2) ?></strong></div>
               <div><?= number_format($remaining,2) ?></div>
-              <div><input class="field-input rec-qty" type="number" step="0.01" min="0" style="padding:6px 8px"
-                     name="items[<?= $ri['id'] ?>][received_qty]" placeholder="0" <?= $remaining <= 0 ? 'disabled' : '' ?>/></div>
-              <div style="display:flex;gap:6px">
-                <select class="field-input" style="padding:6px 8px;width:110px" name="items[<?= $ri['id'] ?>][condition]">
-                  <option value="good">Good</option>
-                  <option value="damaged">Damaged</option>
-                  <option value="rejected">Rejected</option>
+              <div><span class="status-badge status-approved"><?= icon('check', 11) ?> Fully Received</span></div>
+            </div>
+          <?php endforeach; ?>
+
+        <?php elseif (in_array($po['status'], ['sent','acknowledged','partially_shipped'], true) && has_permission('procurement.receiving')): ?>
+        <form method="POST" id="receipt-form">
+          <input type="hidden" name="action" value="record_receipt"/>
+          <input type="hidden" name="po_id" value="<?= $po['id'] ?>"/>
+
+          <div id="receipt-error" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
+
+          <?php if (!empty($delivery_notices)): ?>
+          <!-- Incoming ASNs / Delivery Notices -->
+          <div style="background:#F7FAFC;border:1.5px solid #CBD5E0;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+              <strong style="color:var(--espresso);font-size:13px;display:flex;align-items:center;gap:6px">
+                <?= icon('truck', 15, '', 'color:var(--caramel)') ?> Incoming Advance Shipping Notices (ASNs)
+              </strong>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <label for="select-asn-id" style="font-size:12px;font-weight:600;color:var(--text-muted)">Select ASN:</label>
+                <select id="select-asn-id" name="delivery_notice_id" class="field-input" style="padding:4px 10px;font-size:12px;font-weight:600" onchange="onAsnSelectChange(this.value)">
+                  <option value="">-- No ASN (Direct Walk-in / Unscheduled) --</option>
+                  <?php foreach ($delivery_notices as $dn): ?>
+                    <option value="<?= $dn['id'] ?>" <?= ($selected_asn_id == $dn['id']) ? 'selected' : '' ?>>
+                      <?= htmlspecialchars($dn['notice_ref']) ?> (<?= htmlspecialchars($dn['carrier_name'] ?: 'Carrier N/A') ?> — <?= number_format((float)$dn['total_shipped_qty'], 2) ?> units)
+                    </option>
+                  <?php endforeach; ?>
                 </select>
-                <input class="field-input" type="text" style="padding:6px 8px" name="items[<?= $ri['id'] ?>][notes]" placeholder="Notes (optional)"/>
+                <button type="button" class="act-btn act-activate" style="padding:5px 12px;font-size:12px" onclick="prefillFromSelectedAsn()">
+                  <?= icon('check', 13) ?> Pre-fill Quantities from this ASN
+                </button>
+              </div>
+            </div>
+
+            <!-- Details of selected ASN -->
+            <?php foreach ($delivery_notices as $dn): ?>
+            <div class="asn-detail-box" id="asn-card-<?= $dn['id'] ?>" style="display:none;background:#FFF;border:1px solid #E2E8F0;border-radius:8px;padding:10px 14px;font-size:12px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+                <div>
+                  <strong style="color:var(--caramel);font-size:13px"><?= htmlspecialchars($dn['notice_ref']) ?></strong>
+                  <span style="margin-left:8px">Carrier: <strong><?= htmlspecialchars($dn['carrier_name'] ?: 'N/A') ?></strong></span>
+                  <?php if (!empty($dn['tracking_number'])): ?>
+                    <span style="margin-left:8px">Tracking: <code><?= htmlspecialchars($dn['tracking_number']) ?></code></span>
+                  <?php endif; ?>
+                  <span style="margin-left:8px;color:var(--text-muted)">Shipped Date: <strong><?= date('M d, Y', strtotime($dn['shipped_date'])) ?></strong></span>
+                  <?php if (!empty($dn['expected_arrival_date'])): ?>
+                    <span style="margin-left:8px;color:var(--text-muted)">ETA: <strong><?= date('M d, Y', strtotime($dn['expected_arrival_date'])) ?></strong></span>
+                  <?php endif; ?>
+                </div>
+                <div>
+                  <span class="status-badge status-<?= $dn['fulfillment_status'] === 'delivered' ? 'approved' : 'pending' ?>">
+                    <?= ucwords(str_replace('_', ' ', $dn['fulfillment_status'])) ?>
+                  </span>
+                </div>
+              </div>
+              <?php if (!empty($dn['notes'])): ?>
+                <div style="margin-top:6px;color:var(--text-muted);font-style:italic">"<?= htmlspecialchars($dn['notes']) ?>"</div>
+              <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
+
+          <div class="grn-item-row" style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;border-bottom:1.5px solid var(--border)">
+            <div>Item</div><div>Ordered</div><div>Remaining</div><div>Receiving Qty</div><div>Condition / Notes</div>
+          </div>
+          <?php foreach ($req_items as $ri): $remaining = max(0, $ri['quantity'] - $ri['received_so_far']); ?>
+            <div class="grn-item-row" data-req-id="<?= $ri['id'] ?>">
+              <div>
+                <div class="grn-item-name"><?= htmlspecialchars($ri['item_name']) ?></div>
+                <div class="grn-item-sub"><?= htmlspecialchars($ri['unit']) ?></div>
+              </div>
+              <div><?= number_format($ri['quantity'],2) ?></div>
+              <div><?= number_format($remaining,2) ?></div>
+              <div>
+                <?php if ($remaining <= 0): ?>
+                  <span class="status-badge status-approved" style="font-size:11px"><?= icon('check', 11) ?> Complete</span>
+                  <input type="hidden" name="items[<?= $ri['id'] ?>][received_qty]" value="0"/>
+                  <input type="hidden" name="items[<?= $ri['id'] ?>][condition]" value="good"/>
+                <?php else: ?>
+                  <input class="field-input rec-qty" id="rec-qty-<?= $ri['id'] ?>" data-remaining="<?= $remaining ?>" type="number" step="0.01" min="0" max="<?= $remaining ?>" style="padding:6px 8px;transition:all 0.3s ease"
+                         name="items[<?= $ri['id'] ?>][received_qty]" value="<?= $remaining ?>" placeholder="<?= $remaining ?>"/>
+                <?php endif; ?>
+              </div>
+              <div style="display:flex;gap:6px">
+                <?php if ($remaining <= 0): ?>
+                  <span class="muted-cell" style="font-size:12px;display:flex;align-items:center">—</span>
+                <?php else: ?>
+                  <select class="field-input" style="padding:6px 8px;width:110px" name="items[<?= $ri['id'] ?>][condition]">
+                    <option value="good">Good</option>
+                    <option value="damaged">Damaged</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                  <input class="field-input" type="text" style="padding:6px 8px" name="items[<?= $ri['id'] ?>][notes]" placeholder="Notes (optional)"/>
+                <?php endif; ?>
               </div>
             </div>
           <?php endforeach; ?>
@@ -409,7 +656,14 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
       <?php foreach ($grns as $g): ?>
         <div class="grn-hist-card <?= $g['status']==='discrepancy' ? 'discrepancy' : '' ?>">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <strong><?= status_badge($g['status']) ?></strong>
+            <div style="display:flex;align-items:center;gap:6px">
+              <strong><?= status_badge($g['status']) ?></strong>
+              <?php if (!empty($g['asn_ref'])): ?>
+                <span class="status-badge" style="background:#EBF8FF;color:#2B6CB0;font-size:11px;display:inline-flex;align-items:center;gap:3px">
+                  <?= icon('truck', 11) ?> ASN: <?= htmlspecialchars($g['asn_ref']) ?>
+                </span>
+              <?php endif; ?>
+            </div>
             <span class="muted-cell"><?= htmlspecialchars(trim(($g['firstname'] ?? '').' '.($g['lastname'] ?? ''))) ?: '—' ?> · <?= date('M d, Y g:i A', strtotime($g['received_at'])) ?></span>
           </div>
           <?php if ($g['notes']): ?><p style="font-size:12.5px;color:var(--text-muted)"><?= htmlspecialchars($g['notes']) ?></p><?php endif; ?>
@@ -454,6 +708,61 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
       </div>
       <?php endif; ?>
 
+      <?php if (!empty($incoming_asns)): ?>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h3 style="font-size:13.5px;margin:0;display:flex;align-items:center;gap:6px">
+          <?= icon('truck', 16, '', 'color:var(--caramel)') ?> Incoming Shipments &amp; Advance Shipping Notices (ASNs)
+        </h3>
+        <span class="status-badge status-pending" style="font-size:11.5px"><?= count($incoming_asns) ?> In Transit</span>
+      </div>
+      <div class="table-scroll-wrapper" style="margin-bottom:22px">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-sticky">ASN Ref</th>
+              <th>PO #</th>
+              <th>Requisition / Item</th>
+              <th>Supplier</th>
+              <th>Carrier &amp; Tracking</th>
+              <th>Shipped / ETA</th>
+              <th>Units</th>
+              <th style="text-align:center;width:130px">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach ($incoming_asns as $asn): ?>
+            <tr>
+              <td class="col-sticky" style="font-weight:700;color:var(--caramel)"><?= htmlspecialchars($asn['notice_ref']) ?></td>
+              <td style="font-weight:600"><?= htmlspecialchars($asn['po_number'] ?: ('#' . str_pad($asn['po_id'],5,'0',STR_PAD_LEFT))) ?></td>
+              <td><?= htmlspecialchars($asn['req_title']) ?></td>
+              <td><?= htmlspecialchars($asn['supplier_name']) ?></td>
+              <td>
+                <div><strong><?= htmlspecialchars($asn['carrier_name'] ?: 'N/A') ?></strong></div>
+                <?php if (!empty($asn['tracking_number'])): ?>
+                  <div style="font-size:11px;color:var(--text-muted)"><code><?= htmlspecialchars($asn['tracking_number']) ?></code></div>
+                <?php endif; ?>
+              </td>
+              <td class="muted-cell">
+                <div>Shipped: <?= date('M d, Y', strtotime($asn['shipped_date'])) ?></div>
+                <?php if (!empty($asn['expected_arrival_date'])): ?>
+                  <div style="font-size:11px;color:var(--text)">ETA: <?= date('M d, Y', strtotime($asn['expected_arrival_date'])) ?></div>
+                <?php endif; ?>
+              </td>
+              <td>
+                <span class="status-badge" style="font-size:11px;background:#EDF2F7;color:#4A5568"><?= number_format((float)$asn['total_shipped_qty'], 2) ?> units</span>
+              </td>
+              <td style="text-align:center">
+                <button class="act-btn act-activate" onclick="window.location.href='goods_receipts.php?po_id=<?= $asn['po_id'] ?>&asn_id=<?= $asn['id'] ?>'">
+                  <?= icon('package', 13) ?> Receive from ASN
+                </button>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php endif; ?>
+
       <h3 style="font-size:13.5px;margin-bottom:8px"><?= icon('package', 16) ?> Awaiting Delivery</h3>
       <div class="table-scroll-hint">
         <span><?= icon('chevron-right', 12) ?> Swipe to view all 7 columns</span>
@@ -484,6 +793,55 @@ $open_discrepancies = $discrepancy_stmt->fetchAll();
 </div>
 <script src="../js/validator.js"></script>
 <script>
+const ASN_ITEMS = <?= json_encode($dn_items_map ?? []) ?>;
+
+function onAsnSelectChange(asnId) {
+  document.querySelectorAll('.asn-detail-box').forEach(el => el.style.display = 'none');
+  if (asnId) {
+    const card = document.getElementById('asn-card-' + asnId);
+    if (card) card.style.display = 'block';
+  }
+}
+
+function prefillFromSelectedAsn() {
+  const sel = document.getElementById('select-asn-id');
+  if (!sel || !sel.value) {
+    alert('Please select an Advance Shipping Notice (ASN) to prefill from.');
+    return;
+  }
+  const asnId = sel.value;
+  const items = ASN_ITEMS[asnId];
+  if (!items) {
+    alert('No line item breakdown found for this ASN.');
+    return;
+  }
+  for (const reqId in items) {
+    const inp = document.getElementById('rec-qty-' + reqId);
+    if (inp && !inp.disabled) {
+      const shipped = parseFloat(items[reqId]) || 0;
+      const remaining = parseFloat(inp.getAttribute('data-remaining') || '999999');
+      inp.value = Math.min(shipped, remaining);
+      inp.style.background = '#EBF8FF';
+      inp.style.borderColor = '#3182CE';
+      setTimeout(() => {
+        inp.style.background = '';
+        inp.style.borderColor = '';
+      }, 2500);
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('select-asn-id');
+  if (sel && sel.value) {
+    onAsnSelectChange(sel.value);
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('asn_id')) {
+      prefillFromSelectedAsn();
+    }
+  }
+});
+
 document.getElementById('receipt-form')?.addEventListener('submit', function(e) {
   const errBox = document.getElementById('receipt-error');
   if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }

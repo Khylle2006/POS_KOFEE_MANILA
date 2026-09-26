@@ -40,6 +40,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $reorder_qty = (float)($_POST['reorder_quantity'] ?? 0);
         $supplier = (int)($_POST['default_supplier_id'] ?? 0) ?: null;
         $auto     = isset($_POST['auto_reorder']) ? 1 : 0;
+        $unit_cost = isset($_POST['unit_cost']) && $_POST['unit_cost'] !== '' ? (float)$_POST['unit_cost'] : null;
+        $cost_unit = trim($_POST['cost_unit'] ?? '') ?: null;
 
         if (!$cat_id || !$name) {
             $toast = 'Name and category are required.'; $toast_type = 'error';
@@ -47,12 +49,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $pdo->prepare(
                 'INSERT INTO ingredients
                     (cat_id, name, brand, unit, quantity, reorder_at,
-                     reorder_quantity, default_supplier_id, auto_reorder)
-                 VALUES (:c,:n,:b,:u,:q,:r,:rq,:s,:a)'
+                     reorder_quantity, default_supplier_id, auto_reorder, unit_cost, cost_unit)
+                 VALUES (:c,:n,:b,:u,:q,:r,:rq,:s,:a,:uc,:cu)'
             )->execute([
                 ':c'=>$cat_id, ':n'=>$name, ':b'=>$brand, ':u'=>$unit, ':q'=>$quantity,
                 ':r'=>$reorder, ':rq'=>$reorder_qty ?: max($reorder * 2, 10),
-                ':s'=>$supplier, ':a'=>$auto,
+                ':s'=>$supplier, ':a'=>$auto, ':uc'=>$unit_cost, ':cu'=>$cost_unit,
             ]);
             $new_id = (int)$pdo->lastInsertId();
 
@@ -134,16 +136,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $reorder_qty = (float)($_POST['reorder_quantity'] ?? 0);
         $supplier    = (int)($_POST['default_supplier_id'] ?? 0) ?: null;
         $auto        = isset($_POST['auto_reorder']) ? 1 : 0;
+        $unit_cost   = isset($_POST['unit_cost']) && $_POST['unit_cost'] !== '' ? (float)$_POST['unit_cost'] : null;
+        $cost_unit   = trim($_POST['cost_unit'] ?? '') ?: null;
 
         if ($id && $name) {
             $pdo->prepare(
                 'UPDATE ingredients
                     SET name=:n, brand=:b, unit=:u, cat_id=:c, reorder_at=:r,
-                        reorder_quantity=:rq, default_supplier_id=:s, auto_reorder=:a
+                        reorder_quantity=:rq, default_supplier_id=:s, auto_reorder=:a,
+                        unit_cost=:uc, cost_unit=:cu
                   WHERE id=:id'
             )->execute([
                 ':n'=>$name, ':b'=>$brand, ':u'=>$unit, ':c'=>$cat_id, ':r'=>$reorder,
-                ':rq'=>$reorder_qty, ':s'=>$supplier, ':a'=>$auto, ':id'=>$id,
+                ':rq'=>$reorder_qty, ':s'=>$supplier, ':a'=>$auto,
+                ':uc'=>$unit_cost, ':cu'=>$cost_unit, ':id'=>$id,
             ]);
             check_and_trigger_reorder($id, (int)$user['id']);
             $toast = 'Item updated!';
@@ -453,6 +459,8 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
                 'default_supplier_id' => (int)$i['default_supplier_id'],
                 'auto_reorder' => (int)$i['auto_reorder'],
                 'quantity' => (float)$i['quantity'],
+                'unit_cost' => $i['unit_cost'] !== null ? (float)$i['unit_cost'] : null,
+                'cost_unit' => $i['cost_unit'] ?? null,
             ]), ENT_QUOTES, 'UTF-8');
         ?>
           <tr class="border-t border-[var(--latte,#efe0cc)] hover:bg-[var(--accent-lt,#fcefe1)] transition
@@ -466,6 +474,18 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
                 threshold <?= $fmt($i['reorder_at']) ?> <?= htmlspecialchars($i['unit']) ?>
                 <?php if ((int)$i['auto_reorder'] === 1): ?>
                   <span class="ml-1 text-emerald-600 font-semibold">· auto</span>
+                  <?php
+                    $reorder_target_qty = (float)$i['reorder_quantity'] ?: max((float)$i['reorder_at'] * 2, 10);
+                    if ($i['unit_cost'] !== null && (float)$i['unit_cost'] > 0):
+                      $est_total = $reorder_target_qty * (float)$i['unit_cost'];
+                  ?>
+                    <span class="text-stone-500 font-normal">· est. ₱<?= number_format($est_total, 2) ?></span>
+                  <?php else: ?>
+                    <span class="text-stone-400 font-normal">· (cost unset)</span>
+                  <?php endif; ?>
+                <?php endif; ?>
+                <?php if ($i['unit_cost'] !== null && (float)$i['unit_cost'] > 0): ?>
+                  <span class="text-stone-400">· ₱<?= number_format((float)$i['unit_cost'], 2) ?>/<?= htmlspecialchars($i['cost_unit'] ?: $i['unit']) ?></span>
                 <?php endif; ?>
               </div>
             </td>
@@ -598,6 +618,16 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
             <?php endforeach; ?>
           </select>
         </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Est. Unit Cost (₱)</span>
+          <input name="unit_cost" type="number" step="0.01" min="0" placeholder="0.00"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Cost Unit (optional)</span>
+          <input name="cost_unit" placeholder="e.g. kg, pack, pcs"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
         <label class="col-span-2 flex items-center gap-2 text-[12.5px]">
           <input type="checkbox" name="auto_reorder" checked class="w-4 h-4 accent-[var(--caramel,#c47d3e)]">
           Automatically file a purchase requisition when stock hits the threshold
@@ -666,6 +696,16 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
             <option value="<?= (int)$s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
             <?php endforeach; ?>
           </select>
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Est. Unit Cost (₱)</span>
+          <input name="unit_cost" id="e-unit-cost" type="number" step="0.01" min="0" placeholder="0.00"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
+        </label>
+        <label class="block">
+          <span class="text-[11.5px] font-semibold text-[var(--text-muted,#8b7c88)]">Cost Unit (optional)</span>
+          <input name="cost_unit" id="e-cost-unit" placeholder="e.g. kg, pack, pcs"
+                 class="mt-1 w-full py-2 px-3 rounded-lg text-[13px] border border-[var(--latte,#efe0cc)]">
         </label>
         <label class="col-span-2 flex items-center gap-2 text-[12.5px]">
           <input type="checkbox" name="auto_reorder" id="e-auto" class="w-4 h-4 accent-[var(--caramel,#c47d3e)]">
@@ -802,6 +842,8 @@ function openEdit(p) {
   document.getElementById('e-reorder').value     = p.reorder_at;
   document.getElementById('e-reorder-qty').value = p.reorder_quantity;
   document.getElementById('e-supplier').value    = p.default_supplier_id || '';
+  document.getElementById('e-unit-cost').value   = (p.unit_cost !== null && p.unit_cost !== undefined) ? p.unit_cost : '';
+  document.getElementById('e-cost-unit').value   = p.cost_unit || '';
   document.getElementById('e-auto').checked      = p.auto_reorder === 1;
   openModal('modal-edit');
 }

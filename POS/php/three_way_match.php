@@ -11,78 +11,9 @@ $user  = current_user();
 $toast = '';
 $toast_type = 'success';
 
-// Tolerances — small variances (rounding, minor price drift) shouldn't
-// block payment; anything beyond this is flagged as an exception.
-const PRICE_TOLERANCE_PCT = 3.0;   // invoice total vs PO total
-const QTY_TOLERANCE_UNITS = 0.0;   // invoiced qty may not exceed received qty at all
-
-/**
- * Run the 3-way match for one invoice. Pure computation — does not
- * write to the DB. Returns a structured result the UI (and the POST
- * handler below) both use.
- */
-function run_three_way_match(PDO $pdo, array $invoice, array $po): array {
-    $exceptions = [];
-
-    // ── Line-level: invoiced qty vs received (good-condition) qty ──
-    $li_stmt = $pdo->prepare('SELECT * FROM invoice_items WHERE invoice_id = :id');
-    $li_stmt->execute([':id' => $invoice['id']]);
-    $lines = $li_stmt->fetchAll();
-
-    $recv_stmt = $pdo->prepare(
-        "SELECT gri.requisition_item_id, SUM(gri.received_qty) AS qty
-         FROM goods_receipt_items gri JOIN goods_receipts g ON g.id = gri.grn_id
-         WHERE g.po_id = :po AND gri.item_condition = 'good'
-         GROUP BY gri.requisition_item_id"
-    );
-    $recv_stmt->execute([':po' => $po['id']]);
-    $received_map = $recv_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-
-    $has_any_grn = $pdo->prepare("SELECT COUNT(*) FROM goods_receipts WHERE po_id = :po AND status != 'discrepancy'");
-    $has_any_grn->execute([':po' => $po['id']]);
-    $grn_exists = (int)$has_any_grn->fetchColumn() > 0;
-
-    $line_results = [];
-    foreach ($lines as $l) {
-        $received = (float)($received_map[$l['requisition_item_id']] ?? 0);
-        $over     = $l['qty'] - $received > QTY_TOLERANCE_UNITS;
-        $line_results[] = [
-            'item_name'   => $l['item_name'],
-            'invoiced_qty'=> (float)$l['qty'],
-            'received_qty'=> $received,
-            'over_billed' => $over,
-        ];
-        if ($over) {
-            $exceptions[] = "\"{$l['item_name']}\" invoiced for {$l['qty']} but only {$received} received.";
-        }
-    }
-
-    if (!$grn_exists) {
-        $exceptions[] = 'No completed Goods Receipt found for this Purchase Order.';
-    }
-
-    // ── Header-level: invoice total vs PO (awarded) total ──
-    $po_total  = (float)$po['total_amount'];
-    $inv_total = (float)$invoice['total_amount'];
-    $variance  = $po_total > 0 ? abs($inv_total - $po_total) / $po_total * 100 : ($inv_total > 0 ? 100 : 0);
-    $price_ok  = $variance <= PRICE_TOLERANCE_PCT;
-
-    if (!$price_ok) {
-        $exceptions[] = sprintf(
-            'Invoice total %s differs from PO total %s by %.1f%% (tolerance is %.1f%%).',
-            php_currency($inv_total), php_currency($po_total), $variance, PRICE_TOLERANCE_PCT
-        );
-    }
-
-    return [
-        'passed'       => empty($exceptions),
-        'exceptions'   => $exceptions,
-        'line_results' => $line_results,
-        'po_total'     => $po_total,
-        'inv_total'    => $inv_total,
-        'variance_pct' => round($variance, 2),
-    ];
-}
+// Tolerances from configurable procurement_settings table
+$price_tol = (float)get_procurement_setting('three_way_match_price_tolerance_pct', 3.0);
+$qty_tol   = (float)get_procurement_setting('three_way_match_qty_tolerance_units', 0.0);
 
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -98,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$invoice || !$po) {
         $toast = 'Invoice or Purchase Order not found.'; $toast_type = 'error';
     } elseif ($action === 'confirm_match') {
-        $result = run_three_way_match($pdo, $invoice, $po);
+        $result = run_three_way_match($pdo, $invoice, $po, $price_tol, $qty_tol);
         $summary = $result['passed']
             ? sprintf('Matched clean: invoice %s vs PO %s (%.1f%% variance).', php_currency($result['inv_total']), php_currency($result['po_total']), $result['variance_pct'])
             : implode(' | ', $result['exceptions']);
@@ -118,6 +49,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $toast = 'Match exceptions found — invoice marked disputed.'; $toast_type = 'error';
         } else {
             $toast = '3-way match passed — invoice ready for approval.';
+        }
+    } elseif ($action === 'request_correction') {
+        require_permission('procurement.invoice.match');
+        $correction_notes = trim($_POST['correction_notes'] ?? '');
+        if (!$correction_notes) {
+            $toast = 'Please provide details on what needs correction.'; $toast_type = 'error';
+        } else {
+            $pdo->prepare("UPDATE invoices SET status='needs_correction', correction_notes = :cn WHERE id = :id")
+                ->execute([':cn' => $correction_notes, ':id' => $invoice_id]);
+            audit_log('invoice', $invoice_id, 'correction_requested', $correction_notes);
+
+            // Notify supplier
+            $sup_stmt = $pdo->prepare('SELECT user_id, name FROM suppliers WHERE id = :sid');
+            $sup_stmt->execute([':sid' => $invoice['supplier_id']]);
+            $sup = $sup_stmt->fetch();
+            if (!empty($sup['user_id'])) {
+                notify_user(
+                    (int)$sup['user_id'],
+                    'invoice_correction_needed',
+                    "Invoice {$invoice['invoice_number']} Needs Correction",
+                    "Finance requested a correction: \"{$correction_notes}\". Please update and resubmit.",
+                    "supplier_portal.php?tab=invoices&invoice_id={$invoice_id}"
+                );
+            }
+
+            $toast = 'Correction request sent to supplier. Invoice marked as needs correction.';
         }
     } elseif ($action === 'force_approve') {
         require_permission('procurement.invoice.match');
@@ -166,7 +123,7 @@ $invoice = $stmt->fetch();
 $result = null; $po = null;
 if ($invoice) {
     $po_stmt = $pdo->prepare('SELECT * FROM purchase_orders WHERE id = :id'); $po_stmt->execute([':id' => $invoice['po_id']]); $po = $po_stmt->fetch();
-    $result  = run_three_way_match($pdo, $invoice, $po);
+    $result  = run_three_way_match($pdo, $invoice, $po, $price_tol, $qty_tol);
 }
 ?>
 <!DOCTYPE html>
@@ -211,13 +168,37 @@ if ($invoice) {
     <?php else: ?>
 
       <div class="table-card" style="padding:20px 22px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
           <div>
-            <h2>Invoice <?= htmlspecialchars($invoice['invoice_number']) ?></h2>
-            <p class="muted-cell">PO #<?= str_pad($invoice['po_id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($invoice['supplier_name']) ?> · <?= htmlspecialchars($invoice['req_title']) ?></p>
+            <div style="display:flex;align-items:center;gap:8px">
+              <h2 style="margin:0">Invoice <?= htmlspecialchars($invoice['invoice_number']) ?></h2>
+              <?php if (!empty($invoice['version']) && $invoice['version'] > 1): ?>
+                <span class="status-badge" style="background:#EDF2F7;color:#4A5568;font-weight:700">v<?= (int)$invoice['version'] ?></span>
+              <?php endif; ?>
+            </div>
+            <p class="muted-cell" style="margin-top:4px">PO #<?= str_pad($invoice['po_id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($invoice['supplier_name']) ?> · <?= htmlspecialchars($invoice['req_title']) ?></p>
           </div>
-          <span class="status-badge status-<?= in_array($invoice['status'],['approved','matched','paid'])?'approved':($invoice['status']==='disputed'?'rejected':'pending') ?>"><?= status_badge($invoice['status']) ?></span>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <span class="status-badge status-<?= in_array($invoice['status'],['approved','matched','paid'])?'approved':($invoice['status']==='disputed'?'rejected':'pending') ?>"><?= status_badge($invoice['status']) ?></span>
+            <?php if (!empty($invoice['attachment_path'])): ?>
+              <a href="../<?= htmlspecialchars($invoice['attachment_path']) ?>" target="_blank" class="act-btn" style="font-size:11.5px">
+                <?= icon('paperclip', 12) ?> View Invoice File
+              </a>
+            <?php endif; ?>
+          </div>
         </div>
+
+        <div style="background:#FAF5EE;border:1px solid #E5D5C5;border-radius:8px;padding:8px 14px;margin-top:12px;font-size:12px;display:flex;gap:16px;flex-wrap:wrap;color:var(--espresso)">
+          <span>Price Variance Tolerance: <strong>±<?= number_format($price_tol, 1) ?>%</strong></span>
+          <span>Quantity Variance Tolerance: <strong><?= number_format($qty_tol, 2) ?> units</strong></span>
+        </div>
+
+        <?php if ($invoice['status'] === 'needs_correction' && !empty($invoice['correction_notes'])): ?>
+          <div style="margin-top:12px;background:#FFF5F5;border:1px solid #FEB2B2;border-left:4px solid var(--red);padding:10px 14px;border-radius:8px;font-size:12.5px">
+            <strong style="color:#C53030;display:flex;align-items:center;gap:4px"><?= icon('alert-triangle', 13) ?> Correction Requested from Supplier:</strong>
+            <p style="margin:4px 0 0;color:var(--text);font-size:12px;background:#FFF;padding:8px 12px;border-radius:6px;border:1px solid #FED7D7"><?= nl2br(htmlspecialchars($invoice['correction_notes'])) ?></p>
+          </div>
+        <?php endif; ?>
 
         <div class="match-col">
           <div class="match-box"><h4><?= icon('clipboard', 14, '', 'vertical-align:middle;margin-right:4px') ?> Purchase Order</h4><div class="amt"><?= php_currency($result['po_total']) ?></div><p class="muted-cell">Awarded total</p></div>
@@ -248,7 +229,7 @@ if ($invoice) {
         <?php endif; ?>
 
         <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
-          <?php if (in_array($invoice['status'], ['pending','disputed'], true)): ?>
+          <?php if (in_array($invoice['status'], ['pending','disputed','submitted','under_review'], true)): ?>
             <form method="POST"><input type="hidden" name="action" value="confirm_match"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
               <button type="submit" class="btn-save"><?= icon('check', 14) ?> Run Match</button></form>
           <?php endif; ?>
@@ -258,19 +239,36 @@ if ($invoice) {
               <button type="submit" class="btn-save"><?= icon('check', 14) ?> Approve for Payment</button></form>
           <?php endif; ?>
 
+          <?php if (in_array($invoice['status'], ['disputed','submitted','pending','under_review'], true)): ?>
+            <button type="button" class="act-btn act-suspend" onclick="document.getElementById('correction-form').classList.toggle('open-inline');document.getElementById('override-form')?.classList.remove('open-inline');">
+              <?= icon('message', 13) ?> Request Correction from Supplier
+            </button>
+          <?php endif; ?>
+
           <?php if ($invoice['status'] === 'disputed'): ?>
-            <button type="button" class="act-btn" onclick="document.getElementById('override-form').classList.toggle('open-inline')"><?= icon('alert-triangle', 13) ?> Override & Force-Approve</button>
+            <button type="button" class="act-btn" onclick="document.getElementById('override-form').classList.toggle('open-inline');document.getElementById('correction-form')?.classList.remove('open-inline');">
+              <?= icon('alert-triangle', 13) ?> Override &amp; Force-Approve
+            </button>
           <?php endif; ?>
         </div>
 
+        <form method="POST" id="correction-form" style="margin-top:12px;display:none;background:#FFF5F5;border:1px solid #FED7D7;border-radius:8px;padding:12px" class="inline-toggle-form">
+          <input type="hidden" name="action" value="request_correction"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
+          <strong style="font-size:12px;color:#9B2C2C;display:block;margin-bottom:6px">Request Invoice Correction from Supplier</strong>
+          <textarea class="field-input" name="correction_notes" placeholder="Explain the discrepancy (e.g. price exceeds contract rate, missing tax breakdown, invoiced quantity exceeds received goods)..." required style="width:100%;min-height:70px;margin-bottom:8px"></textarea>
+          <div style="text-align:right">
+            <button type="submit" class="btn-save" style="background:var(--red);border-color:var(--red)">Send Correction Request to Supplier</button>
+          </div>
+        </form>
+
         <?php if ($invoice['status'] === 'disputed'): ?>
-        <form method="POST" id="override-form" style="margin-top:12px;display:none;gap:8px" class="override-form">
+        <form method="POST" id="override-form" style="margin-top:12px;display:none" class="inline-toggle-form">
           <input type="hidden" name="action" value="force_approve"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
-          <textarea class="field-input" name="override_note" placeholder="Justify why this exception is being overridden (required, goes in the audit log)" style="width:100%;min-height:60px;margin-bottom:8px"></textarea>
+          <textarea class="field-input" name="override_note" placeholder="Justify why this exception is being overridden (required, goes in the audit log)" style="width:100%;min-height:60px;margin-bottom:8px" required></textarea>
           <div style="text-align:right"><button type="submit" class="btn-save">Confirm Override</button></div>
         </form>
-        <style>.override-form.open-inline{display:block!important}</style>
         <?php endif; ?>
+        <style>.inline-toggle-form.open-inline{display:block!important}</style>
       </div>
 
       <p style="margin-top:14px"><a href="invoices.php?id=<?= $invoice['id'] ?>" style="font-size:12.5px;color:var(--caramel);font-weight:600">← Back to Invoice</a></p>

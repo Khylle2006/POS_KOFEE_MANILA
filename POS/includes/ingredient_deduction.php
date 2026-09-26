@@ -59,8 +59,16 @@ function deduct_order_ingredients(PDO $pdo, int $orderId, ?int $processedBy = nu
             ':used_qty' => $requiredQty,
             ':processed_by' => $processedBy,
         ]);
+
+        if (function_exists('check_and_trigger_reorder')) {
+            try {
+                check_and_trigger_reorder($ingredientId, $processedBy);
+            } catch (Throwable $t) {
+                error_log('check_and_trigger_reorder error: ' . $t->getMessage());
+            }
+        }
     }
 
-    $pdo->prepare('UPDATE orders SET ingredients_deducted_at = NOW() WHERE id = :id')
+    $pdo->prepare('UPDATE orders SET ingredients_deducted_at = NOW(), stock_deducted = 1 WHERE id = :id')
         ->execute([':id' => $orderId]);
 }

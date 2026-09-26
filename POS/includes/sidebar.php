@@ -76,6 +76,7 @@ $access = [
     'procurement_view'         => has_permission('procurement.view'),
     'procurement_requisitions' => has_permission('procurement.requisitions') || has_permission('procurement.requisition.create'),
     'procurement_rfq'          => has_permission('procurement.rfq.manage') || has_permission('procurement.bidding.review'),
+    'procurement_finance_review' => has_permission('procurement.finance.review') || has_permission('finance.view') || in_array('admin', $roles, true),
     'procurement_po'           => has_permission('procurement.po.manage'),
     'procurement_receiving'    => has_permission('procurement.receiving'),
     'procurement_invoices'     => has_permission('procurement.invoice.create'),
@@ -105,6 +106,10 @@ try {
     $pending_loans_count = 0;
     if ($access['payroll']) {
         try { $pending_loans_count = (int)$pdo->query("SELECT COUNT(*) FROM employee_loans WHERE status = 'pending_approval'")->fetchColumn(); } catch (Throwable $e) {}
+    }
+    $pending_finance_approvals_count = 0;
+    if ($access['procurement_finance_review']) {
+        try { $pending_finance_approvals_count = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
     }
 } catch (Throwable $e) {
     // DB not reachable — sidebar still renders, just without counts.
@@ -536,7 +541,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         'finance' => [
             'title' => 'Finance',
             'icon'  => 'coin',
-            'badge' => $pending_loans_count,
+            'badge' => $pending_loans_count + $pending_finance_approvals_count,
             'items' => [
                 [
                     'label'  => 'Payroll Management',
@@ -552,6 +557,14 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'icon'   => 'file-text',
                     'access' => $access['payroll_own'],
                     'active' => ($current === 'my_payslips.php') || ($current === 'payslip.php' && !$access['payroll']),
+                ],
+                [
+                    'label'  => 'Purchase Approvals',
+                    'url'    => 'finance_purchase_approvals.php',
+                    'icon'   => 'shield-check',
+                    'badge'  => $pending_finance_approvals_count,
+                    'access' => $access['procurement_finance_review'],
+                    'active' => ($current === 'finance_purchase_approvals.php'),
                 ],
                 [
                     'label'  => 'Invoices',
@@ -572,7 +585,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         'procurement' => [
             'title' => 'Procurement',
             'icon'  => 'truck',
-            'badge' => 0,
+            'badge' => $pending_finance_approvals_count,
             'items' => [
                 [
                     'label'  => 'Overview',
@@ -594,6 +607,21 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'icon'   => 'rfq',
                     'access' => $access['procurement_rfq'],
                     'active' => ($current === 'rfq.php'),
+                ],
+                [
+                    'label'  => 'Purchase Approvals',
+                    'url'    => 'finance_purchase_approvals.php',
+                    'icon'   => 'shield-check',
+                    'badge'  => $pending_finance_approvals_count,
+                    'access' => $access['procurement_finance_review'],
+                    'active' => ($current === 'finance_purchase_approvals.php'),
+                ],
+                [
+                    'label'  => 'Contracts',
+                    'url'    => 'purchase_contracts.php',
+                    'icon'   => 'file-text',
+                    'access' => $access['procurement_po'],
+                    'active' => ($current === 'purchase_contracts.php'),
                 ],
                 [
                     'label'  => 'Purchase Orders',

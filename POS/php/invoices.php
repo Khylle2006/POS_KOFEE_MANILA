@@ -65,13 +65,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $total = round($subtotal + $tax, 2);
 
+                $attachment_path = null;
+                if (!empty($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+                    $upload_dir = __DIR__ . '/../uploads/invoices';
+                    if (!is_dir($upload_dir)) {
+                        @mkdir($upload_dir, 0755, true);
+                    }
+                    $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
+                    if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
+                        $fname = 'inv_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+                        if (move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
+                            $attachment_path = 'uploads/invoices/' . $fname;
+                        }
+                    }
+                }
+
                 $inv_stmt = $pdo->prepare(
-                    'INSERT INTO invoices (po_id, supplier_id, invoice_number, invoice_date, due_date, subtotal, tax_amount, total_amount, uploaded_by)
-                     VALUES (:po, :sup, :num, :idate, :ddate, :sub, :tax, :tot, :u)'
+                    'INSERT INTO invoices (po_id, supplier_id, invoice_number, invoice_date, due_date, subtotal, tax_amount, total_amount, attachment_path, version, uploaded_by)
+                     VALUES (:po, :sup, :num, :idate, :ddate, :sub, :tax, :tot, :att, 1, :u)'
                 );
                 $inv_stmt->execute([
                     ':po' => $po_id, ':sup' => $po['supplier_id'], ':num' => $inv_num, ':idate' => $inv_date, ':ddate' => $due_date,
-                    ':sub' => $subtotal, ':tax' => $tax, ':tot' => $total, ':u' => $user['id'],
+                    ':sub' => $subtotal, ':tax' => $tax, ':tot' => $total, ':att' => $attachment_path, ':u' => $user['id'],
                 ]);
                 $invoice_id = (int)$pdo->lastInsertId();
 
@@ -106,10 +121,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($action === 'request_correction') {
+        require_permission('procurement.invoice.match');
+        $id = (int)($_POST['id'] ?? 0);
+        $notes = trim($_POST['correction_notes'] ?? '');
+        if (!$notes) {
+            $toast = 'Please provide details on what needs correction.'; $toast_type = 'error';
+        } else {
+            $inv_stmt = $pdo->prepare('SELECT * FROM invoices WHERE id = :id');
+            $inv_stmt->execute([':id' => $id]);
+            $inv = $inv_stmt->fetch();
+            if ($inv) {
+                $pdo->prepare("UPDATE invoices SET status = 'needs_correction', correction_notes = :cn WHERE id = :id")
+                    ->execute([':cn' => $notes, ':id' => $id]);
+                audit_log('invoice', $id, 'correction_requested', $notes);
+
+                // Notify supplier
+                $sup_stmt = $pdo->prepare('SELECT user_id FROM suppliers WHERE id = :sid');
+                $sup_stmt->execute([':sid' => $inv['supplier_id']]);
+                $sup_uid = (int)$sup_stmt->fetchColumn();
+                if ($sup_uid > 0) {
+                    notify_user(
+                        $sup_uid,
+                        'invoice_correction_needed',
+                        "Invoice {$inv['invoice_number']} Needs Correction",
+                        "Finance requested a correction: \"{$notes}\". Please update and resubmit.",
+                        "supplier_portal.php?tab=invoices&invoice_id={$id}"
+                    );
+                }
+                $toast = 'Correction request sent to supplier. Invoice marked needs correction.';
+            }
+        }
+        header('Location: invoices.php?id=' . $id . '&toast=' . urlencode($toast) . '&type=' . $toast_type);
+        exit;
+    }
+
     if ($action === 'cancel') {
         require_permission('procurement.invoice.create');
         $id = (int)($_POST['id'] ?? 0);
-        $pdo->prepare("UPDATE invoices SET status='cancelled' WHERE id=:id AND status IN ('pending','disputed')")->execute([':id' => $id]);
+        $pdo->prepare("UPDATE invoices SET status='cancelled' WHERE id=:id AND status IN ('pending','disputed','submitted','needs_correction')")->execute([':id' => $id]);
         audit_log('invoice', $id, 'cancelled');
         $toast = 'Invoice cancelled.';
         header('Location: invoices.php?id=' . $id . '&toast=' . urlencode($toast) . '&type=success');
@@ -179,7 +229,7 @@ $eligible_pos = $eligible_stmt->fetchAll();
 
 $filter = $_GET['status'] ?? 'all';
 $where  = '1=1'; $params = [];
-if (in_array($filter, ['pending','matched','disputed','approved','paid','cancelled'], true)) {
+if (in_array($filter, ['submitted','pending','matched','needs_correction','disputed','approved','paid','cancelled'], true)) {
     $where .= ' AND i.status = :st'; $params[':st'] = $filter;
 }
 $list_stmt = $pdo->prepare("
@@ -227,13 +277,13 @@ $invoices = $list_stmt->fetchAll();
         <h2>New Invoice — <?= htmlspecialchars($new_po['req_title']) ?></h2>
         <p class="muted-cell" style="margin-bottom:16px">PO #<?= str_pad($new_po['id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($new_po['supplier_name']) ?> · PO Total: <?= php_currency($new_po['total_amount']) ?></p>
 
-        <form method="POST" id="invoice-form">
+        <form method="POST" id="invoice-form" enctype="multipart/form-data">
           <input type="hidden" name="action" value="create"/>
           <input type="hidden" name="po_id" value="<?= $new_po['id'] ?>"/>
 
           <div id="invoice-error" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--red-lt);color:var(--red);font-size:12.5px;font-weight:600"></div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
             <div>
               <input class="field-input" type="text" name="invoice_number" id="f-inv-num" placeholder="Invoice Number *" required/>
             </div>
@@ -243,6 +293,11 @@ $invoices = $list_stmt->fetchAll();
             <div>
               <input class="field-input" type="date" name="due_date" id="f-due-date" placeholder="Due Date"/>
             </div>
+          </div>
+
+          <div style="margin-bottom:16px">
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Invoice Document / Receipt (PDF, JPG, PNG)</label>
+            <input class="field-input" type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png"/>
           </div>
 
           <div class="inv-line-row" style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;border-bottom:1.5px solid var(--border)">
@@ -275,11 +330,24 @@ $invoices = $list_stmt->fetchAll();
       <div class="table-card" style="padding:20px 22px;margin-bottom:18px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <h2><?= htmlspecialchars($invoice['invoice_number']) ?></h2>
-            <p class="muted-cell">PO #<?= str_pad($invoice['po_id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($invoice['supplier_name']) ?> · <?= htmlspecialchars($invoice['req_title']) ?></p>
+            <div style="display:flex;align-items:center;gap:8px">
+              <h2 style="margin:0"><?= htmlspecialchars($invoice['invoice_number']) ?></h2>
+              <?php if (!empty($invoice['version'])): ?>
+                <span style="background:#e8f4fd;color:#0b72b9;font-weight:700;font-size:11px;padding:2px 8px;border-radius:6px">v<?= (int)$invoice['version'] ?></span>
+              <?php endif; ?>
+            </div>
+            <p class="muted-cell" style="margin-top:4px">PO #<?= str_pad($invoice['po_id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($invoice['supplier_name']) ?> · <?= htmlspecialchars($invoice['req_title']) ?></p>
           </div>
-          <span class="status-badge status-<?= in_array($invoice['status'],['approved','matched','paid'])?'approved':($invoice['status']==='disputed'?'rejected':'pending') ?>"><?= status_badge($invoice['status']) ?></span>
+          <span class="status-badge status-<?= in_array($invoice['status'],['approved','matched','paid'])?'approved':(in_array($invoice['status'],['disputed','needs_correction','cancelled','rejected'])?'rejected':'pending') ?>"><?= status_badge($invoice['status']) ?></span>
         </div>
+
+        <?php if (!empty($invoice['attachment_path'])): ?>
+          <div style="margin-top:12px">
+            <a href="../<?= htmlspecialchars($invoice['attachment_path']) ?>" target="_blank" class="btn-cancel" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;text-decoration:none">
+              <?= icon('file-text', 13) ?> View Attached Invoice Document
+            </a>
+          </div>
+        <?php endif; ?>
 
         <div class="inv-line-row" style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;border-bottom:1.5px solid var(--border);margin-top:16px">
           <div>Item</div><div>Qty</div><div>Unit Price</div><div>Line Total</div>
@@ -299,24 +367,50 @@ $invoices = $list_stmt->fetchAll();
           <div>Total: <strong style="color:var(--espresso)"><?= php_currency($invoice['total_amount']) ?></strong></div>
         </div>
 
+        <?php if (!empty($invoice['correction_notes'])): ?>
+          <div style="margin-top:14px;padding:12px 14px;border-radius:10px;background:#FFF3CD;border:1px solid #FFEBAA;color:#856404;font-size:13px">
+            <strong><?= icon('alert-triangle', 14) ?> Correction Requested:</strong>
+            <p style="margin:4px 0 0 0"><?= nl2br(htmlspecialchars($invoice['correction_notes'])) ?></p>
+          </div>
+        <?php endif; ?>
+
         <?php if ($invoice['match_notes']): ?>
           <p style="margin-top:12px;font-size:12.5px;color:var(--text-muted);font-style:italic;padding:10px;background:#FBF6EF;border-radius:10px">Match notes: <?= htmlspecialchars($invoice['match_notes']) ?></p>
         <?php endif; ?>
 
-        <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
-          <?php if (in_array($invoice['status'], ['pending','disputed'], true) && has_permission('procurement.invoice.create')): ?>
+        <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+          <?php if (in_array($invoice['status'], ['pending','disputed','submitted','needs_correction'], true) && has_permission('procurement.invoice.create')): ?>
             <form method="POST" onsubmit="return confirm('Cancel this invoice?')">
               <input type="hidden" name="action" value="cancel"/><input type="hidden" name="id" value="<?= $invoice['id'] ?>"/>
               <button type="submit" class="btn-cancel"><?= icon('x', 13) ?> Cancel Invoice</button>
             </form>
           <?php endif; ?>
-          <?php if (in_array($invoice['status'], ['pending','disputed'], true) && has_permission('procurement.invoice.match')): ?>
+          <?php if (in_array($invoice['status'], ['pending','disputed','submitted','matched'], true) && has_permission('procurement.invoice.match')): ?>
+            <button type="button" class="btn-cancel" onclick="document.getElementById('correction-form-wrap').style.display='block';this.style.display='none'" style="color:var(--red);border-color:var(--red)">
+              <?= icon('message', 13) ?> Request Correction
+            </button>
             <a href="three_way_match.php?invoice_id=<?= $invoice['id'] ?>" class="btn-save"><?= icon('link', 13) ?> Run 3-Way Match</a>
           <?php endif; ?>
           <?php if ($invoice['status'] === 'approved' && has_permission('procurement.payment.process')): ?>
             <a href="payments.php?new_for_invoice=<?= $invoice['id'] ?>" class="btn-save"><?= icon('dollar', 13) ?> Schedule Payment</a>
           <?php endif; ?>
         </div>
+
+        <?php if (has_permission('procurement.invoice.match')): ?>
+        <div id="correction-form-wrap" style="display:none;margin-top:16px;padding:16px;background:#FEF6E9;border:1.5px solid #F5D8A0;border-radius:10px">
+          <h4 style="margin:0 0 8px 0;font-size:13.5px;color:var(--espresso)">Request Correction from Supplier</h4>
+          <p style="margin:0 0 10px 0;font-size:12px;color:var(--text-muted)">State the exact discrepancy (e.g. quantity difference, incorrect price, missing attachment) so the supplier can resubmit.</p>
+          <form method="POST">
+            <input type="hidden" name="action" value="request_correction"/>
+            <input type="hidden" name="id" value="<?= $invoice['id'] ?>"/>
+            <textarea class="field-input" name="correction_notes" rows="3" placeholder="Describe the correction required..." required style="margin-bottom:10px"><?= htmlspecialchars($invoice['correction_notes'] ?? '') ?></textarea>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button type="button" class="btn-cancel" onclick="document.getElementById('correction-form-wrap').style.display='none'">Cancel</button>
+              <button type="submit" class="btn-save" style="background:var(--red)"><?= icon('send', 13) ?> Send Request to Supplier</button>
+            </div>
+          </form>
+        </div>
+        <?php endif; ?>
       </div>
       <p><a href="invoices.php" style="font-size:12.5px;color:var(--caramel);font-weight:600">← Back to Invoices</a></p>
 
@@ -402,9 +496,12 @@ $invoices = $list_stmt->fetchAll();
 
       <div class="filter-bar" style="padding:0">
         <a href="invoices.php" class="filter-pill <?= $filter==='all'?'active':'' ?>">All</a>
+        <a href="invoices.php?status=submitted" class="filter-pill <?= $filter==='submitted'?'active':'' ?>">Submitted</a>
         <a href="invoices.php?status=pending" class="filter-pill <?= $filter==='pending'?'active':'' ?>">Pending</a>
         <a href="invoices.php?status=matched" class="filter-pill <?= $filter==='matched'?'active':'' ?>">Matched</a>
+        <a href="invoices.php?status=needs_correction" class="filter-pill <?= $filter==='needs_correction'?'active':'' ?>">Needs Correction</a>
         <a href="invoices.php?status=disputed" class="filter-pill <?= $filter==='disputed'?'active':'' ?>">Disputed</a>
+        <a href="invoices.php?status=approved" class="filter-pill <?= $filter==='approved'?'active':'' ?>">Approved</a>
         <a href="invoices.php?status=paid" class="filter-pill <?= $filter==='paid'?'active':'' ?>">Paid</a>
       </div>
       <div class="table-scroll-hint">
@@ -418,11 +515,16 @@ $invoices = $list_stmt->fetchAll();
             <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No invoices logged yet.</td></tr>
           <?php else: foreach ($invoices as $i): ?>
             <tr>
-              <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($i['invoice_number']) ?></td>
+              <td class="col-sticky" style="font-weight:700">
+                <?= htmlspecialchars($i['invoice_number']) ?>
+                <?php if (!empty($i['version']) && $i['version'] > 1): ?>
+                  <span style="background:#e8f4fd;color:#0b72b9;font-weight:700;font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px">v<?= (int)$i['version'] ?></span>
+                <?php endif; ?>
+              </td>
               <td>#<?= str_pad($i['po_id'],5,'0',STR_PAD_LEFT) ?></td>
               <td><?= htmlspecialchars($i['supplier_name']) ?></td>
               <td style="font-weight:700"><?= php_currency($i['total_amount']) ?></td>
-              <td><span class="status-badge status-<?= in_array($i['status'],['approved','matched','paid'])?'approved':($i['status']==='disputed'?'rejected':'pending') ?>"><?= status_badge($i['status']) ?></span></td>
+              <td><span class="status-badge status-<?= in_array($i['status'],['approved','matched','paid'])?'approved':(in_array($i['status'],['disputed','needs_correction','cancelled','rejected'])?'rejected':'pending') ?>"><?= status_badge($i['status']) ?></span></td>
               <td class="muted-cell"><?= date('M d, Y', strtotime($i['created_at'])) ?></td>
               <td style="text-align:center"><button class="act-btn" onclick="window.location.href='invoices.php?id=<?= $i['id'] ?>'"><?= icon('eye', 13) ?> View</button></td>
             </tr>

@@ -25,6 +25,7 @@ $user = current_user();
     .btn-logout {
       margin-top: 8px; padding: 11px 24px; background: #c47d3e; color: #fff;
       border: none; border-radius: 12px; font-family: 'Poppins', sans-serif;
+    }
     .btn-logout:hover { background: #7a4e2e; }
   </style>
 </head>
