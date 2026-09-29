@@ -3,35 +3,36 @@ require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/icons.php';
 require_login();
-require_permission('menu.manage');
 
 $pdo   = get_db();
 $user  = current_user();
 $role  = $user['role'] ?? 'crew';
+$roles = $user['roles'] ?? [$role];
 $toast = '';
 $toast_type = 'success';
 
-// Admin/HR = reviewers only. Everyone else = requesters only.
-$is_reviewer = in_array($role, ['admin', 'hr']);
+// Reviewer check: Admin, HR, Manager, or users with leave.view permission
+$is_reviewer = in_array('admin', $roles, true)
+            || in_array('hr', $roles, true)
+            || in_array('manager', $roles, true)
+            || has_permission('leave.view');
 
 $leave_types = ['Vacation','Sick','Emergency','Unpaid','Other'];
 
 // ── Resolve the logged-in user's own employee profile (for self-service filing) ──
-$my_employee = null;
-if (!$is_reviewer) {
-    $stmt = $pdo->prepare('SELECT * FROM employees WHERE user_id = :uid LIMIT 1');
-    $stmt->execute([':uid' => $user['id']]);
-    $my_employee = $stmt->fetch() ?: null;
+$stmt = $pdo->prepare('SELECT * FROM employees WHERE user_id = :uid LIMIT 1');
+$stmt->execute([':uid' => $user['id']]);
+$my_employee = $stmt->fetch() ?: null;
+if (!$my_employee && !$is_reviewer) {
+    $my_employee = get_or_create_user_employee($pdo, (int)$user['id']);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // ── File leave — requesters only, always tied to THEIR OWN employee record ──
+    // ── File leave — tied to user's OWN employee record ──
     if ($action === 'file') {
-        if ($is_reviewer) {
-            $toast = 'HR/Admin accounts review leave and cannot file new requests.'; $toast_type = 'error';
-        } elseif (!$my_employee) {
+        if (!$my_employee) {
             $toast = "Your account isn't linked to an employee profile yet. Ask HR to link it first."; $toast_type = 'error';
         } else {
             $type   = in_array($_POST['leave_type'] ?? '', $leave_types) ? $_POST['leave_type'] : 'Vacation';
@@ -57,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ── Approve / Reject — reviewers only ──
     if ($action === 'review') {
         if (!$is_reviewer) {
-            $toast = 'Only HR/Admin can review leave requests.'; $toast_type = 'error';
+            $toast = 'Only authorized HR / managers can review leave requests.'; $toast_type = 'error';
         } else {
             $id     = (int)($_POST['id'] ?? 0);
             $status = $_POST['status'] ?? '';
@@ -167,7 +168,7 @@ foreach ($leaves as $l) {
       <h1>Leave Requests</h1>
       <p><?= $is_reviewer ? 'Review and approve employee leave' : 'File and track your leave requests' ?></p>
     </div>
-    <?php if (!$is_reviewer && $my_employee): ?>
+    <?php if ($my_employee): ?>
       <button class="btn-add" onclick="openFile()"><?= icon('plus', 16) ?> <span>File Leave</span></button>
     <?php endif; ?>
   </div>

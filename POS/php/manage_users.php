@@ -19,41 +19,19 @@ foreach ($all_roles_db as $r) {
 }
 if (empty($system_roles)) {
     $system_roles = [
-        'admin'       => 'Admin',
-        'manager'     => 'Manager',
-        'hr'          => 'HR',
-        'finance'     => 'Finance',
-        'cashier'     => 'Cashier',
-        'staff'       => 'Crew / Barista',
-        'crew'        => 'Crew',
-        'ops'         => 'Ops',
+        'admin'       => 'System Administrator',
+        'manager'     => 'Branch / Store Manager',
+        'cashier'     => 'POS Cashier',
+        'crew'        => 'Crew / Barista',
+        'warehouse'   => 'Warehouse & Inventory Officer',
         'procurement' => 'Procurement Officer',
-        'warehouse'   => 'Warehouse / Receiving Officer',
-        'supplier'    => 'Supplier',
+        'finance'     => 'Finance Officer',
+        'hr'          => 'Human Resources Officer',
+        'ops'         => 'Operations Supervisor',
+        'supplier'    => 'Supplier Partner',
     ];
 }
 $emp_types = ['Full-time', 'Part-time', 'Contract'];
-
-// ── Multi-role support ────────────────────────
-// A user can now hold more than one role, so roles live in their own
-// join table instead of the single users.role column. users.role is kept
-// as a "primary" role for legacy code (session/dashboard greeting etc.)
-// but user_roles is the source of truth for permissions/badges.
-$pdo->exec("
-    CREATE TABLE IF NOT EXISTS user_roles (
-        id      INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        role    VARCHAR(50) NOT NULL,
-        UNIQUE KEY uniq_user_role (user_id, role),
-        CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-");
-// One-time backfill: give every existing user their current single role
-// in the new table (harmless to re-run — duplicates are ignored).
-$pdo->exec("
-    INSERT IGNORE INTO user_roles (user_id, role)
-    SELECT id, role FROM users WHERE role IS NOT NULL AND role <> ''
-");
 
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

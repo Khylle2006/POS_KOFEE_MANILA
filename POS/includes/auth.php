@@ -188,15 +188,19 @@ function require_clocked_in_for_pos(bool $json = false): void {
 function require_role(string ...$roles): void {
     require_login();
     
-    $user_role = $_SESSION['role'] ?? '';
+    $user_roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
+        ? $_SESSION['roles']
+        : (!empty($_SESSION['role']) ? [$_SESSION['role']] : []);
     
-    if (!in_array($user_role, $roles, true)) {
-        $dest = in_array($user_role, ['admin', 'manager']) 
-            ? '../php/dashboard.php' 
-            : '../php/menu.php';
-        header('Location: ' . $dest . '?reason=forbidden');
-        exit;
+    if (in_array('admin', $user_roles, true) || array_intersect($user_roles, $roles)) {
+        return;
     }
+
+    $dest = array_intersect($user_roles, ['admin', 'manager']) 
+        ? '../php/dashboard.php' 
+        : '../php/menu.php';
+    header('Location: ' . $dest . '?reason=forbidden');
+    exit;
 }
 
 // ═══════════════════════════════════════════════
@@ -290,12 +294,26 @@ function refresh_session(): void {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($user) {
-            $_SESSION['role'] = $user['role'] ?? 'staff';
+            $_SESSION['role'] = $user['role'] ?? 'crew';
             $_SESSION['username'] = $user['username'];
             $_SESSION['firstname'] = $user['firstname'] ?? '';
             $_SESSION['lastname'] = $user['lastname'] ?? '';
             $_SESSION['email'] = $user['email'] ?? '';
             $_SESSION['status'] = $user['status'] ?? 'active';
+
+            // Also reload roles from user_roles
+            $rStmt = $pdo->prepare("SELECT role FROM user_roles WHERE user_id = ? ORDER BY role");
+            $rStmt->execute([$_SESSION['user_id']]);
+            $roles = $rStmt->fetchAll(PDO::FETCH_COLUMN);
+            if (!empty($roles)) {
+                $_SESSION['roles'] = $roles;
+                if (!in_array($_SESSION['role'], $roles, true)) {
+                    $_SESSION['role'] = $roles[0];
+                }
+            } else if (!empty($_SESSION['role'])) {
+                $_SESSION['roles'] = [$_SESSION['role']];
+            }
+            clear_permission_cache();
         }
     } catch (Exception $e) {
         // Silent fail

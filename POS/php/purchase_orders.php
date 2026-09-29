@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($target_po['status'] === 'closed') {
             $toast = 'This order is already closed.';
             $toast_type = 'error';
-        } elseif ($target_po['status'] !== 'delivered') {
+        } elseif (!in_array($target_po['status'], ['delivered', 'pending_rating'], true)) {
             $toast = 'Cannot close order: Goods have not been confirmed delivered yet.';
             $toast_type = 'error';
         } elseif ($target_po['issue_status'] === 'open') {
@@ -113,53 +113,141 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $inv_paid = ((int)$chk_inv->fetchColumn()) > 0;
             }
 
+            // Gating: Supplier must have confirmed receipt of payment
+            $payment_confirmed = !empty($target_po['supplier_payment_confirmed_at']);
+            if (!$payment_confirmed) {
+                $chk_conf = $pdo->prepare("
+                    SELECT COUNT(*) FROM payments 
+                    WHERE po_id = :p AND status = 'completed' AND supplier_confirmation_status != 'confirmed'
+                ");
+                $chk_conf->execute([':p' => $id]);
+                $unconf_cnt = (int)$chk_conf->fetchColumn();
+
+                $chk_any = $pdo->prepare("SELECT COUNT(*) FROM payments WHERE po_id = :p AND status = 'completed'");
+                $chk_any->execute([':p' => $id]);
+                $any_completed = (int)$chk_any->fetchColumn();
+
+                if ($any_completed > 0 && $unconf_cnt === 0) {
+                    $payment_confirmed = true;
+                }
+            }
+
             if (!$inv_paid) {
                 $toast = 'Cannot close order: Invoice has not been marked as paid yet.';
                 $toast_type = 'error';
+            } elseif (!$payment_confirmed) {
+                $toast = 'Cannot close order: Supplier has not confirmed receipt of payment in their portal.';
+                $toast_type = 'error';
             } else {
-                $quality   = max(1, min(5, (int)($_POST['quality_score'] ?? 5)));
-                $timely    = max(1, min(5, (int)($_POST['timeliness_score'] ?? 5)));
-                $price     = max(1, min(5, (int)($_POST['price_score'] ?? 5)));
-                $comm      = max(1, min(5, (int)($_POST['communication_score'] ?? 5)));
-                $comments  = trim($_POST['comments'] ?? '');
+                $is_skipped  = !empty($_POST['is_skipped']) || !empty($_POST['skip_rating']);
+                $skip_reason = trim($_POST['skip_reason'] ?? '');
+                $comments    = trim($_POST['comments'] ?? '');
 
-                try {
-                    $pdo->beginTransaction();
+                if ($is_skipped) {
+                    if (!$skip_reason) {
+                        $toast = 'Please provide an explicit reason for skipping the supplier evaluation.';
+                        $toast_type = 'error';
+                    } else {
+                        try {
+                            $pdo->beginTransaction();
 
-                    $pdo->prepare('
-                        INSERT INTO supplier_performance_ratings
-                            (po_id, supplier_id, rated_by, quality_score, timeliness_score, price_score, communication_score, comments)
-                        VALUES (:po, :sup, :u, :q, :t, :p, :c, :cm)
-                    ')->execute([
-                        ':po' => $id, ':sup' => $target_po['supplier_id'], ':u' => $user['id'],
-                        ':q' => $quality, ':t' => $timely, ':p' => $price, ':c' => $comm, ':cm' => $comments ?: null,
-                    ]);
+                            $pdo->prepare('
+                                INSERT INTO supplier_performance_ratings
+                                    (po_id, supplier_id, rated_by, is_skipped, skip_reason, comments)
+                                VALUES (:po, :sup, :u, 1, :sr, :cm)
+                            ')->execute([
+                                ':po' => $id, ':sup' => $target_po['supplier_id'], ':u' => $user['id'],
+                                ':sr' => $skip_reason, ':cm' => $comments ?: null,
+                            ]);
 
-                    $overall = round(($quality + $timely + $price + $comm) / 4, 2);
+                            $pdo->prepare("
+                                UPDATE purchase_orders 
+                                SET status = 'closed', rating_status = 'skipped', is_locked = 1, closed_at = NOW(), closed_notes = :cn 
+                                WHERE id = :id
+                            ")->execute([':cn' => "Rating skipped: {$skip_reason}", ':id' => $id]);
 
-                    $pdo->prepare('
-                        UPDATE suppliers
-                        SET rating_avg = ROUND(((COALESCE(rating_avg, 0) * rating_count) + :o) / (rating_count + 1), 2),
-                            rating_count = rating_count + 1
-                        WHERE id = :sid
-                    ')->execute([':o' => $overall, ':sid' => $target_po['supplier_id']]);
+                            $pdo->prepare("UPDATE purchase_requisitions SET status = 'closed' WHERE id = :id")
+                                ->execute([':id' => $target_po['requisition_id']]);
 
-                    $pdo->prepare("UPDATE purchase_orders SET status = 'closed', closed_at = NOW(), supplier_rating = :r WHERE id = :id")
-                        ->execute([':r' => round($overall), ':id' => $id]);
+                            $pdo->commit();
 
-                    $pdo->prepare("UPDATE purchase_requisitions SET status = 'closed' WHERE id = :id")
-                        ->execute([':id' => $target_po['requisition_id']]);
+                            audit_log('po', $id, 'closed', "Order closed with rating skipped ({$skip_reason})");
+                            $toast = "Order closed successfully with supplier rating skipped.";
+                        } catch (Exception $e) {
+                            if ($pdo->inTransaction()) $pdo->rollBack();
+                            $toast = $e->getMessage();
+                            $toast_type = 'error';
+                        }
+                    }
+                } else {
+                    // 6 Dimensions evaluation:
+                    $quality   = max(1, min(5, (int)($_POST['quality_score'] ?? 5)));
+                    $timely    = max(1, min(5, (int)($_POST['timeliness_score'] ?? 5)));
+                    $qty_acc   = max(1, min(5, (int)($_POST['quantity_accuracy_score'] ?? 5)));
+                    $price     = max(1, min(5, (int)($_POST['price_score'] ?? 5)));
+                    $comm      = max(1, min(5, (int)($_POST['communication_score'] ?? 5)));
+                    $comp      = max(1, min(5, (int)($_POST['compliance_score'] ?? 5)));
 
-                    $pdo->commit();
+                    // Weighted overall calculation:
+                    $overall = round(
+                        ($quality * 0.25) +
+                        ($timely * 0.20) +
+                        ($qty_acc * 0.15) +
+                        ($price * 0.15) +
+                        ($comm * 0.15) +
+                        ($comp * 0.10),
+                        2
+                    );
 
-                    audit_log('po', $id, 'closed', "Procurement cycle complete, overall rating {$overall}/5");
-                    audit_log('supplier', $target_po['supplier_id'], 'performance_rated', "PO #$id — overall {$overall}/5");
+                    try {
+                        $pdo->beginTransaction();
 
-                    $toast = "Order closed successfully — supplier rated {$overall}/5.";
-                } catch (Exception $e) {
-                    if ($pdo->inTransaction()) $pdo->rollBack();
-                    $toast = $e->getMessage();
-                    $toast_type = 'error';
+                        $pdo->prepare('
+                            INSERT INTO supplier_performance_ratings
+                                (po_id, supplier_id, rated_by, quality_score, timeliness_score, quantity_accuracy_score, price_score, communication_score, compliance_score, overall_score, comments)
+                            VALUES (:po, :sup, :u, :q, :t, :qa, :p, :c, :comp, :ov, :cm)
+                        ')->execute([
+                            ':po'   => $id, 
+                            ':sup'  => $target_po['supplier_id'], 
+                            ':u'    => $user['id'],
+                            ':q'    => $quality, 
+                            ':t'    => $timely, 
+                            ':qa'   => $qty_acc,
+                            ':p'    => $price, 
+                            ':c'    => $comm, 
+                            ':comp' => $comp,
+                            ':ov'   => $overall,
+                            ':cm'   => $comments ?: null,
+                        ]);
+
+                        // Update supplier historical rating
+                        $pdo->prepare('
+                            UPDATE suppliers
+                            SET rating_avg = ROUND(((COALESCE(rating_avg, 0) * rating_count) + :o) / (rating_count + 1), 2),
+                                rating_count = rating_count + 1
+                            WHERE id = :sid
+                        ')->execute([':o' => $overall, ':sid' => $target_po['supplier_id']]);
+
+                        $pdo->prepare("
+                            UPDATE purchase_orders 
+                            SET status = 'closed', rating_status = 'rated', is_locked = 1, closed_at = NOW(), supplier_rating = :r 
+                            WHERE id = :id
+                        ")->execute([':r' => round($overall), ':id' => $id]);
+
+                        $pdo->prepare("UPDATE purchase_requisitions SET status = 'closed' WHERE id = :id")
+                            ->execute([':id' => $target_po['requisition_id']]);
+
+                        $pdo->commit();
+
+                        audit_log('po', $id, 'closed', "Procurement cycle complete, overall 6-dim rating {$overall}/5");
+                        audit_log('supplier', $target_po['supplier_id'], 'performance_rated', "PO #$id — 6-dimension evaluation {$overall}/5");
+
+                        $toast = "Order closed successfully — supplier evaluated at {$overall}/5.0.";
+                    } catch (Exception $e) {
+                        if ($pdo->inTransaction()) $pdo->rollBack();
+                        $toast = $e->getMessage();
+                        $toast_type = 'error';
+                    }
                 }
             }
         }
@@ -216,11 +304,58 @@ if ($view_id) {
         $grn_stmt->execute([':id' => $view_id]);
         $linked_grn = $grn_stmt->fetch();
 
-        $gate_receipt_ok   = in_array($po['status'], ['delivered', 'closed'], true) || !empty($linked_grn);
-        $gate_invoice_paid = !empty($po['paid_at']) || (!empty($linked_invoice) && $linked_invoice['status'] === 'paid');
-        $gate_issue_ok     = ($po['issue_status'] !== 'open');
-        $can_close         = ($gate_receipt_ok && $gate_invoice_paid && $gate_issue_ok && $po['status'] !== 'closed');
+        // Linked payments & confirmation info
+        $pay_conf_stmt = $pdo->prepare("
+            SELECT 
+                COUNT(*) AS total_payments,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_payments,
+                SUM(CASE WHEN supplier_confirmation_status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed_payments,
+                SUM(CASE WHEN supplier_confirmation_status = 'disputed' THEN 1 ELSE 0 END) AS disputed_payments
+            FROM payments WHERE po_id = :id
+        ");
+        $pay_conf_stmt->execute([':id' => $view_id]);
+        $pay_stats = $pay_conf_stmt->fetch() ?: ['total_payments' => 0, 'completed_payments' => 0, 'confirmed_payments' => 0, 'disputed_payments' => 0];
+
+        $gate_receipt_ok        = in_array($po['status'], ['delivered', 'closed', 'pending_rating'], true) || !empty($linked_grn);
+        $gate_invoice_paid      = !empty($po['paid_at']) || (!empty($linked_invoice) && $linked_invoice['status'] === 'paid');
+        $gate_payment_confirmed = !empty($po['supplier_payment_confirmed_at']) || 
+            (($pay_stats['completed_payments'] > 0) && ($pay_stats['completed_payments'] == $pay_stats['confirmed_payments']));
+        $payment_is_disputed    = ($pay_stats['disputed_payments'] > 0);
+        $gate_issue_ok          = ($po['issue_status'] !== 'open');
+        $can_close              = ($gate_receipt_ok && $gate_invoice_paid && $gate_payment_confirmed && !$payment_is_disputed && $gate_issue_ok && $po['status'] !== 'closed');
     }
+}
+
+function get_po_lifecycle_state(array $po, ?array $pay_stats = [], ?array $linked_grn = null, ?array $linked_invoice = null): array {
+    $pay_stats = $pay_stats ?? [];
+    if ($po['status'] === 'closed') {
+        return ['code' => 'closed', 'label' => 'Closed', 'step' => 9, 'badge_class' => 'status-approved'];
+    }
+    if ($po['status'] === 'cancelled') {
+        return ['code' => 'cancelled', 'label' => 'Cancelled', 'step' => 0, 'badge_class' => 'status-rejected'];
+    }
+    if (($pay_stats['disputed_payments'] ?? 0) > 0) {
+        return ['code' => 'disputed', 'label' => 'Payment Disputed', 'step' => 7, 'badge_class' => 'status-rejected'];
+    }
+    if (!empty($po['supplier_payment_confirmed_at']) || (($pay_stats['completed_payments'] ?? 0) > 0 && $pay_stats['completed_payments'] == $pay_stats['confirmed_payments'])) {
+        return ['code' => 'pending_rating', 'label' => 'Pending Supplier Rating', 'step' => 8, 'badge_class' => 'status-pending'];
+    }
+    if (!empty($po['paid_at']) || (($pay_stats['completed_payments'] ?? 0) > 0)) {
+        return ['code' => 'awaiting_confirmation', 'label' => 'Awaiting Supplier Confirmation', 'step' => 7, 'badge_class' => 'status-pending'];
+    }
+    if (!empty($linked_invoice) && in_array($linked_invoice['status'], ['approved', 'matched'], true)) {
+        return ['code' => 'pending_payment', 'label' => 'Pending Payment', 'step' => 6, 'badge_class' => 'status-pending'];
+    }
+    if (in_array($po['status'], ['delivered'], true) || !empty($linked_grn)) {
+        return ['code' => 'delivered', 'label' => 'Fully Received', 'step' => 4, 'badge_class' => 'status-approved'];
+    }
+    if ($po['acknowledged_at'] || $po['status'] === 'acknowledged') {
+        return ['code' => 'acknowledged', 'label' => 'Acknowledged', 'step' => 3, 'badge_class' => 'status-pending'];
+    }
+    if ($po['status'] === 'sent') {
+        return ['code' => 'sent', 'label' => 'Sent to Supplier', 'step' => 2, 'badge_class' => 'status-pending'];
+    }
+    return ['code' => 'draft', 'label' => 'Draft', 'step' => 1, 'badge_class' => 'status-pending'];
 }
 
 $filter = $_GET['status'] ?? 'all';
@@ -236,7 +371,12 @@ if ($filter === 'issues') {
 $open_issues_count = (int)$pdo->query("SELECT COUNT(*) FROM purchase_orders WHERE issue_status = 'open'")->fetchColumn();
 
 $list_stmt = $pdo->prepare("
-    SELECT po.*, s.name AS supplier_name, pr.title AS req_title, c.contract_ref
+    SELECT po.*, s.name AS supplier_name, pr.title AS req_title, c.contract_ref,
+           (SELECT COUNT(*) FROM payments p WHERE p.po_id = po.id AND p.status = 'completed') AS completed_payments_count,
+           (SELECT COUNT(*) FROM payments p WHERE p.po_id = po.id AND p.status = 'completed' AND p.supplier_confirmation_status = 'confirmed') AS confirmed_payments_count,
+           (SELECT COUNT(*) FROM payments p WHERE p.po_id = po.id AND p.status = 'completed' AND p.supplier_confirmation_status = 'disputed') AS disputed_payments_count,
+           (SELECT i.status FROM invoices i WHERE i.po_id = po.id ORDER BY i.id DESC LIMIT 1) AS inv_status,
+           (SELECT grn.id FROM goods_receipts grn WHERE grn.po_id = po.id ORDER BY grn.id DESC LIMIT 1) AS grn_id
     FROM purchase_orders po
     JOIN suppliers s ON s.id = po.supplier_id
     JOIN purchase_requisitions pr ON pr.id = po.requisition_id
@@ -489,28 +629,50 @@ $pos = $list_stmt->fetchAll();
             <?php endif; ?>
           </div>
 
-          <!-- Step 6: Payment -->
+          <!-- Step 6: Payment Disbursed -->
           <div class="po-step">
             <div class="po-step-dot <?= $gate_invoice_paid ? 'done' : '' ?>"><?= $gate_invoice_paid ? icon('check', 11) : '' ?></div>
             <div class="po-step-label">
-              Payment Sent <?= $po['paid_at'] ? '(' . date('M d, Y', strtotime($po['paid_at'])) . ')' : '' ?>
+              Payment Disbursed <?= $po['paid_at'] ? '(' . date('M d, Y', strtotime($po['paid_at'])) . ')' : '' ?>
             </div>
-            <?php if (!$gate_invoice_paid && !empty($linked_invoice) && in_array($linked_invoice['status'], ['approved', 'matched'], true) && has_permission('procurement.payment.process')): ?>
+            <?php if (!$gate_invoice_paid && !empty($linked_invoice) && in_array($linked_invoice['status'], ['approved', 'matched', 'partially_paid'], true) && has_permission('procurement.payment.process')): ?>
               <div class="po-step-action">
                 <a href="payments.php?new_for_invoice=<?= $linked_invoice['id'] ?>" class="act-btn act-activate"><?= icon('dollar', 12) ?> Schedule Payment</a>
               </div>
             <?php endif; ?>
           </div>
 
-          <!-- Step 7: Order Closure & Supplier Rating -->
+          <!-- Step 7: Supplier Payment Confirmation -->
+          <div class="po-step">
+            <div class="po-step-dot <?= $gate_payment_confirmed ? 'done' : ($payment_is_disputed ? 'warning' : '') ?>">
+              <?= $gate_payment_confirmed ? icon('check', 11) : ($payment_is_disputed ? icon('alert-triangle', 11) : '') ?>
+            </div>
+            <div class="po-step-label">
+              <?php if ($gate_payment_confirmed): ?>
+                Supplier Confirmed Payment <?= $po['supplier_payment_confirmed_at'] ? '(' . date('M d, Y', strtotime($po['supplier_payment_confirmed_at'])) . ')' : '' ?>
+              <?php elseif ($payment_is_disputed): ?>
+                <span style="color:var(--red);font-weight:700">⚠️ Payment Disputed by Supplier</span>
+              <?php elseif ($gate_invoice_paid): ?>
+                <span class="muted-cell">Awaiting Supplier Confirmation (Portal)</span>
+              <?php else: ?>
+                <span class="muted-cell">Supplier Payment Confirmation</span>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <!-- Step 8: Order Closure & Supplier Rating -->
           <div class="po-step" style="border-bottom:none">
             <div class="po-step-dot <?= $po['status'] === 'closed' ? 'done' : '' ?>"><?= $po['status'] === 'closed' ? icon('check', 11) : '' ?></div>
             <div class="po-step-label">
               <?php if ($po['status'] === 'closed'): ?>
-                Order Closed &amp; Rated <?= $po['closed_at'] ? '(' . date('M d, Y', strtotime($po['closed_at'])) . ')' : '' ?>
-                <?= $po['supplier_rating'] ? ' — ' . $po['supplier_rating'] . '/5 Stars' : '' ?>
+                Order Closed <?= $po['closed_at'] ? '(' . date('M d, Y', strtotime($po['closed_at'])) . ')' : '' ?>
+                <?php if ($po['rating_status'] === 'skipped'): ?>
+                  <span class="muted-cell">— Rating Skipped (<?= htmlspecialchars($po['skip_reason'] ?? 'Exempt') ?>)</span>
+                <?php elseif ($po['supplier_rating']): ?>
+                  — <strong><?= number_format((float)$po['supplier_rating'], 2) ?>/5.00 Stars</strong>
+                <?php endif; ?>
               <?php else: ?>
-                <span class="muted-cell">Order Closure &amp; Rating</span>
+                <span class="muted-cell">Order Closure &amp; Supplier Rating</span>
               <?php endif; ?>
             </div>
           </div>
@@ -525,15 +687,19 @@ $pos = $list_stmt->fetchAll();
               <div style="display:grid;grid-template-columns:1fr;gap:6px;margin-bottom:12px">
                 <div style="display:flex;align-items:center;gap:6px;color:<?= $gate_receipt_ok ? '#15803D' : '#991B1B' ?>">
                   <?= $gate_receipt_ok ? icon('check', 13) : icon('x', 13) ?>
-                  <span>Goods Delivery: <strong><?= $gate_receipt_ok ? 'Delivered & Received' : 'Pending Receipt' ?></strong></span>
+                  <span>1. Goods Delivery: <strong><?= $gate_receipt_ok ? 'Delivered & Received' : 'Pending Receipt' ?></strong></span>
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;color:<?= $gate_invoice_paid ? '#15803D' : '#991B1B' ?>">
                   <?= $gate_invoice_paid ? icon('check', 13) : icon('x', 13) ?>
-                  <span>Invoice &amp; Payment: <strong><?= $gate_invoice_paid ? 'Paid' : 'Pending Payment' ?></strong></span>
+                  <span>2. Payment Disbursement: <strong><?= $gate_invoice_paid ? 'Paid' : 'Pending Payment' ?></strong></span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;color:<?= $gate_payment_confirmed ? '#15803D' : ($payment_is_disputed ? '#B91C1C' : '#991B1B') ?>">
+                  <?= $gate_payment_confirmed ? icon('check', 13) : ($payment_is_disputed ? icon('alert-triangle', 13) : icon('x', 13)) ?>
+                  <span>3. Supplier Confirmation: <strong><?= $gate_payment_confirmed ? 'Confirmed Received' : ($payment_is_disputed ? 'Disputed by Supplier' : 'Awaiting Supplier Confirmation') ?></strong></span>
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;color:<?= $gate_issue_ok ? '#15803D' : '#991B1B' ?>">
                   <?= $gate_issue_ok ? icon('check', 13) : icon('x', 13) ?>
-                  <span>Supplier Issues: <strong><?= $gate_issue_ok ? 'None / Resolved' : 'Active Issue Under Review' ?></strong></span>
+                  <span>4. Supplier Issues: <strong><?= $gate_issue_ok ? 'None / Resolved' : 'Active Issue Under Review' ?></strong></span>
                 </div>
               </div>
 
@@ -548,6 +714,18 @@ $pos = $list_stmt->fetchAll();
                   </button>
                 <?php endif; ?>
               <?php endif; ?>
+            </div>
+          <?php else: ?>
+            <div style="margin-top:16px;padding:12px 14px;background:#F1F5F9;border:1.5px solid #CBD5E1;border-radius:10px;font-size:12.5px;color:#334155;display:flex;align-items:center;gap:8px">
+              <?= icon('lock', 16, '', 'color:#64748B') ?>
+              <div>
+                <strong>PO Finalized &amp; Locked:</strong> Closed on <?= date('M d, Y', strtotime($po['closed_at'])) ?> by <?= htmlspecialchars($po['closed_by_name'] ?? 'Authorized Officer') ?>.
+                <?php if ($po['rating_status'] === 'skipped'): ?>
+                  <span style="display:block;margin-top:2px;color:#64748B">Performance rating was exempted/skipped. Reason: <?= htmlspecialchars($po['skip_reason'] ?? 'Not specified') ?>.</span>
+                <?php elseif ($po['supplier_rating']): ?>
+                  <span style="display:block;margin-top:2px;color:#059669;font-weight:600">Rated <?= number_format((float)$po['supplier_rating'], 2) ?>/5.00 Stars.</span>
+                <?php endif; ?>
+              </div>
             </div>
           <?php endif; ?>
         </div>
@@ -630,72 +808,131 @@ $pos = $list_stmt->fetchAll();
       <!-- Close & Rate Supplier Modal -->
       <?php if ($po && $can_close && has_permission('procurement.performance.rate')): ?>
       <div class="modal-overlay" id="modal-close-rate">
-        <div class="modal" style="max-width:520px">
+        <div class="modal" style="max-width:580px">
           <div class="modal-header">
             <h3 style="display:flex;align-items:center;gap:6px">
-              <?= icon('flag', 16, '', 'color:var(--caramel)') ?> Close Order &amp; Rate Supplier
+              <?= icon('flag', 16, '', 'color:var(--caramel)') ?> Close Purchase Order &amp; Evaluate Supplier
             </h3>
             <button class="modal-close" onclick="closeCloseRateModal()"><?= icon('x', 14) ?></button>
           </div>
-          <form method="POST">
+          <form method="POST" id="close-rate-form">
             <input type="hidden" name="action" value="close_and_rate"/>
             <input type="hidden" name="id" value="<?= $po['id'] ?>"/>
-            <div class="modal-body" style="padding:16px 20px">
-              <p style="margin:0 0 14px;font-size:12.5px;color:var(--text-muted)">
-                Formal closure of PO #<?= str_pad($po['id'], 5, '0', STR_PAD_LEFT) ?> for <strong><?= htmlspecialchars($po['supplier_name']) ?></strong>. All items were confirmed delivered and invoice paid. Rate the supplier's performance on this delivery:
+            <div class="modal-body" style="padding:16px 20px;max-height:75vh;overflow-y:auto">
+              <p style="margin:0 0 12px;font-size:12.5px;color:var(--text-muted)">
+                Formal closure of PO #<?= str_pad($po['id'], 5, '0', STR_PAD_LEFT) ?> for <strong><?= htmlspecialchars($po['supplier_name']) ?></strong>. All items were confirmed delivered and invoice payment confirmed. Evaluate supplier performance across the 6 procurement dimensions or record an authorized exemption:
               </p>
 
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-                <div class="field-group" style="margin:0">
-                  <label class="field-label">Quality of Goods (1–5)</label>
-                  <select class="field-input" name="quality_score" required>
-                    <option value="5" selected>5 — Excellent</option>
-                    <option value="4">4 — Good</option>
-                    <option value="3">3 — Acceptable</option>
-                    <option value="2">2 — Poor</option>
-                    <option value="1">1 — Very Poor</option>
+              <!-- Live Weighted Score Card -->
+              <div style="background:#FAF5EE;border:1.5px solid #E5D5C5;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between" id="scorecard-summary-card">
+                <div>
+                  <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Calculated Overall Score</span>
+                  <div style="font-size:22px;font-weight:800;color:var(--espresso);display:flex;align-items:baseline;gap:4px">
+                    <span id="live-weighted-score">5.00</span>
+                    <span style="font-size:13px;font-weight:600;color:var(--text-muted)">/ 5.00 Stars</span>
+                  </div>
+                </div>
+                <div id="live-score-badge" style="font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;background:#DCFCE7;color:#15803D">
+                  ★ Excellent Partner
+                </div>
+              </div>
+
+              <!-- Skip Rating Toggle -->
+              <div style="margin-bottom:14px;padding:10px 12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px">
+                <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--espresso);cursor:pointer;margin:0">
+                  <input type="checkbox" id="skip_rating_toggle" name="skip_rating" value="1" onchange="toggleSkipRating(this.checked)" style="width:16px;height:16px;accent-color:var(--caramel)">
+                  <span>Skip Supplier Performance Rating for this PO</span>
+                </label>
+                <div id="skip_reason_container" style="display:none;margin-top:10px">
+                  <label class="field-label" style="font-size:12px">Mandatory Exemption Reason <span style="color:var(--red)">*</span></label>
+                  <select name="skip_reason" id="skip_reason_input" class="field-input">
+                    <option value="">-- Select Reason for Exemption --</option>
+                    <option value="Minor consumable / low-value order">Minor consumable / low-value order</option>
+                    <option value="Recurring utility / standard service">Recurring utility / standard service</option>
+                    <option value="Supplier exempt from performance rating">Supplier exempt from performance rating</option>
+                    <option value="One-time emergency procurement exception">One-time emergency procurement exception</option>
+                    <option value="Other documented justification">Other documented justification</option>
                   </select>
                 </div>
+              </div>
+
+              <!-- 6 Dimensions Scorecard Inputs -->
+              <div id="scorecard-inputs-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
                 <div class="field-group" style="margin:0">
-                  <label class="field-label">On-Time Delivery (1–5)</label>
-                  <select class="field-input" name="timeliness_score" required>
+                  <label class="field-label" style="font-size:12px">1. Quality &amp; Specs (25%)</label>
+                  <select class="field-input score-input" name="quality_score" id="score_quality" onchange="calculateWeightedScore()" required>
+                    <option value="5" selected>5 — Exceptional (Zero defects)</option>
+                    <option value="4">4 — Good (Minor acceptable variances)</option>
+                    <option value="3">3 — Standard (Meets specifications)</option>
+                    <option value="2">2 — Marginal (Notable flaws/spoilage)</option>
+                    <option value="1">1 — Unsatisfactory (Rejected/unusable)</option>
+                  </select>
+                </div>
+
+                <div class="field-group" style="margin:0">
+                  <label class="field-label" style="font-size:12px">2. Timeliness (20%)</label>
+                  <select class="field-input score-input" name="timeliness_score" id="score_timeliness" onchange="calculateWeightedScore()" required>
                     <option value="5" selected>5 — On Time / Early</option>
-                    <option value="4">4 — Minor Delay</option>
-                    <option value="3">3 — Moderate Delay</option>
-                    <option value="2">2 — Major Delay</option>
-                    <option value="1">1 — Unacceptable</option>
+                    <option value="4">4 — Minor Delay (&lt; 24h)</option>
+                    <option value="3">3 — Moderate Delay (1-2 days)</option>
+                    <option value="2">2 — Significant Delay (&gt; 3 days)</option>
+                    <option value="1">1 — Unacceptable Delay / No Show</option>
                   </select>
                 </div>
+
                 <div class="field-group" style="margin:0">
-                  <label class="field-label">Price Fairness (1–5)</label>
-                  <select class="field-input" name="price_score" required>
-                    <option value="5" selected>5 — Highly Competitive</option>
-                    <option value="4">4 — Fair</option>
-                    <option value="3">3 — Standard</option>
-                    <option value="2">2 — Higher Than Expected</option>
-                    <option value="1">1 — Overpriced</option>
+                  <label class="field-label" style="font-size:12px">3. Quantity Accuracy (15%)</label>
+                  <select class="field-input score-input" name="quantity_accuracy_score" id="score_quantity" onchange="calculateWeightedScore()" required>
+                    <option value="5" selected>5 — 100% Exact Count &amp; Pack</option>
+                    <option value="4">4 — Minor discrepancy resolved</option>
+                    <option value="3">3 — Acceptable count tolerance</option>
+                    <option value="2">2 — Frequent short shipment</option>
+                    <option value="1">1 — Severe quantity mismatch</option>
                   </select>
                 </div>
+
                 <div class="field-group" style="margin:0">
-                  <label class="field-label">Responsiveness (1–5)</label>
-                  <select class="field-input" name="communication_score" required>
-                    <option value="5" selected>5 — Fast &amp; Helpful</option>
-                    <option value="4">4 — Responsive</option>
-                    <option value="3">3 — Slow Response</option>
-                    <option value="2">2 — Poor Communication</option>
-                    <option value="1">1 — Unresponsive</option>
+                  <label class="field-label" style="font-size:12px">4. Price Accuracy (15%)</label>
+                  <select class="field-input score-input" name="pricing_accuracy_score" id="score_price" onchange="calculateWeightedScore()" required>
+                    <option value="5" selected>5 — Exact Match with PO</option>
+                    <option value="4">4 — Minor billing variance fixed</option>
+                    <option value="3">3 — Standard billing accuracy</option>
+                    <option value="2">2 — Frequent pricing errors</option>
+                    <option value="1">1 — Unauthorized price hikes</option>
+                  </select>
+                </div>
+
+                <div class="field-group" style="margin:0">
+                  <label class="field-label" style="font-size:12px">5. Communication (15%)</label>
+                  <select class="field-input score-input" name="communication_score" id="score_communication" onchange="calculateWeightedScore()" required>
+                    <option value="5" selected>5 — Proactive &amp; Instant</option>
+                    <option value="4">4 — Responsive &amp; Helpful</option>
+                    <option value="3">3 — Standard Response Time</option>
+                    <option value="2">2 — Slow / Poor Coordination</option>
+                    <option value="1">1 — Completely Unresponsive</option>
+                  </select>
+                </div>
+
+                <div class="field-group" style="margin:0">
+                  <label class="field-label" style="font-size:12px">6. Food Safety/Cert (10%)</label>
+                  <select class="field-input score-input" name="compliance_score" id="score_compliance" onchange="calculateWeightedScore()" required>
+                    <option value="5" selected>5 — Full Certs &amp; Clean Cold Chain</option>
+                    <option value="4">4 — Compliant Documentation</option>
+                    <option value="3">3 — Meets Minimum Safety Rules</option>
+                    <option value="2">2 — Missing Certs / Incomplete Docs</option>
+                    <option value="1">1 — Safety/Hygienic Violations</option>
                   </select>
                 </div>
               </div>
 
               <div class="field-group" style="margin:0">
-                <label class="field-label">Review / Evaluation Notes (optional)</label>
-                <textarea class="field-input" name="comments" rows="2" placeholder="e.g. Excellent packaging, goods fresh and delivered right on schedule."></textarea>
+                <label class="field-label" style="font-size:12px">Evaluation &amp; Performance Comments (optional)</label>
+                <textarea class="field-input" name="comments" rows="2" placeholder="e.g. Pristine bean roasting quality, prompt courier delivery and accurate billing."></textarea>
               </div>
             </div>
             <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--border)">
               <button type="button" class="btn-cancel" onclick="closeCloseRateModal()">Cancel</button>
-              <button type="submit" class="btn-save"><?= icon('check', 13) ?> Confirm Closure &amp; Rate</button>
+              <button type="submit" class="btn-save" id="close-rate-submit-btn"><?= icon('check', 13) ?> Confirm Rating &amp; Close PO</button>
             </div>
           </form>
         </div>
@@ -752,9 +989,32 @@ $pos = $list_stmt->fetchAll();
               <td><?= htmlspecialchars($p['supplier_name']) ?></td>
               <td style="font-weight:700">₱<?= number_format($p['total_amount'],2) ?></td>
               <td>
-                <span class="status-badge status-<?= $p['status']==='closed'?'approved':($p['status']==='cancelled'?'rejected':'pending') ?>">
-                  <?= ucfirst($p['status']) ?>
+                <?php
+                  $lifecycle = get_po_lifecycle_state(
+                      $p,
+                      [
+                          'completed_payments' => (int)($p['completed_payments_count'] ?? 0),
+                          'confirmed_payments' => (int)($p['confirmed_payments_count'] ?? 0),
+                          'disputed_payments'  => (int)($p['disputed_payments_count'] ?? 0)
+                      ],
+                      !empty($p['grn_id']) ? ['id' => $p['grn_id']] : null,
+                      !empty($p['inv_status']) ? ['status' => $p['inv_status']] : null
+                  );
+                ?>
+                <span class="status-badge <?= htmlspecialchars($lifecycle['badge_class']) ?>">
+                  <?= htmlspecialchars($lifecycle['label']) ?>
                 </span>
+                <?php if ($p['status'] === 'closed'): ?>
+                  <?php if (!empty($p['supplier_rating'])): ?>
+                    <span class="status-badge" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;font-weight:700;margin-left:4px">
+                      ★ <?= number_format((float)$p['supplier_rating'], 1) ?>
+                    </span>
+                  <?php elseif (($p['rating_status'] ?? '') === 'skipped'): ?>
+                    <span class="status-badge" style="background:#F1F5F9;color:#64748B;margin-left:4px" title="Rating skipped: <?= htmlspecialchars($p['skip_reason'] ?? 'Exempt') ?>">
+                      Exempt
+                    </span>
+                  <?php endif; ?>
+                <?php endif; ?>
                 <?php if ($p['issue_status'] === 'open'): ?>
                   <span class="status-badge" style="background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;font-weight:700;margin-left:4px;display:inline-flex;align-items:center;gap:3px">
                     <?= icon('alert-triangle', 10) ?> Issue Open
@@ -786,12 +1046,80 @@ function closeResolveModal() {
 }
 function openCloseRateModal() {
   const m = document.getElementById('modal-close-rate');
-  if (m) m.classList.add('open');
+  if (m) {
+    m.classList.add('open');
+    calculateWeightedScore();
+  }
 }
 function closeCloseRateModal() {
   const m = document.getElementById('modal-close-rate');
   if (m) m.classList.remove('open');
 }
+
+function calculateWeightedScore() {
+  const q = parseFloat(document.getElementById('score_quality')?.value || 5);
+  const t = parseFloat(document.getElementById('score_timeliness')?.value || 5);
+  const qa = parseFloat(document.getElementById('score_quantity')?.value || 5);
+  const p = parseFloat(document.getElementById('score_price')?.value || 5);
+  const c = parseFloat(document.getElementById('score_communication')?.value || 5);
+  const comp = parseFloat(document.getElementById('score_compliance')?.value || 5);
+
+  const weighted = (q * 0.25) + (t * 0.20) + (qa * 0.15) + (p * 0.15) + (c * 0.15) + (comp * 0.10);
+  const rounded = weighted.toFixed(2);
+
+  const el = document.getElementById('live-weighted-score');
+  if (el) el.textContent = rounded;
+
+  const badge = document.getElementById('live-score-badge');
+  if (badge) {
+    if (weighted >= 4.5) {
+      badge.textContent = '★ Excellent Partner';
+      badge.style.background = '#DCFCE7';
+      badge.style.color = '#15803D';
+    } else if (weighted >= 3.5) {
+      badge.textContent = '★ Good / Reliable';
+      badge.style.background = '#E0F2FE';
+      badge.style.color = '#0369A1';
+    } else if (weighted >= 2.5) {
+      badge.textContent = '★ Standard / Meets Spec';
+      badge.style.background = '#FEF3C7';
+      badge.style.color = '#92400E';
+    } else {
+      badge.textContent = '⚠️ Needs Improvement';
+      badge.style.background = '#FEE2E2';
+      badge.style.color = '#991B1B';
+    }
+  }
+}
+
+function toggleSkipRating(isSkipped) {
+  const scorecardSection = document.getElementById('scorecard-inputs-grid');
+  const summaryCard = document.getElementById('scorecard-summary-card');
+  const reasonBox = document.getElementById('skip_reason_container');
+  const reasonInput = document.getElementById('skip_reason_input');
+  const submitBtn = document.getElementById('close-rate-submit-btn');
+
+  if (isSkipped) {
+    if (scorecardSection) scorecardSection.style.display = 'none';
+    if (summaryCard) summaryCard.style.display = 'none';
+    if (reasonBox) reasonBox.style.display = 'block';
+    if (reasonInput) reasonInput.required = true;
+    if (submitBtn) submitBtn.innerHTML = '<?= icon("check", 13) ?> Confirm Order Closure (Rating Skipped)';
+    document.querySelectorAll('.score-input').forEach(el => el.required = false);
+  } else {
+    if (scorecardSection) scorecardSection.style.display = 'grid';
+    if (summaryCard) summaryCard.style.display = 'flex';
+    if (reasonBox) reasonBox.style.display = 'none';
+    if (reasonInput) {
+      reasonInput.required = false;
+      reasonInput.value = '';
+    }
+    if (submitBtn) submitBtn.innerHTML = '<?= icon("check", 13) ?> Confirm Rating &amp; Close PO';
+    document.querySelectorAll('.score-input').forEach(el => el.required = true);
+    calculateWeightedScore();
+  }
+}
+
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { 
     if (e.target === el) {

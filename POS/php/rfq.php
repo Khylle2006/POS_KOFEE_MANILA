@@ -363,7 +363,7 @@ $finance_threshold = (float)get_procurement_setting('finance_approval_threshold'
 <div id="page-rfq" class="page active">
   <div class="page-header">
     <div>
-      <h1>RFQ &amp; Bidding</h1>
+      <h1>RFQ &amp; Selecting Supplier</h1>
       <p>Issue formal RFQ invitation letters with buyer e-signature, compare quotations, and select suppliers</p>
     </div>
   </div>

@@ -69,8 +69,8 @@ $access = [
     
         'payroll'            => has_permission('payroll.view'),
     'payroll_own'        => has_permission('payroll.own'),
-    'hr_requests'        => has_permission('leave.view') || in_array('admin', $roles, true),
-    'manage_permissions' => has_permission('permissions.manage') || in_array('admin', $roles, true) || in_array('hr', $roles, true),
+    'hr_requests'        => has_permission('requests.manage') || has_permission('leave.view') || in_array('admin', $roles, true) || in_array('hr', $roles, true) || in_array('manager', $roles, true),
+    'manage_permissions' => has_permission('permissions.manage') || in_array('admin', $roles, true),
 
     // Procurement Module Access
     'procurement_view'         => has_permission('procurement.view'),
@@ -85,7 +85,9 @@ $access = [
     'procurement_suppliers'    => has_permission('procurement.suppliers.manage'),
     'procurement_performance'  => has_permission('procurement.performance.rate'),
     'procurement_reports'      => has_permission('procurement.reports.view'),
-    'supplier_portal'     => has_permission('procurement.supplier.portal'),
+    'supplier_portal'          => has_permission('procurement.supplier.portal') || in_array('procurement', $roles, true) || in_array('manager', $roles, true) || in_array('admin', $roles, true),
+    'store_management'         => has_permission('store.view') || has_permission('store.manage') || in_array('admin', $roles, true) || in_array('manager', $roles, true),
+    'profile'                  => true,
 ];
 
 // ── Live badge counts (best-effort; never break the sidebar if a
@@ -421,9 +423,11 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         </div>
     </div>
 
-    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
+    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold cursor-pointer hover:opacity-90
                 bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
-                text-[var(--espresso-deep,#1c1108)]">
+                text-[var(--espresso-deep,#1c1108)]"
+         title="My Profile & Payment Details"
+         onclick="window.location.href='profile.php'">
         <?= htmlspecialchars($initials) ?>
     </div>
 </header>
@@ -552,7 +556,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'active' => in_array($current, ['payroll.php', 'payroll_run.php', 'payroll_reports.php', 'payroll_settings.php'], true) || ($current === 'payslip.php' && $access['payroll']),
                 ],
                 [
-                    'label'  => 'My Compensation',
+                    'label'  => 'My Payslips',
                     'url'    => 'my_payslips.php',
                     'icon'   => 'file-text',
                     'access' => $access['payroll_own'],
@@ -583,9 +587,9 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
             ],
         ],
         'procurement' => [
-            'title' => 'Procurement',
-            'icon'  => 'truck',
-            'badge' => $pending_finance_approvals_count,
+            'title' => (in_array('supplier', $roles, true) && count($roles) === 1) ? 'Supplier Portal' : 'Procurement',
+            'icon'  => (in_array('supplier', $roles, true) && count($roles) === 1) ? 'briefcase' : 'truck',
+            'badge' => 0,
             'items' => [
                 [
                     'label'  => 'Overview',
@@ -607,14 +611,6 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'icon'   => 'rfq',
                     'access' => $access['procurement_rfq'],
                     'active' => ($current === 'rfq.php'),
-                ],
-                [
-                    'label'  => 'Purchase Approvals',
-                    'url'    => 'finance_purchase_approvals.php',
-                    'icon'   => 'shield-check',
-                    'badge'  => $pending_finance_approvals_count,
-                    'access' => $access['procurement_finance_review'],
-                    'active' => ($current === 'finance_purchase_approvals.php'),
                 ],
                 [
                     'label'  => 'Contracts',
@@ -664,6 +660,13 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'icon'   => 'analytics',
                     'access' => $access['procurement_reports'],
                     'active' => ($current === 'procurement_reports.php'),
+                ],
+                [
+                    'label'  => 'Supplier Portal',
+                    'url'    => 'supplier_portal.php',
+                    'icon'   => 'briefcase',
+                    'access' => $access['supplier_portal'],
+                    'active' => ($current === 'supplier_portal.php'),
                 ],
             ],
         ],
@@ -729,19 +732,12 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'access' => $access['analytics'],
                     'active' => ($current === 'analytics.php'),
                 ],
-            ],
-        ],
-        'Supplier' => [
-            'title' => 'Supplier Portal',
-            'icon'  => 'briefcase',
-            'badge' => 0,
-            'items' => [
                 [
-                    'label'  => 'Supplier Portal',
-                    'url'    => 'supplier_portal.php',
-                    'icon'   => 'briefcase',
-                    'access' => $access['supplier_portal'],
-                    'active' => ($current === 'supplier_portal.php'),
+                    'label'  => 'Store & Branch Hours',
+                    'url'    => 'store_management.php',
+                    'icon'   => 'home',
+                    'access' => $access['store_management'],
+                    'active' => ($current === 'store_management.php'),
                 ],
             ],
         ],
@@ -816,8 +812,9 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 
     <div class="flex-1"></div>
 
-    <div class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2"
-         title="<?= htmlspecialchars($user['firstname'] ?: $user['username']) ?> (<?= htmlspecialchars(implode(', ', $roles)) ?>)">
+    <div class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2 cursor-pointer hover:bg-[rgba(251,243,233,0.12)] transition-colors"
+         title="View My Profile & Salary Payment Details"
+         onclick="window.location.href='profile.php'">
         <div class="kfs-user-avatar w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                     bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                     text-[var(--espresso-deep,#1c1108)]">
@@ -962,16 +959,6 @@ function applyUnreadCount(count) {
 function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c =>
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-function markAllNotificationsRead() {
-    fetch('../api/notifications.php', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({action: 'all_read'})
-    }).then(() => {
-        document.querySelectorAll('.notification-dot').forEach(dot => { dot.className = 'notification-dot mt-1.5 w-2 h-2 rounded-full flex-shrink-0 opacity-0'; });
-        document.getElementById('notification-count')?.remove();
-    });
 }
 
 document.addEventListener('click', event => {

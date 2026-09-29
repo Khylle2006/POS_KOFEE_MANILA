@@ -4,7 +4,6 @@ require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
 require_once '../includes/icons.php';
 require_login();
-require_permission('procurement.supplier.portal');
 
 $pdo   = get_db();
 $user  = current_user();
@@ -14,10 +13,57 @@ $toast_type = 'success';
 // Ensure tables exist
 ensure_procurement_tables($pdo);
 
-// ── Resolve this login to a supplier profile ──────────────────
+// Check if user is an administrator or procurement manager (who can view & preview any supplier profile)
+$roles = $_SESSION['roles'] ?? (isset($_SESSION['role']) ? [$_SESSION['role']] : (isset($user['role']) ? [$user['role']] : []));
+$is_admin_mode = in_array('admin', $roles, true)
+    || in_array('procurement', $roles, true)
+    || in_array('manager', $roles, true)
+    || has_permission('procurement.suppliers.manage')
+    || has_permission('procurement.manage')
+    || has_permission('*');
+
+if (!$is_admin_mode && !has_permission('procurement.supplier.portal')) {
+    require_permission('procurement.supplier.portal');
+}
+
+// ── Resolve supplier profile ──────────────────
+$linked_supplier = null;
 $sup_stmt = $pdo->prepare('SELECT * FROM suppliers WHERE user_id = :u');
 $sup_stmt->execute([':u' => $user['id']]);
-$supplier = $sup_stmt->fetch();
+$linked_supplier = $sup_stmt->fetch() ?: null;
+
+$all_suppliers = [];
+if ($is_admin_mode) {
+    $all_sup_stmt = $pdo->query("SELECT id, name, contact_person, email, phone, status, rating_avg, rating_count FROM suppliers ORDER BY status = 'active' DESC, name ASC");
+    $all_suppliers = $all_sup_stmt->fetchAll();
+}
+
+$supplier = null;
+if ($is_admin_mode) {
+    $requested_id = (int)($_GET['supplier_id'] ?? $_POST['supplier_id'] ?? 0);
+    if ($requested_id > 0) {
+        $chk_sup = $pdo->prepare('SELECT * FROM suppliers WHERE id = :id');
+        $chk_sup->execute([':id' => $requested_id]);
+        $supplier = $chk_sup->fetch() ?: null;
+    }
+    // If no valid supplier_id was requested in admin mode:
+    if (!$supplier) {
+        if ($linked_supplier) {
+            $supplier = $linked_supplier;
+        } elseif (!empty($all_suppliers)) {
+            // Default to the first active supplier
+            $supplier = $all_suppliers[0];
+            $full_sup = $pdo->prepare('SELECT * FROM suppliers WHERE id = :id');
+            $full_sup->execute([':id' => $supplier['id']]);
+            $supplier = $full_sup->fetch() ?: $supplier;
+        }
+    }
+} else {
+    // Standard supplier user: bind strictly to their linked supplier account
+    $supplier = $linked_supplier ?: false;
+}
+
+$admin_sup_qs = ($is_admin_mode && $supplier) ? '&supplier_id=' . (int)$supplier['id'] : '';
 
 // ── POST actions (only meaningful once a supplier profile is linked) ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
@@ -73,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
             $toast = $res['error'];
             $toast_type = 'error';
         }
-        header('Location: supplier_portal.php?tab=rfqs&toast=' . urlencode($toast) . '&type=' . $toast_type);
+        header('Location: supplier_portal.php?tab=rfqs' . $admin_sup_qs . '&toast=' . urlencode($toast) . '&type=' . $toast_type);
         exit;
     }
 
@@ -139,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                     );
 
                     $toast = "Contract {$c_row['contract_ref']} successfully countersigned! Kofee Manila procurement has been notified to issue the Purchase Order.";
-                    header('Location: supplier_portal.php?tab=contracts&toast=' . urlencode($toast));
+                    header('Location: supplier_portal.php?tab=contracts' . $admin_sup_qs . '&toast=' . urlencode($toast));
                     exit;
                 } catch (Exception $e) {
                     $toast = 'Error signing contract: ' . $e->getMessage();
@@ -195,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
             notify_role_by_permission('procurement.po.manage', 'po_acknowledged', $title, $msg, $url, !empty($po_row['created_by']) ? (int)$po_row['created_by'] : null);
 
             $toast = "Purchase Order {$po_num} acknowledged successfully.";
-            header('Location: supplier_portal.php?tab=orders&toast=' . urlencode($toast));
+            header('Location: supplier_portal.php?tab=orders' . $admin_sup_qs . '&toast=' . urlencode($toast));
             exit;
         }
     }
@@ -244,8 +290,168 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 notify_role_by_permission('procurement.po.manage', 'po_issue', $title, $msg, $url, !empty($po_row['created_by']) ? (int)$po_row['created_by'] : null);
 
                 $toast = "Your issue has been reported to management for review. PO {$po_num} marked under review.";
-                header('Location: supplier_portal.php?tab=orders&toast=' . urlencode($toast));
+                header('Location: supplier_portal.php?tab=orders' . $admin_sup_qs . '&toast=' . urlencode($toast));
                 exit;
+            }
+        }
+    }
+
+    if ($action === 'confirm_payment') {
+        $payment_id         = (int)($_POST['payment_id'] ?? 0);
+        $confirmed_name     = trim($_POST['supplier_confirmed_name'] ?? '');
+        $confirmation_notes = trim($_POST['supplier_confirmation_notes'] ?? '');
+
+        $chk = $pdo->prepare("
+            SELECT p.*, i.invoice_number, i.po_id, po.po_number
+            FROM payments p
+            JOIN invoices i ON i.id = p.invoice_id
+            JOIN purchase_orders po ON po.id = p.po_id
+            WHERE p.id = :pid AND i.supplier_id = :sid
+        ");
+        $chk->execute([':pid' => $payment_id, ':sid' => $supplier['id']]);
+        $payment_row = $chk->fetch();
+
+        if (!$payment_row) {
+            $toast = 'Payment record not found or does not belong to your account.';
+            $toast_type = 'error';
+        } else {
+            try {
+                $pdo->beginTransaction();
+
+                $officer_name = $confirmed_name ?: ($supplier['contact_person'] ?: $supplier['name']);
+                $pdo->prepare("
+                    UPDATE payments 
+                    SET supplier_confirmation_status = 'confirmed',
+                        supplier_confirmed_by = :uid,
+                        supplier_confirmed_name = :name,
+                        supplier_confirmed_at = NOW(),
+                        supplier_confirmation_notes = :notes
+                    WHERE id = :id
+                ")->execute([
+                    ':uid'   => $user['id'],
+                    ':name'  => $officer_name,
+                    ':notes' => $confirmation_notes ?: null,
+                    ':id'    => $payment_id,
+                ]);
+
+                // Check if all completed payments for this PO are confirmed
+                $unconf_stmt = $pdo->prepare("
+                    SELECT COUNT(*) FROM payments 
+                    WHERE po_id = :poid 
+                      AND status = 'completed' 
+                      AND supplier_confirmation_status != 'confirmed'
+                ");
+                $unconf_stmt->execute([':poid' => $payment_row['po_id']]);
+                $unconf_cnt = (int)$unconf_stmt->fetchColumn();
+
+                if ($unconf_cnt === 0) {
+                    $pdo->prepare("
+                        UPDATE purchase_orders 
+                        SET supplier_payment_confirmed_at = NOW(),
+                            supplier_payment_confirmed_by = :uid,
+                            rating_status = 'pending_rating',
+                            status = CASE WHEN status = 'delivered' THEN 'pending_rating' ELSE status END
+                        WHERE id = :poid
+                    ")->execute([
+                        ':uid'  => $user['id'],
+                        ':poid' => $payment_row['po_id'],
+                    ]);
+                }
+
+                $pdo->commit();
+
+                audit_log('payment', $payment_id, 'supplier_confirmed', "Supplier {$supplier['name']} confirmed receipt of " . php_currency($payment_row['amount']));
+                notify_role_by_permission(
+                    'procurement.payment.process',
+                    'payment_confirmed',
+                    'Payment Confirmed by Supplier',
+                    "Supplier {$supplier['name']} confirmed receipt of " . php_currency($payment_row['amount']) . " for Invoice #{$payment_row['invoice_number']}.",
+                    'payments.php?id=' . $payment_id,
+                    $user['id']
+                );
+
+                $toast = 'Payment receipt confirmed successfully. Thank you!';
+                header('Location: supplier_portal.php?tab=invoices' . $admin_sup_qs . '&toast=' . urlencode($toast));
+                exit;
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $toast = 'Error confirming payment: ' . $e->getMessage();
+                $toast_type = 'error';
+            }
+        }
+    }
+
+    if ($action === 'dispute_payment') {
+        $payment_id     = (int)($_POST['payment_id'] ?? 0);
+        $dispute_reason = trim($_POST['dispute_reason'] ?? '');
+        $dispute_notes  = trim($_POST['dispute_notes'] ?? '');
+
+        $chk = $pdo->prepare("
+            SELECT p.*, i.invoice_number, i.po_id, po.po_number
+            FROM payments p
+            JOIN invoices i ON i.id = p.invoice_id
+            JOIN purchase_orders po ON po.id = p.po_id
+            WHERE p.id = :pid AND i.supplier_id = :sid
+        ");
+        $chk->execute([':pid' => $payment_id, ':sid' => $supplier['id']]);
+        $payment_row = $chk->fetch();
+
+        if (!$payment_row) {
+            $toast = 'Payment record not found or does not belong to your account.';
+            $toast_type = 'error';
+        } elseif (!$dispute_reason) {
+            $toast = 'Please select a reason for the payment dispute.';
+            $toast_type = 'error';
+        } elseif (!$dispute_notes) {
+            $toast = 'Please provide detailed notes explaining the dispute.';
+            $toast_type = 'error';
+        } else {
+            $dispute_attachment_path = null;
+            if (!empty($_FILES['dispute_attachment']) && $_FILES['dispute_attachment']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['dispute_attachment']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true) && $_FILES['dispute_attachment']['size'] <= 10 * 1024 * 1024) {
+                    $upload_dir = __DIR__ . '/../uploads/receipts';
+                    if (!is_dir($upload_dir)) @mkdir($upload_dir, 0755, true);
+                    $fname = 'dispute_' . date('Ymd_His') . '_' . bin2hex(random_bytes(3)) . '.' . $ext;
+                    if (move_uploaded_file($_FILES['dispute_attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
+                        $dispute_attachment_path = 'uploads/receipts/' . $fname;
+                    }
+                }
+            }
+
+            try {
+                $pdo->prepare("
+                    UPDATE payments 
+                    SET supplier_confirmation_status = 'disputed',
+                        supplier_dispute_reason = :reason,
+                        supplier_confirmation_notes = :notes,
+                        supplier_dispute_attachment = :att,
+                        supplier_disputed_at = NOW()
+                    WHERE id = :id
+                ")->execute([
+                    ':reason' => $dispute_reason,
+                    ':notes'  => $dispute_notes,
+                    ':att'    => $dispute_attachment_path,
+                    ':id'     => $payment_id,
+                ]);
+
+                audit_log('payment', $payment_id, 'supplier_disputed', "Supplier {$supplier['name']} reported payment dispute: {$dispute_reason}");
+                notify_role_by_permission(
+                    'procurement.payment.process',
+                    'payment_disputed',
+                    'Payment Disputed by Supplier',
+                    "URGENT: Supplier {$supplier['name']} disputed payment for Invoice #{$payment_row['invoice_number']} ({$dispute_reason}). Please review in Payments.",
+                    'payments.php?id=' . $payment_id,
+                    $user['id']
+                );
+
+                $toast = 'Payment dispute reported to finance. Our team has been alerted.';
+                $toast_type = 'error';
+                header('Location: supplier_portal.php?tab=invoices' . $admin_sup_qs . '&toast=' . urlencode($toast) . '&type=error');
+                exit;
+            } catch (Exception $e) {
+                $toast = 'Error filing dispute: ' . $e->getMessage();
+                $toast_type = 'error';
             }
         }
     }
@@ -369,7 +575,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
 
                 $pdo->commit();
                 $toast = "Advance Shipping Notice {$notice_ref} submitted successfully. Receiving team has been notified.";
-                header('Location: supplier_portal.php?tab=orders&toast=' . urlencode($toast));
+                header('Location: supplier_portal.php?tab=orders' . $admin_sup_qs . '&toast=' . urlencode($toast));
                 exit;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
@@ -393,7 +599,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
 
         audit_log('po', $po_id, 'fulfillment_updated', "Fulfillment status updated to {$f_status}" . ($notes ? ": {$notes}" : ''));
         $toast = "Fulfillment status updated to " . ucfirst(str_replace('_', ' ', $f_status)) . ".";
-        header('Location: supplier_portal.php?tab=orders&toast=' . urlencode($toast));
+        header('Location: supplier_portal.php?tab=orders' . $admin_sup_qs . '&toast=' . urlencode($toast));
         exit;
     }
 
@@ -414,7 +620,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
         } else {
             $toast = 'Could not mark shipped — order may already be past that step.'; $toast_type = 'error';
         }
-        header('Location: supplier_portal.php?tab=orders&toast=' . urlencode($toast));
+        header('Location: supplier_portal.php?tab=orders' . $admin_sup_qs . '&toast=' . urlencode($toast) . '&type=' . $toast_type);
         exit;
     }
 
@@ -538,7 +744,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                         'three_way_match.php?invoice_id=' . $invoice_id
                     );
                     $toast = "Invoice {$inv_num} (v{$new_version}) resubmitted successfully — awaiting 3-way match.";
-                    header('Location: supplier_portal.php?tab=invoices&toast=' . urlencode($toast));
+                    header('Location: supplier_portal.php?tab=invoices' . $admin_sup_qs . '&toast=' . urlencode($toast));
                     exit;
 
                 } else {
@@ -606,7 +812,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                         'three_way_match.php?invoice_id=' . $invoice_id
                     );
                     $toast = 'Invoice submitted — awaiting match and approval.';
-                    header('Location: supplier_portal.php?tab=invoices&toast=' . urlencode($toast));
+                    header('Location: supplier_portal.php?tab=invoices' . $admin_sup_qs . '&toast=' . urlencode($toast));
                     exit;
                 }
             } catch (Exception $e) {
@@ -617,7 +823,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
     }
 
     $ret_tab = $_POST['tab'] ?? ($_GET['tab'] ?? 'rfqs');
-    header('Location: supplier_portal.php?tab=' . urlencode($ret_tab) . ($toast ? '&toast=' . urlencode($toast) . '&type=' . $toast_type : ''));
+    header('Location: supplier_portal.php?tab=' . urlencode($ret_tab) . $admin_sup_qs . ($toast ? '&toast=' . urlencode($toast) . '&type=' . $toast_type : ''));
     exit;
 }
 
@@ -634,9 +840,19 @@ $my_bids = [];
 $my_contracts = [];
 $contract_items_map = [];
 $my_pos = [];
+$po_items_map = [];
+$invoiceable_items = [];
+$all_dns = [];
+$po_dns_map = [];
 $my_letters = [];
 $my_invoices = [];
 $my_invoice_items = [];
+$my_payments = [];
+$my_invoice_payments = [];
+$awaiting_payment_conf_count = 0;
+$pending_cnt_count = 0;
+$pending_ack_count = 0;
+$needs_corr_count  = 0;
 $breakdown = null;
 $ratings = [];
 
@@ -757,20 +973,33 @@ if ($supplier) {
         $po_dns_map[$dn['po_id']][] = $dn;
     }
 
-    // 6. Own performance scorecard
+    // 6. Own performance scorecard (all 6 evaluation dimensions)
     $b = $pdo->prepare('
-        SELECT AVG(quality_score) AS quality, AVG(timeliness_score) AS timeliness,
-               AVG(price_score) AS price, AVG(communication_score) AS communication
-        FROM supplier_performance_ratings WHERE supplier_id = :s
+        SELECT 
+            AVG(quality_score) AS quality,
+            AVG(timeliness_score) AS timeliness,
+            AVG(quantity_accuracy_score) AS quantity_accuracy,
+            AVG(price_score) AS price,
+            AVG(communication_score) AS communication,
+            AVG(compliance_score) AS compliance,
+            AVG(overall_score) AS overall,
+            COUNT(*) AS total_evaluations
+        FROM supplier_performance_ratings 
+        WHERE supplier_id = :s AND is_skipped = 0
     ');
     $b->execute([':s' => $supplier['id']]);
     $breakdown = $b->fetch();
 
     $r = $pdo->prepare('
-        SELECT spr.*, po.id AS po_id
+        SELECT spr.*, po.po_number, po.total_amount, pr.title AS req_title,
+               u.firstname AS evaluator_fname, u.lastname AS evaluator_lname
         FROM supplier_performance_ratings spr
         JOIN purchase_orders po ON po.id = spr.po_id
-        WHERE spr.supplier_id = :s ORDER BY spr.created_at DESC LIMIT 10
+        JOIN purchase_requisitions pr ON pr.id = po.requisition_id
+        LEFT JOIN users u ON u.id = spr.rated_by
+        WHERE spr.supplier_id = :s 
+        ORDER BY spr.created_at DESC 
+        LIMIT 15
     ');
     $r->execute([':s' => $supplier['id']]);
     $ratings = $r->fetchAll();
@@ -795,6 +1024,23 @@ if ($supplier) {
         $iis->execute([':id' => $inv['id']]);
         $my_invoice_items[$inv['id']] = $iis->fetchAll();
     }
+
+    // Fetch payments for this supplier
+    $pay_stmt = $pdo->prepare("
+        SELECT py.*, i.invoice_number, po.id AS po_id, po.po_number
+        FROM payments py
+        JOIN invoices i ON i.id = py.invoice_id
+        JOIN purchase_orders po ON po.id = py.po_id
+        WHERE i.supplier_id = :s
+        ORDER BY py.payment_date DESC, py.id DESC
+    ");
+    $pay_stmt->execute([':s' => $supplier['id']]);
+    $my_payments = $pay_stmt->fetchAll();
+    $my_invoice_payments = [];
+    foreach ($my_payments as $py) {
+        $my_invoice_payments[$py['invoice_id']][] = $py;
+    }
+    $awaiting_payment_conf_count = count(array_filter($my_payments, fn($p) => $p['status'] === 'completed' && in_array($p['supplier_confirmation_status'], ['pending', 'awaiting_confirmation'], true)));
 }
 
 $pending_cnt_count = count(array_filter($my_contracts, fn($c) => $c['status'] === 'sent_to_supplier'));
@@ -844,9 +1090,48 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
     <div class="toast toast-<?= $toast_type ?>" style="position:static;display:inline-flex;margin-bottom:12px"><?= $toast ?></div>
     <?php endif; ?>
 
+    <?php if ($is_admin_mode && !empty($all_suppliers)): ?>
+      <!-- ── Admin / Procurement Impersonation Bar ── -->
+      <div class="table-card" style="margin-bottom:18px;padding:12px 18px;background:linear-gradient(135deg,#FFFDF9 0%,#F5ECE0 100%);border:1.5px solid var(--caramel);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="background:var(--espresso);color:var(--cream);width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <?= icon('eye', 18) ?>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--caramel);text-transform:uppercase;letter-spacing:0.05em">
+              Procurement &amp; Management Preview Mode
+            </div>
+            <div style="font-size:13.5px;color:var(--espresso);font-weight:600">
+              Viewing Portal as: <span style="font-weight:800;color:var(--espresso)"><?= $supplier ? htmlspecialchars($supplier['name']) : 'No Supplier Selected' ?></span>
+              <?php if ($supplier && !empty($supplier['contact_person'])): ?>
+                <span style="font-size:12px;font-weight:400;color:var(--text-muted)">(Contact: <?= htmlspecialchars($supplier['contact_person']) ?>)</span>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
+        <form method="GET" style="display:flex;align-items:center;gap:8px;margin:0">
+          <input type="hidden" name="tab" value="<?= htmlspecialchars($active_tab) ?>"/>
+          <label for="supplier-switcher" style="font-size:12px;font-weight:700;color:var(--espresso);white-space:nowrap">Switch Supplier:</label>
+          <select id="supplier-switcher" name="supplier_id" class="field-input" style="padding:6px 12px;font-size:13px;font-weight:600;min-width:240px;background:#fff;border-color:var(--caramel)" onchange="this.form.submit()">
+            <?php foreach ($all_suppliers as $s): ?>
+              <option value="<?= $s['id'] ?>" <?= ($supplier && (int)$s['id'] === (int)$supplier['id']) ? 'selected' : '' ?>>
+                <?= htmlspecialchars($s['name']) ?> <?= $s['status'] !== 'active' ? '(' . $s['status'] . ')' : '' ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <a href="suppliers.php" class="act-btn" style="padding:6px 10px;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+            <?= icon('edit', 12) ?> Edit Suppliers
+          </a>
+        </form>
+      </div>
+    <?php endif; ?>
+
     <?php if (!$supplier): ?>
       <div class="table-card" style="padding:22px">
         <p>Your account isn't linked to a supplier profile yet. Ask a Procurement Officer to connect your login on the <strong>Suppliers</strong> page before you can quote or track orders here.</p>
+        <?php if ($is_admin_mode): ?>
+          <p style="margin-top:10px"><a href="suppliers.php" class="act-btn act-activate"><?= icon('plus', 12) ?> Register or Link a Supplier Profile</a></p>
+        <?php endif; ?>
       </div>
 
     <?php else: ?>
@@ -879,12 +1164,19 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
           <?= icon('invoice', 14) ?> Invoices &amp; Payments
           <?php if ($needs_corr_count > 0): ?>
             <span style="background:var(--red);color:#fff;padding:1px 7px;border-radius:10px;font-size:10.5px;font-weight:700;margin-left:4px"><?= $needs_corr_count ?> Action Needed</span>
+          <?php elseif ($awaiting_payment_conf_count > 0): ?>
+            <span style="background:#16a34a;color:#fff;padding:1px 7px;border-radius:10px;font-size:10.5px;font-weight:700;margin-left:4px"><?= $awaiting_payment_conf_count ?> Confirm</span>
           <?php else: ?>
             (<?= count($my_invoices) ?>)
           <?php endif; ?>
         </button>
         <button type="button" class="filter-pill <?= $active_tab === 'performance' ? 'active' : '' ?>" onclick="switchTab('performance')">
-          <?= icon('star', 14) ?> My Scorecard &amp; Ratings
+          <?= icon('star', 14) ?> Scorecard &amp; Ratings
+          <?php if ($supplier && $supplier['rating_count'] > 0): ?>
+            <span style="background:#FAF5EE;color:var(--espresso);border:1px solid #E5D5C5;padding:1px 6px;border-radius:10px;font-size:10.5px;font-weight:700;margin-left:4px">
+              ★ <?= number_format((float)$supplier['rating_avg'], 1) ?>
+            </span>
+          <?php endif; ?>
         </button>
       </div>
 
@@ -910,7 +1202,7 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                     <?php if ($can_quote['is_expired']): ?>
                       <span class="status-badge status-rejected" style="font-size:11px"><?= icon('x', 11) ?> Expired on <?= date('M d, Y', strtotime($inv['due_date'])) ?></span>
                     <?php else: ?>
-                      <span class="status-badge" style="background:#e6f4ea;color:#137333;font-size:11px"><?= icon('clock', 11) ?> Due <?= date('M d, Y', strtotime($inv['due_date'])) ?> (<?= $can_quote['days_left'] ?>d left)</span>
+                      <span class="status-badge" style="background:#e6f4ea;color:#137333;font-size:11px"><?= icon('clock', 11) ?> Due <?= date('M d, Y', strtotime($inv['due_date'])) ?> (<?= (int)($can_quote['days_left'] ?? 0) ?>d left)</span>
                     <?php endif; ?>
                   <?php else: ?>
                     <span>No deadline set</span>
@@ -931,6 +1223,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                 <input type="hidden" name="action" value="submit_bid"/>
                 <input type="hidden" name="tab" value="rfqs"/>
                 <input type="hidden" name="rfq_id" value="<?= $inv['id'] ?>"/>
+                <?php if ($is_admin_mode && $supplier): ?>
+                  <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+                <?php endif; ?>
                 <div class="field-group" style="margin:0;max-width:150px">
                   <label class="field-label">Quoted Total (₱) <span style="color:var(--red)">*</span></label>
                   <input class="field-input" type="number" step="0.01" min="0.01" name="quoted_total" value="<?= $inv['quoted_total'] ?: '' ?>" required/>
@@ -953,6 +1248,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                   <form method="POST" onsubmit="return confirm('Withdraw this submitted quotation?');" style="display:inline-block">
                     <input type="hidden" name="action" value="withdraw_bid"/>
                     <input type="hidden" name="bid_id" value="<?= $inv['bid_id'] ?>"/>
+                    <?php if ($is_admin_mode && $supplier): ?>
+                      <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+                    <?php endif; ?>
                     <button type="submit" class="act-btn" style="color:var(--red);font-size:11.5px"><?= icon('x', 11) ?> Withdraw Quote</button>
                   </form>
                 </div>
@@ -979,7 +1277,7 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
             <?php else: foreach ($my_bids as $b): ?>
               <tr>
                 <td style="font-weight:700"><?= htmlspecialchars($b['req_title']) ?></td>
-                <td><?= htmlspecialchars($b['rfq_ref']) ?></td>
+                <td><?= htmlspecialchars($b['rfq_ref'] ?? '') ?></td>
                 <td style="font-weight:700;color:var(--espresso)">₱<?= number_format((float)$b['quoted_total'], 2) ?></td>
                 <td><?= (int)$b['lead_time_days'] ?> day(s)</td>
                 <td><span class="status-badge status-<?= $b['status']==='selected'?'approved':($b['status']==='withdrawn'||$b['status']==='rejected'?'rejected':'pending') ?>"><?= status_badge($b['status']) ?></span></td>
@@ -989,6 +1287,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                     <form method="POST" onsubmit="return confirm('Withdraw this quotation?');">
                       <input type="hidden" name="action" value="withdraw_bid"/>
                       <input type="hidden" name="bid_id" value="<?= $b['id'] ?>"/>
+                      <?php if ($is_admin_mode && $supplier): ?>
+                        <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+                      <?php endif; ?>
                       <button type="submit" class="act-btn" style="color:var(--red);font-size:11px"><?= icon('x', 11) ?> Withdraw</button>
                     </form>
                   <?php else: ?>
@@ -1065,7 +1366,7 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
               </div>
 
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <button type="button" class="btn-save" style="padding:7px 14px;font-size:12.5px;<?= $cnt['status']==='sent_to_supplier'?'background:var(--caramel)':'' ?>" onclick='openContractModal(<?= htmlspecialchars(json_encode($cnt), ENT_QUOTES) ?>)'>
+                <button type="button" class="btn-save" style="padding:7px 14px;font-size:12.5px;<?= $cnt['status']==='sent_to_supplier'?'background:var(--caramel)':'' ?>" onclick="openContractModalById(<?= (int)$cnt['id'] ?>)">
                   <?= $cnt['status'] === 'sent_to_supplier' ? icon('edit', 14) . ' Review &amp; Countersign' : icon('eye', 14) . ' View Signed Agreement' ?>
                 </button>
               </div>
@@ -1129,7 +1430,7 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button type="button" class="act-btn" onclick="togglePoItems(<?= $p['id'] ?>)"><?= icon('package', 13) ?> Items (<?= count($po_items_map[$p['id']] ?? []) ?>)</button>
                 <?php if ($p['status'] === 'sent'): ?>
-                  <form method="POST"><input type="hidden" name="action" value="acknowledge_po"/><input type="hidden" name="tab" value="orders"/><input type="hidden" name="po_id" value="<?= $p['id'] ?>"/>
+                  <form method="POST"><input type="hidden" name="action" value="acknowledge_po"/><input type="hidden" name="tab" value="orders"/><input type="hidden" name="po_id" value="<?= $p['id'] ?>"/><?php if ($is_admin_mode && $supplier): ?><input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/><?php endif; ?>
                     <button type="submit" class="act-btn act-activate"><?= icon('check', 13) ?> Acknowledge Order</button></form>
                   <?php if ($p['issue_status'] !== 'open'): ?>
                     <button type="button" class="act-btn act-suspend" style="color:var(--red);border-color:#FCA5A5" onclick="openIssueModal(<?= $p['id'] ?>, '<?= htmlspecialchars($p['po_number'] ?: ('KM-PO-' . str_pad($p['id'], 5, '0', STR_PAD_LEFT))) ?>', '<?= htmlspecialchars($p['contract_ref'] ?? '') ?>')"><?= icon('alert-triangle', 13) ?> Raise an Issue</button>
@@ -1139,7 +1440,7 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                   <?php if ($p['status'] === 'acknowledged' && $p['issue_status'] !== 'open'): ?>
                     <button type="button" class="act-btn act-suspend" style="color:var(--red);border-color:#FCA5A5" onclick="openIssueModal(<?= $p['id'] ?>, '<?= htmlspecialchars($p['po_number'] ?: ('KM-PO-' . str_pad($p['id'], 5, '0', STR_PAD_LEFT))) ?>', '<?= htmlspecialchars($p['contract_ref'] ?? '') ?>')"><?= icon('alert-triangle', 13) ?> Raise an Issue</button>
                   <?php endif; ?>
-                  <button type="button" class="act-btn act-activate" style="background:var(--caramel);color:#fff;border-color:var(--caramel)" onclick='openAsnModal(<?= $p['id'] ?>, <?= json_encode($p['po_number'] ?: ('KM-PO-' . str_pad($p['id'], 5, '0', STR_PAD_LEFT))) ?>, <?= htmlspecialchars(json_encode($po_items_map[$p['id']] ?? []), ENT_QUOTES) ?>)'><?= icon('truck', 13) ?> Dispatch Notice (ASN)</button>
+                  <button type="button" class="act-btn act-activate" style="background:var(--caramel);color:#fff;border-color:var(--caramel)" onclick="openAsnModalById(<?= (int)$p['id'] ?>)"><?= icon('truck', 13) ?> Dispatch Notice (ASN)</button>
                   <button type="button" class="act-btn" onclick="toggleShipForm(<?= $p['id'] ?>)"><?= icon('check', 13) ?> Quick Shipped</button>
                 <?php endif; ?>
                 <?php if ($p['status'] === 'delivered' && (!$p['invoice_id'] || $p['invoice_status'] === 'cancelled')): ?>
@@ -1247,6 +1548,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
               <input type="hidden" name="action" value="mark_shipped"/>
               <input type="hidden" name="tab" value="orders"/>
               <input type="hidden" name="po_id" value="<?= $p['id'] ?>"/>
+              <?php if ($is_admin_mode && $supplier): ?>
+                <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+              <?php endif; ?>
               <div class="field-group" style="margin:0;flex:1;min-width:200px">
                 <label class="field-label">Tracking / Carrier Note (optional)</label>
                 <input class="field-input" type="text" name="shipping_notes" placeholder="e.g. LBC, tracking #1234"/>
@@ -1260,6 +1564,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
               <input type="hidden" name="action" value="submit_invoice"/>
               <input type="hidden" name="tab" value="orders"/>
               <input type="hidden" name="po_id" value="<?= $p['id'] ?>"/>
+              <?php if ($is_admin_mode && $supplier): ?>
+                <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+              <?php endif; ?>
               <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
                 <div class="field-group" style="margin:0;max-width:160px">
                   <label class="field-label">Invoice Number <span style="color:var(--red)">*</span></label>
@@ -1287,11 +1594,12 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                   <thead><tr><th style="text-align:left;font-size:11.5px">Item</th><th style="text-align:left;font-size:11.5px">Ordered</th><th style="text-align:left;font-size:11.5px">Qty Invoiced</th><th style="text-align:left;font-size:11.5px">Unit Price (₱)</th></tr></thead>
                   <tbody>
                     <?php foreach (($invoiceable_items[$p['id']] ?? []) as $ri): ?>
+                      <?php $u_price = (float)($ri['unit_price'] ?? $ri['est_unit_price'] ?? 0); ?>
                       <tr>
                         <td style="font-size:12.5px;font-weight:600"><?= htmlspecialchars($ri['item_name']) ?></td>
                         <td style="font-size:12.5px" class="muted-cell"><?= number_format((float)$ri['quantity'],2) ?> <?= htmlspecialchars($ri['unit']) ?></td>
                         <td><input class="field-input" type="number" step="0.01" min="0" style="width:90px;padding:6px 8px" name="lines[<?= $ri['id'] ?>][qty]" value="<?= number_format((float)$ri['quantity'],2) ?>"/></td>
-                        <td><input class="field-input" type="number" step="0.01" min="0" style="width:100px;padding:6px 8px" name="lines[<?= $ri['id'] ?>][unit_price]" value="<?= number_format((float)$ri['est_unit_price'],2) ?>"/></td>
+                        <td><input class="field-input" type="number" step="0.01" min="0" style="width:100px;padding:6px 8px" name="lines[<?= $ri['id'] ?>][unit_price]" value="<?= number_format($u_price, 2) ?>"/></td>
                       </tr>
                     <?php endforeach; ?>
                   </tbody>
@@ -1373,6 +1681,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                 <input type="hidden" name="action" value="acknowledge_letter"/>
                 <input type="hidden" name="tab" value="letters"/>
                 <input type="hidden" name="letter_id" value="<?= $let['id'] ?>"/>
+                <?php if ($is_admin_mode && $supplier): ?>
+                  <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+                <?php endif; ?>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
                   <div class="field-group" style="margin:0;flex:1;min-width:240px">
                     <label class="field-label">Confirmation / Estimated Delivery Note (optional)</label>
@@ -1394,7 +1705,20 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
       <div id="tab-invoices" class="tab-pane <?= $active_tab === 'invoices' ? 'active' : '' ?>">
         <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px">
           <?= icon('invoice', 16, '', 'color:var(--caramel)') ?> Invoices &amp; Payments (<?= count($my_invoices) ?>)
+          <?php if (!empty($awaiting_payment_conf_count)): ?>
+            <span class="count-badge" style="background:#fef3c7;color:#92400e;font-size:11px"><?= $awaiting_payment_conf_count ?> Action Needed</span>
+          <?php endif; ?>
         </h3>
+
+        <?php if (!empty($awaiting_payment_conf_count)): ?>
+          <div style="background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:10px;padding:14px 18px;margin-bottom:18px;color:#92400E;display:flex;align-items:center;gap:12px">
+            <?= icon('clock', 22, '', 'color:#92400E;flex-shrink:0') ?>
+            <div>
+              <div style="font-weight:700;font-size:13.5px"><?= $awaiting_payment_conf_count ?> Payment<?= $awaiting_payment_conf_count > 1 ? 's' : '' ?> Awaiting Your Receipt Confirmation</div>
+              <div style="font-size:12px;margin-top:2px">Kofee Manila Finance has recorded payment disbursements for your invoices. Please review the payment details and proof of payment documents below, then click <strong>Confirm Payment Received</strong> to verify receipt.</div>
+            </div>
+          </div>
+        <?php endif; ?>
 
         <?php if ($needs_corr_count > 0): ?>
           <div style="background:#FFF3CD;border:1.5px solid #FFEBAA;border-radius:10px;padding:14px 18px;margin-bottom:18px;color:#856404;display:flex;align-items:center;gap:12px">
@@ -1491,6 +1815,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                 <input type="hidden" name="tab" value="invoices"/>
                 <input type="hidden" name="invoice_id" value="<?= $inv['id'] ?>"/>
                 <input type="hidden" name="po_id" value="<?= $inv['po_id'] ?>"/>
+                <?php if ($is_admin_mode && $supplier): ?>
+                  <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+                <?php endif; ?>
 
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                   <h4 style="margin:0;font-size:13.5px;color:var(--espresso)">
@@ -1553,6 +1880,105 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                 </div>
               </form>
             <?php endif; ?>
+
+            <!-- Payments Breakdown Section -->
+            <div style="margin-top:14px;border-top:1px solid #F2E6D6;padding-top:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <strong style="font-size:12.5px;color:var(--espresso);display:flex;align-items:center;gap:5px">
+                  <?= icon('dollar', 14) ?> Payments &amp; Disbursements (<?= count($my_invoice_payments[$inv['id']] ?? []) ?>)
+                </strong>
+                <span style="font-size:12px;font-weight:700;color:var(--green)">
+                  Total Paid: <?= php_currency($inv['amount_paid'] ?? 0) ?> / <?= php_currency($inv['total_amount']) ?>
+                </span>
+              </div>
+
+              <?php $inv_pays = $my_invoice_payments[$inv['id']] ?? []; ?>
+              <?php if (empty($inv_pays)): ?>
+                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">No payments recorded for this invoice yet.</p>
+              <?php else: ?>
+                <div style="border:1px solid #E8DED2;border-radius:8px;overflow:hidden;background:#fff">
+                  <div style="overflow-x:auto">
+                    <table style="width:100%;font-size:12px;border-collapse:collapse">
+                      <thead style="background:#FAF7F2;border-bottom:1px solid #E8DED2">
+                        <tr>
+                          <th style="padding:6px 10px;text-align:left">Date</th>
+                          <th style="padding:6px 10px;text-align:left">Method &amp; Account</th>
+                          <th style="padding:6px 10px;text-align:left">Reference</th>
+                          <th style="padding:6px 10px;text-align:right">Amount</th>
+                          <th style="padding:6px 10px;text-align:center">Proof</th>
+                          <th style="padding:6px 10px;text-align:left">Confirmation Status</th>
+                          <th style="padding:6px 10px;text-align:right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <?php foreach ($inv_pays as $pay): ?>
+                          <tr style="border-bottom:1px dashed #E8DED2">
+                            <td style="padding:8px 10px"><?= date('M d, Y', strtotime($pay['payment_date'] ?: $pay['completed_at'] ?: $pay['scheduled_at'])) ?></td>
+                            <td style="padding:8px 10px">
+                              <strong><?= ucwords(str_replace('_',' ',$pay['payment_method'])) ?></strong>
+                              <?php if ($pay['paying_account']): ?>
+                                <div style="font-size:11px;color:var(--text-muted)"><?= htmlspecialchars($pay['paying_account']) ?></div>
+                              <?php endif; ?>
+                            </td>
+                            <td style="padding:8px 10px;font-family:monospace;font-size:11.5px"><?= htmlspecialchars($pay['reference_no'] ?: '—') ?></td>
+                            <td style="padding:8px 10px;text-align:right;font-weight:700"><?= php_currency($pay['amount']) ?></td>
+                            <td style="padding:8px 10px;text-align:center">
+                              <?php if (!empty($pay['receipt_attachment_path'])): ?>
+                                <a href="../<?= htmlspecialchars($pay['receipt_attachment_path']) ?>" target="_blank" class="btn-ghost" style="padding:2px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">
+                                  <?= icon('file-text', 12) ?> <span>View Proof</span>
+                                </a>
+                              <?php else: ?>
+                                <span style="color:var(--text-muted);font-size:11px">—</span>
+                              <?php endif; ?>
+                            </td>
+                            <td style="padding:8px 10px">
+                              <?php if ($pay['status'] === 'completed'): ?>
+                                <?php if ($pay['supplier_confirmation_status'] === 'confirmed'): ?>
+                                  <span style="color:#16a34a;font-weight:700;display:inline-flex;align-items:center;gap:4px">
+                                    <?= icon('check', 12) ?> Confirmed
+                                  </span>
+                                  <div style="font-size:10.5px;color:var(--text-muted)">
+                                    <?= date('M d, Y', strtotime($pay['supplier_confirmed_at'])) ?>
+                                    <?= $pay['supplier_confirmed_name'] ? ' · ' . htmlspecialchars($pay['supplier_confirmed_name']) : '' ?>
+                                  </div>
+                                <?php elseif ($pay['supplier_confirmation_status'] === 'disputed'): ?>
+                                  <span style="color:#dc2626;font-weight:700;display:inline-flex;align-items:center;gap:4px">
+                                    <?= icon('alert-triangle', 12) ?> Disputed
+                                  </span>
+                                  <div style="font-size:10.5px;color:#dc2626">
+                                    <?= htmlspecialchars($pay['supplier_dispute_reason'] ?: 'Issue reported') ?>
+                                  </div>
+                                <?php else: ?>
+                                  <span style="color:#d97706;font-weight:700;display:inline-flex;align-items:center;gap:4px">
+                                    <?= icon('clock', 12) ?> Awaiting Confirmation
+                                  </span>
+                                <?php endif; ?>
+                              <?php else: ?>
+                                <span style="color:var(--text-muted)"><?= ucfirst($pay['status']) ?></span>
+                              <?php endif; ?>
+                            </td>
+                            <td style="padding:8px 10px;text-align:right">
+                              <?php if ($pay['status'] === 'completed' && in_array($pay['supplier_confirmation_status'], ['pending', 'awaiting_confirmation'], true)): ?>
+                                <div style="display:inline-flex;gap:6px">
+                                  <button type="button" class="btn-save" style="padding:3px 8px;font-size:11px;background:#16a34a;border-color:#16a34a" onclick="openConfirmPaymentModal(<?= $pay['id'] ?>, '<?= htmlspecialchars($inv['invoice_number'], ENT_QUOTES) ?>', '<?= number_format($pay['amount'], 2) ?>')">
+                                    <?= icon('check', 11) ?> Confirm Received
+                                  </button>
+                                  <button type="button" class="btn-cancel" style="padding:3px 8px;font-size:11px;color:#dc2626;border-color:#dc2626" onclick="openDisputePaymentModal(<?= $pay['id'] ?>, '<?= htmlspecialchars($inv['invoice_number'], ENT_QUOTES) ?>', '<?= number_format($pay['amount'], 2) ?>')">
+                                    Dispute
+                                  </button>
+                                </div>
+                              <?php else: ?>
+                                <span style="color:var(--text-muted);font-size:11px">&mdash;</span>
+                              <?php endif; ?>
+                            </td>
+                          </tr>
+                        <?php endforeach; ?>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              <?php endif; ?>
+            </div>
           </div>
         <?php endforeach; endif; ?>
       </div>
@@ -1562,26 +1988,239 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
       <!-- ═══════════════════════════════════════════════ -->
       <div id="tab-performance" class="tab-pane <?= $active_tab === 'performance' ? 'active' : '' ?>">
         <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px">
-          <?= icon('star', 16, '', 'fill:currentColor;color:var(--amber,#b45309)') ?> My Performance Scorecard
+          <?= icon('star', 16, '', 'fill:currentColor;color:var(--amber,#b45309)') ?> My Performance Scorecard &amp; Ratings
         </h3>
-        <div class="table-card" style="padding:18px 20px;margin-bottom:8px">
-          <p class="muted-cell" style="margin-bottom:12px"><?= $supplier['rating_count'] ?> rating(s) · Overall <?= $supplier['rating_avg'] ? number_format($supplier['rating_avg'],2) . '/5' : 'Not yet rated' ?></p>
-          <?php if ($breakdown && $supplier['rating_count'] > 0): ?>
-            <?php foreach (['quality'=>'Quality of Goods','timeliness'=>'On-Time Delivery','price'=>'Price Competitiveness','communication'=>'Responsiveness'] as $key => $label): $val = (float)$breakdown[$key]; ?>
-              <div class="score-row">
-                <span style="width:160px;font-size:12.5px;font-weight:600"><?= $label ?></span>
-                <div class="breakdown-bar-wrap"><div class="breakdown-bar-fill" style="width:<?= $val/5*100 ?>%"></div></div>
-                <span style="font-size:12.5px;font-weight:700"><?= number_format($val,1) ?> / 5.0</span>
+
+        <!-- Overall Score Summary Card -->
+        <div class="table-card" style="padding:20px;margin-bottom:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:18px;padding-bottom:16px;border-bottom:1.5px solid var(--border)">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--caramel);text-transform:uppercase;letter-spacing:0.06em">Official Vendor Standing</div>
+              <div style="font-size:20px;font-weight:800;color:var(--espresso);margin-top:2px"><?= htmlspecialchars($supplier['name']) ?></div>
+              <p class="muted-cell" style="margin-top:4px">
+                <?= (int)$supplier['rating_count'] ?> completed evaluation(s) on file · Evaluated across 6 quality, logistics, and pricing criteria
+              </p>
+            </div>
+            <div style="text-align:right;background:#FAF5EE;padding:12px 20px;border-radius:10px;border:1px solid #E5D5C5">
+              <div style="font-size:11px;font-weight:700;color:var(--espresso);text-transform:uppercase">Composite Rating</div>
+              <div style="font-size:28px;font-weight:800;color:<?= ($supplier['rating_avg'] >= 4.0 ? 'var(--green,#16a34a)' : ($supplier['rating_avg'] >= 3.0 ? 'var(--caramel,#c47d3e)' : 'var(--red,#dc2626)')) ?>;margin-top:2px;display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                <?= icon('star', 22, '', 'fill:currentColor') ?>
+                <span><?= $supplier['rating_avg'] ? number_format($supplier['rating_avg'], 2) : '—' ?></span>
+                <span style="font-size:15px;color:var(--text-muted);font-weight:500">/ 5.0</span>
               </div>
-            <?php endforeach; ?>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+                <?= ($supplier['rating_avg'] >= 4.5 ? '⭐ Tier 1 Preferred Vendor' : ($supplier['rating_avg'] >= 3.5 ? '✓ Compliant Active Supplier' : ($supplier['rating_avg'] > 0 ? '⚠️ Under Performance Review' : 'New Vendor (Unrated)'))) ?>
+              </div>
+            </div>
+          </div>
+
+          <div style="font-weight:700;font-size:13px;color:var(--espresso);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.04em">
+            6-Dimension Performance Breakdown
+          </div>
+
+          <?php 
+          $dims = [
+            'quality'           => ['label' => 'Quality of Goods',               'weight' => '25% Weight', 'desc' => 'Freshness, packaging integrity, and adherence to specs'],
+            'timeliness'        => ['label' => 'On-Time Delivery',               'weight' => '20% Weight', 'desc' => 'Punctuality against PO delivery schedule'],
+            'quantity_accuracy' => ['label' => 'Order & Quantity Accuracy',      'weight' => '20% Weight', 'desc' => 'Discrepancy-free dispatch vs quantities ordered'],
+            'price'             => ['label' => 'Pricing & Cost Discipline',       'weight' => '15% Weight', 'desc' => 'Adherence to contract pricing with no hidden charges'],
+            'communication'     => ['label' => 'Communication & Responsiveness', 'weight' => '10% Weight', 'desc' => 'Timely notices, prompt acknowledgements, and support'],
+            'compliance'        => ['label' => 'Compliance & Documentation',     'weight' => '10% Weight', 'desc' => 'Complete invoices, valid permits, and accurate ASNs'],
+          ];
+          ?>
+
+          <?php if ($breakdown && $supplier['rating_count'] > 0): ?>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:14px">
+              <?php foreach ($dims as $key => $meta): 
+                $val = (float)($breakdown[$key] ?? 0); 
+                $bar_pct = max(0, min(100, ($val / 5.0) * 100));
+                $bar_color = ($val >= 4.0 ? '#16a34a' : ($val >= 3.0 ? '#c47d3e' : ($val > 0 ? '#dc2626' : '#9ca3af')));
+              ?>
+                <div style="background:#FAF8F5;border:1px solid #EFEAE2;border-radius:8px;padding:12px 14px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-size:13px;font-weight:700;color:var(--espresso)"><?= $meta['label'] ?></span>
+                    <span style="font-size:11px;font-weight:600;color:var(--caramel)"><?= $meta['weight'] ?></span>
+                  </div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px"><?= $meta['desc'] ?></div>
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div class="breakdown-bar-wrap" style="margin:0;height:9px">
+                      <div class="breakdown-bar-fill" style="width:<?= $bar_pct ?>%;background:<?= $bar_color ?>"></div>
+                    </div>
+                    <span style="font-size:13px;font-weight:800;color:var(--espresso);min-width:55px;text-align:right">
+                      <?= $val > 0 ? number_format($val, 1) : '—' ?> <span style="font-size:10.5px;color:var(--text-muted);font-weight:400">/ 5</span>
+                    </span>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
           <?php else: ?>
-            <p class="muted-cell">No performance ratings on file yet — ratings are awarded upon Purchase Order delivery &amp; closure.</p>
+            <p class="muted-cell" style="margin:0">No performance ratings on file yet — ratings are awarded upon Purchase Order delivery &amp; closure.</p>
           <?php endif; ?>
+        </div>
+
+        <!-- Evaluation History Table -->
+        <h3 class="portal-section-title" style="display:flex;align-items:center;gap:6px;margin-top:20px">
+          <?= icon('clipboard', 16, '', 'color:var(--caramel)') ?> Recent Purchase Order Evaluations &amp; Reviews
+        </h3>
+        <div class="table-scroll-wrapper" style="margin-bottom:8px">
+          <table>
+            <thead>
+              <tr>
+                <th>PO Number &amp; Requisition</th>
+                <th>Evaluation Date</th>
+                <th>Overall Score</th>
+                <th>Evaluator Notes / Feedback</th>
+                <th style="text-align:right">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (empty($ratings)): ?>
+                <tr class="empty-row"><td colspan="5"><?= icon('inbox', 18) ?> No past evaluations on record.</td></tr>
+              <?php else: foreach ($ratings as $rt): ?>
+                <tr>
+                  <td>
+                    <strong><?= htmlspecialchars($rt['po_number'] ?: ('KM-PO-' . str_pad($rt['po_id'], 5, '0', STR_PAD_LEFT))) ?></strong>
+                    <div style="font-size:11.5px;color:var(--text-muted)"><?= htmlspecialchars($rt['req_title'] ?: 'Order Supplies') ?></div>
+                  </td>
+                  <td class="muted-cell"><?= date('M d, Y', strtotime($rt['created_at'])) ?></td>
+                  <td>
+                    <?php if ($rt['is_skipped']): ?>
+                      <span class="status-badge" style="background:#F3F4F6;color:#6B7280;font-size:11px">Skipped</span>
+                    <?php else: ?>
+                      <span class="status-badge" style="background:#e6f4ea;color:#137333;font-weight:700;display:inline-flex;align-items:center;gap:4px">
+                        <?= icon('star', 12, '', 'fill:currentColor') ?> <?= number_format((float)$rt['overall_score'], 1) ?> / 5.0
+                      </span>
+                    <?php endif; ?>
+                  </td>
+                  <td style="font-size:12px;color:var(--espresso);max-width:320px">
+                    <?php if ($rt['is_skipped']): ?>
+                      <span style="font-style:italic;color:var(--text-muted)">Evaluation skipped: <?= htmlspecialchars($rt['skip_reason'] ?: 'Justification provided by purchasing officer') ?></span>
+                    <?php else: ?>
+                      <?= htmlspecialchars($rt['comments'] ?: 'Order fulfilled and closed satisfactorily.') ?>
+                    <?php endif; ?>
+                  </td>
+                  <td style="text-align:right">
+                    <span class="status-badge status-approved" style="font-size:11px"><?= icon('check', 10) ?> Completed</span>
+                  </td>
+                </tr>
+              <?php endforeach; endif; ?>
+            </tbody>
+          </table>
         </div>
       </div>
 
     <?php endif; ?>
 
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CONFIRM PAYMENT RECEIVED MODAL                  -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-confirm-payment">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h3 style="display:flex;align-items:center;gap:6px;color:#166534">
+        <?= icon('check-circle', 16) ?> Confirm Payment Received
+      </h3>
+      <button class="modal-close" onclick="closeConfirmPaymentModal()"><?= icon('x', 14) ?></button>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="confirm_payment"/>
+      <input type="hidden" name="tab" value="invoices"/>
+      <input type="hidden" name="payment_id" id="m-conf-pay-id" value=""/>
+      <?php if ($is_admin_mode && $supplier): ?>
+        <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+      <?php endif; ?>
+
+      <div class="modal-body" style="padding:18px 20px">
+        <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;color:#166534">
+          <div>Invoice: <strong id="m-conf-inv-num"></strong></div>
+          <div style="margin-top:2px">Amount: <strong id="m-conf-amt" style="font-size:14px"></strong></div>
+          <p style="margin:6px 0 0;font-size:11.5px;color:#374151">
+            Confirming this payment verifies that funds have been credited to your company bank or financial account. This advances the order lifecycle toward completion.
+          </p>
+        </div>
+
+        <div class="field-group" style="margin-bottom:12px">
+          <label class="field-label">Confirmed By (Officer / Accountant Name)</label>
+          <input type="text" name="supplier_confirmed_name" class="field-input" placeholder="e.g. Maria Santos (Finance Lead)" value="<?= htmlspecialchars($supplier['contact_person'] ?? '') ?>"/>
+        </div>
+
+        <div class="field-group" style="margin-bottom:0">
+          <label class="field-label">Acknowledgement Notes (Optional)</label>
+          <textarea name="supplier_confirmation_notes" class="field-input" rows="2" placeholder="e.g. Official Receipt #OR-9912 issued. Funds cleared."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#FAF8F5;border-top:1px solid var(--border)">
+        <button type="button" class="btn-cancel" onclick="closeConfirmPaymentModal()">Cancel</button>
+        <button type="submit" class="btn-save" style="background:#166534;border-color:#166534">
+          <?= icon('check', 13) ?> Confirm Payment Receipt
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- REPORT PAYMENT DISPUTE MODAL                    -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-dispute-payment">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <h3 style="display:flex;align-items:center;gap:6px;color:#dc2626">
+        <?= icon('alert-triangle', 16) ?> Report Payment Issue / Dispute
+      </h3>
+      <button class="modal-close" onclick="closeDisputePaymentModal()"><?= icon('x', 14) ?></button>
+    </div>
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="action" value="dispute_payment"/>
+      <input type="hidden" name="tab" value="invoices"/>
+      <input type="hidden" name="payment_id" id="m-disp-pay-id" value=""/>
+      <?php if ($is_admin_mode && $supplier): ?>
+        <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+      <?php endif; ?>
+
+      <div class="modal-body" style="padding:18px 20px">
+        <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;color:#991B1B">
+          <div>Invoice: <strong id="m-disp-inv-num"></strong></div>
+          <div style="margin-top:2px">Disbursed Amount: <strong id="m-disp-amt"></strong></div>
+          <p style="margin:6px 0 0;font-size:11.5px;color:#4B5563">
+            Filing a payment dispute immediately halts PO closure and alerts store finance and procurement management to investigate.
+          </p>
+        </div>
+
+        <div class="field-group" style="margin-bottom:12px">
+          <label class="field-label">Dispute Reason <span style="color:var(--red)">*</span></label>
+          <select name="dispute_reason" class="field-input" required>
+            <option value="Funds Not Received / Credited">Funds Not Received / Credited to Account</option>
+            <option value="Incorrect Amount Deducted / Credited">Incorrect Amount Deducted / Credited</option>
+            <option value="Invalid Transaction Reference / Check Bounced">Invalid Transaction Reference / Check Bounced</option>
+            <option value="Discrepancy with Withholding Tax or Deduction">Discrepancy with Withholding Tax or Deduction</option>
+            <option value="Other Commercial Payment Concern">Other Commercial Payment Concern</option>
+          </select>
+        </div>
+
+        <div class="field-group" style="margin-bottom:12px">
+          <label class="field-label">Detailed Explanation <span style="color:var(--red)">*</span></label>
+          <textarea name="dispute_notes" class="field-input" rows="3" placeholder="Explain the discrepancy, date verified with bank, or missing credit details..." required></textarea>
+        </div>
+
+        <div class="field-group" style="margin-bottom:0">
+          <label class="field-label">Dispute Proof Attachment (Optional, PDF / Image)</label>
+          <input type="file" name="dispute_attachment" class="field-input" accept=".pdf,.jpg,.jpeg,.png"/>
+          <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px">Upload bank statement snippet, bounce notice, or SOA.</small>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#FAF8F5;border-top:1px solid var(--border)">
+        <button type="button" class="btn-cancel" onclick="closeDisputePaymentModal()">Cancel</button>
+        <button type="submit" class="btn-save" style="background:#dc2626;border-color:#dc2626">
+          <?= icon('alert-triangle', 13) ?> Submit Dispute
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1600,6 +2239,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
       <input type="hidden" name="action" value="raise_po_issue"/>
       <input type="hidden" name="tab" value="orders"/>
       <input type="hidden" name="po_id" id="m-issue-po-id" value=""/>
+      <?php if ($is_admin_mode && $supplier): ?>
+        <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+      <?php endif; ?>
 
       <div class="modal-body" style="padding:16px 20px">
         <div style="background:#FFF5F5;border:1px solid #FEB2B2;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;color:#742A2A">
@@ -1651,6 +2293,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
       <input type="hidden" name="action" value="submit_asn"/>
       <input type="hidden" name="tab" value="orders"/>
       <input type="hidden" name="po_id" id="m-asn-po-id" value=""/>
+      <?php if ($is_admin_mode && $supplier): ?>
+        <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+      <?php endif; ?>
 
       <div class="modal-body" style="padding:16px 20px;max-height:75vh;overflow-y:auto">
         <div style="background:#FAF5EE;border:1px solid #E5D5C5;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px">
@@ -1736,6 +2381,9 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
       <input type="hidden" name="tab" value="contracts"/>
       <input type="hidden" name="contract_id" id="mc-contract-id" value=""/>
       <input type="hidden" name="supplier_signature" id="mc-supplier-sig" value=""/>
+      <?php if ($is_admin_mode && $supplier): ?>
+        <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+      <?php endif; ?>
 
       <div class="modal-body" style="max-height:75vh;overflow-y:auto">
         <div style="background:#FAF5EE;border:1px solid #E5D5C5;border-radius:10px;padding:16px;margin-bottom:14px">
@@ -1856,7 +2504,22 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
 </div>
 
 <script>
-const CONTRACT_ITEMS = <?= json_encode($contract_items_map) ?>;
+const CONTRACT_ITEMS = <?= json_encode($contract_items_map, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+const CONTRACTS_DATA = <?= json_encode($my_contracts, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+const PO_ITEMS_MAP   = <?= json_encode($po_items_map, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+const PO_LIST        = <?= json_encode($my_pos, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
+function openContractModalById(id) {
+  const c = (CONTRACTS_DATA || []).find(item => item.id == id);
+  if (c) openContractModal(c);
+}
+
+function openAsnModalById(poId) {
+  const p = (PO_LIST || []).find(item => item.id == poId);
+  const poNum = p ? (p.po_number || ('KM-PO-' + String(p.id).padStart(5, '0'))) : ('KM-PO-' + poId);
+  const items = (PO_ITEMS_MAP || {})[poId] || [];
+  openAsnModal(poId, poNum, items);
+}
 
 function switchTab(tab) {
   document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
@@ -2110,12 +2773,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const contractId = urlParams.get('contract_id');
   if (contractId) {
     switchTab('contracts');
-    // Find contract by id in my_contracts
-    <?php if (!empty($my_contracts)): ?>
-      const allContracts = <?= json_encode($my_contracts) ?>;
-      const target = allContracts.find(c => c.id == contractId);
-      if (target) openContractModal(target);
-    <?php endif; ?>
+    openContractModalById(contractId);
   }
   const poId = urlParams.get('po_id');
   if (poId) {
@@ -2143,12 +2801,36 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+function openConfirmPaymentModal(payId, invNum, amt) {
+  document.getElementById('m-conf-pay-id').value = payId;
+  document.getElementById('m-conf-inv-num').textContent = invNum;
+  document.getElementById('m-conf-amt').textContent = '₱' + amt;
+  document.getElementById('modal-confirm-payment').classList.add('open');
+}
+function closeConfirmPaymentModal() {
+  const m = document.getElementById('modal-confirm-payment');
+  if (m) m.classList.remove('open');
+}
+
+function openDisputePaymentModal(payId, invNum, amt) {
+  document.getElementById('m-disp-pay-id').value = payId;
+  document.getElementById('m-disp-inv-num').textContent = invNum;
+  document.getElementById('m-disp-amt').textContent = '₱' + amt;
+  document.getElementById('modal-dispute-payment').classList.add('open');
+}
+function closeDisputePaymentModal() {
+  const m = document.getElementById('modal-dispute-payment');
+  if (m) m.classList.remove('open');
+}
+
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { 
     if (e.target === el) {
       closeContractModal();
       closeIssueModal();
       closeAsnModal();
+      closeConfirmPaymentModal();
+      closeDisputePaymentModal();
     }
   });
 });
@@ -2157,6 +2839,8 @@ document.addEventListener('keydown', e => {
     closeContractModal();
     closeIssueModal();
     closeAsnModal();
+    closeConfirmPaymentModal();
+    closeDisputePaymentModal();
   }
 });
 </script>

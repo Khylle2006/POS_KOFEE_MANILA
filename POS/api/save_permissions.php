@@ -31,6 +31,16 @@ if (empty($role)) {
 
 $pdo = get_db();
 
+// Case 0: Reset role to recommended system defaults
+if (($data['action'] ?? '') === 'reset_defaults') {
+    $res = reset_role_to_default_permissions($role);
+    if (!$res['ok']) {
+        http_response_code(422);
+    }
+    echo json_encode($res);
+    exit;
+}
+
 // Case 1: Bulk replace all permissions for a role
 if (isset($data['permissions']) && is_array($data['permissions'])) {
     try {

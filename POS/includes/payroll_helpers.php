@@ -116,7 +116,7 @@ function periods_per_year(string $frequency): int {
 function aggregate_attendance(int $employee_id, string $start, string $end): array {
     $std   = payroll_setting_num('standard_hours_per_day', 8);
     $grace = (int)payroll_setting_num('grace_period_minutes', 15);
-    $include_unapproved = payroll_setting('auto_approve_attendance', '0') === '1';
+    $include_unapproved = payroll_setting('auto_approve_attendance', '1') !== '0';
 
     $totals = [
         'days_worked' => 0.0, 'regular_hours' => 0.0, 'overtime_hours' => 0.0,
@@ -309,6 +309,7 @@ function derive_rates(array $employee): array {
  * SSS contribution schedule and keep the ranges contiguous.
  */
 function compute_sss(float $monthly_basic): float {
+    if ($monthly_basic <= 0) return 0.0;
     $rate = 0.05;            // employee share of the total contribution
     $msc  = max(5000, min(35000, round($monthly_basic / 500) * 500));
     return round($msc * $rate, 2);
@@ -316,6 +317,7 @@ function compute_sss(float $monthly_basic): float {
 
 /** PhilHealth employee share — half of the premium, floored and capped. */
 function compute_philhealth(float $monthly_basic): float {
+    if ($monthly_basic <= 0) return 0.0;
     $premium_rate = 0.05;
     $base = max(10000, min(100000, $monthly_basic));
     return round(($base * $premium_rate) / 2, 2);
@@ -323,6 +325,7 @@ function compute_philhealth(float $monthly_basic): float {
 
 /** Pag-IBIG employee share, capped at the statutory maximum. */
 function compute_pagibig(float $monthly_basic): float {
+    if ($monthly_basic <= 0) return 0.0;
     $rate = $monthly_basic <= 1500 ? 0.01 : 0.02;
     return round(min($monthly_basic * $rate, 200), 2);
 }
@@ -354,6 +357,58 @@ function compute_withholding_tax(float $taxable_period_income, string $frequency
     }
 
     return round(max(0, $annual_tax) / $per_year, 2);
+}
+
+/**
+ * Compute standard Philippine statutory deductions for a payroll period.
+ * Automatically computes SSS, PhilHealth, Pag-IBIG, and BIR TRAIN withholding tax,
+ * plus any active employee loan repayments.
+ *
+ * @param float  $basic_pay Period basic pay (attendance-based)
+ * @param float  $gross_pay Period gross pay
+ * @param array  $employee  Employee record
+ * @param string $frequency 'semimonthly', 'monthly', 'weekly', etc.
+ * @return array Itemized deductions, statutory total, and combined total
+ */
+function compute_ph_statutory_deductions(float $basic_pay, float $gross_pay, array $employee, string $frequency = 'semimonthly'): array {
+    $per_year = periods_per_year($frequency);
+    $split    = max(1.0, (float)$per_year / 12.0);
+
+    // Monthly basic salary equivalent for bracket schedules
+    $monthly_basic = $basic_pay * $split;
+
+    $is_tax_exempt = (isset($employee['tax_exempt']) && (int)$employee['tax_exempt'] === 1);
+
+    if ($monthly_basic <= 0) {
+        $sss        = 0.0;
+        $philhealth = 0.0;
+        $pagibig    = 0.0;
+        $tax        = 0.0;
+    } else {
+        $sss        = $is_tax_exempt ? 0.0 : round(compute_sss($monthly_basic) / $split, 2);
+        $philhealth = $is_tax_exempt ? 0.0 : round(compute_philhealth($monthly_basic) / $split, 2);
+        $pagibig    = $is_tax_exempt ? 0.0 : round(compute_pagibig($monthly_basic) / $split, 2);
+
+        // Taxable income under BIR TRAIN Law (Gross minus mandatory employee contributions)
+        $taxable = max(0.0, $gross_pay - $sss - $philhealth - $pagibig);
+        $tax     = $is_tax_exempt ? 0.0 : compute_withholding_tax($taxable, $frequency);
+    }
+
+    $eid = (int)($employee['id'] ?? 0);
+    $loan_ded = $eid > 0 ? active_loan_deduction($eid) : 0.0;
+
+    $statutory_total  = round($sss + $philhealth + $pagibig + $tax, 2);
+    $total_deductions = round($statutory_total + $loan_ded, 2);
+
+    return [
+        'sss'              => $sss,
+        'philhealth'       => $philhealth,
+        'pagibig'          => $pagibig,
+        'withholding_tax'  => $tax,
+        'loan_deduction'   => $loan_ded,
+        'statutory_total'  => $statutory_total,
+        'total_deductions' => $total_deductions,
+    ];
 }
 
 // ═══════════════════════════════════════════════
@@ -780,12 +835,14 @@ function peso(float $amount): string {
 /** Badge class for a period status, using the shared status tokens. */
 function period_status_class(string $status): string {
     return match ($status) {
-        'draft'      => 'pr-badge pr-badge-gray',
-        'calculated' => 'pr-badge pr-badge-blue',
-        'approved'   => 'pr-badge pr-badge-amber',
-        'paid'       => 'pr-badge pr-badge-green',
-        'locked'     => 'pr-badge pr-badge-gray',
-        default      => 'pr-badge pr-badge-gray',
+        'draft'           => 'pr-badge pr-badge-gray',
+        'calculated'      => 'pr-badge pr-badge-blue',
+        'pending_finance' => 'pr-badge pr-badge-amber',
+        'approved'        => 'pr-badge pr-badge-blue',
+        'partially_paid'  => 'pr-badge pr-badge-amber',
+        'paid'            => 'pr-badge pr-badge-green',
+        'locked'          => 'pr-badge pr-badge-purple',
+        default           => 'pr-badge pr-badge-gray',
     };
 }
 
@@ -793,21 +850,680 @@ function period_status_class(string $status): string {
 function period_status_badge(string $status, int $exceptions = 0): string {
     $class = period_status_class($status);
 
-    $icon_svg = match ($status) {
-        'draft'      => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>',
-        'calculated' => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-        'approved'   => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>',
-        'paid'       => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
-        'locked'     => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
-        default      => '',
+    $label = match ($status) {
+        'draft'           => 'Draft',
+        'calculated'      => 'Calculated',
+        'pending_finance' => 'Under Finance Review',
+        'approved'        => 'Finance Approved',
+        'partially_paid'  => 'Partially Released',
+        'paid'            => 'Released',
+        'locked'          => 'Locked',
+        default           => ucfirst(htmlspecialchars($status)),
     };
 
-    $html = '<span class="' . $class . '">' . $icon_svg . ' ' . ucfirst(htmlspecialchars($status)) . '</span>';
-    if ($exceptions > 0 && $status !== 'paid') {
+    $icon_svg = match ($status) {
+        'draft'           => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>',
+        'calculated'      => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        'pending_finance' => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        'approved'        => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>',
+        'partially_paid'  => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+        'paid'            => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+        'locked'          => '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+        default           => '',
+    };
+
+    $html = '<span class="' . $class . '">' . $icon_svg . ' ' . $label . '</span>';
+    if ($exceptions > 0 && !in_array($status, ['paid', 'partially_paid'], true)) {
         $html .= ' <span class="pr-badge pr-badge-amber" style="margin-left:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ' . $exceptions . ' to review</span>';
     }
     return $html;
 }
+
+/**
+ * Synchronize period status based on all payslip payment statuses in that period.
+ */
+function sync_period_payment_status(PDO $pdo, int $period_id): void {
+    $counts = $pdo->prepare("
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) as paid_count,
+            SUM(CASE WHEN payment_status = 'failed' THEN 1 ELSE 0 END) as failed_count
+        FROM payslips
+        WHERE period_id = :pid
+    ");
+    $counts->execute([':pid' => $period_id]);
+    $st = $counts->fetch();
+    
+    $total  = (int)($st['total'] ?? 0);
+    $paid   = (int)($st['paid_count'] ?? 0);
+    $failed = (int)($st['failed_count'] ?? 0);
+
+    if ($total > 0 && $paid === $total) {
+        $pdo->prepare("UPDATE payroll_periods SET status = 'paid', paid_at = COALESCE(paid_at, NOW()) WHERE id = :id")
+            ->execute([':id' => $period_id]);
+    } elseif ($paid > 0 || $failed > 0) {
+        $pdo->prepare("UPDATE payroll_periods SET status = 'partially_paid' WHERE id = :id AND status != 'paid'")
+            ->execute([':id' => $period_id]);
+    }
+}
+
+/**
+ * Release an individual employee's payslip.
+ * Tracks transfer individually, supporting PayMongo bank/ewallet or manual cash.
+ */
+function release_single_employee_payslip(PDO $pdo, int $payslip_id, int $actor_id, ?string $method = null, array $details = []): array {
+    require_once __DIR__ . '/paymongo_disbursement_helpers.php';
+
+    $stmt = $pdo->prepare("
+        SELECT s.*, e.firstname, e.lastname, e.employee_code, e.contact_number, e.user_id,
+               epd.payout_type, epd.bank_code, epd.bank_name, epd.account_name,
+               epd.account_number_last4, epd.ewallet_provider, epd.ewallet_account_name, epd.ewallet_mobile_number
+        FROM payslips s
+        JOIN employees e ON e.id = s.employee_id
+        LEFT JOIN employee_payment_details epd ON epd.employee_id = e.id AND epd.is_active = 1
+        WHERE s.id = :id
+    ");
+    $stmt->execute([':id' => $payslip_id]);
+    $slip = $stmt->fetch();
+
+    if (!$slip) {
+        return ['ok' => false, 'error' => 'Payslip record not found.'];
+    }
+
+    if ($slip['payment_status'] === 'paid') {
+        return ['ok' => false, 'error' => 'This employee has already been paid and released.'];
+    }
+
+    $employee_name = trim($slip['firstname'] . ' ' . $slip['lastname']);
+    $net_pay = (float)$slip['net_pay'];
+    $period_id = (int)$slip['period_id'];
+
+    if ($net_pay <= 0) {
+        return ['ok' => false, 'error' => "Cannot disburse zero or negative net pay (₱" . number_format($net_pay, 2) . ") for {$employee_name}."];
+    }
+
+    // Determine target payment method
+    $chosen_method = $method ?: ($slip['payment_method'] ?: 'cash');
+
+    // Allow user override from $details
+    $bank_name   = $details['bank_name'] ?? ($slip['bank_name'] ?? null);
+    $bank_code   = $details['bank_code'] ?? ($slip['bank_code'] ?? null);
+    $last4       = $details['account_number_last4'] ?? ($slip['account_number_last4'] ?? null);
+    $ew_provider = $details['ewallet_provider'] ?? ($slip['ewallet_provider'] ?? null);
+    $ew_mobile   = $details['ewallet_mobile_number'] ?? ($slip['ewallet_mobile_number'] ?? null);
+
+    $is_online = in_array($chosen_method, ['bank_transfer', 'ewallet', 'paymongo'], true);
+
+    if ($is_online) {
+        // Validate destination
+        $dest_type = ($chosen_method === 'ewallet' || !empty($ew_provider)) ? 'ewallet' : 'bank';
+        
+        $item_data = [
+            'amount'                => $net_pay,
+            'recipient_name'        => $employee_name,
+            'payout_destination'    => $dest_type,
+            'bank_code'             => $bank_code,
+            'bank_name'             => $bank_name,
+            'account_number_last4'  => $last4,
+            'ewallet_provider'      => $ew_provider,
+            'ewallet_mobile_number' => $ew_mobile,
+            'idempotency_key'       => 'pay_' . hash('sha256', "ps_{$payslip_id}_amt_{$net_pay}_" . time()),
+        ];
+
+        // Format destination display
+        if ($dest_type === 'bank') {
+            $dest_display = ($bank_name ?: 'Bank') . ' •••• ' . ($last4 ?: '0000');
+        } else {
+            $dest_display = strtoupper($ew_provider ?: 'E-Wallet') . ' ' . ($ew_mobile ?: '09XX•••XXXX');
+        }
+
+        $cfg = get_paymongo_disbursement_config($pdo);
+        $res = execute_paymongo_transfer_call($cfg, $item_data);
+
+        if (!$res['ok']) {
+            // Update payslip to failed, recording individual error
+            $pdo->prepare("
+                UPDATE payslips
+                SET payment_status = 'failed',
+                    transfer_error = :err,
+                    transfer_channel = :ch,
+                    payout_account_info = :info
+                WHERE id = :id
+            ")->execute([
+                ':err'  => $res['error'],
+                ':ch'   => $chosen_method,
+                ':info' => $dest_display,
+                ':id'   => $payslip_id,
+            ]);
+
+            // Sync period status
+            sync_period_payment_status($pdo, $period_id);
+
+            payroll_audit($period_id, $payslip_id, 'transfer_failed', "Transfer of ₱" . number_format($net_pay, 2) . " to {$employee_name} failed: {$res['error']}", $actor_id);
+
+            return [
+                'ok'            => false,
+                'status'        => 'failed',
+                'employee_name' => $employee_name,
+                'error'         => $res['error']
+            ];
+        }
+
+        $transfer_id = $res['transfer_id'];
+    } else {
+        // Manual Cash / Cheque Release
+        $dest_display = ($chosen_method === 'cheque') ? 'Corporate Bank Cheque' : 'Cash / Over-The-Counter Envelope';
+        $transfer_id  = 'CSH-' . date('Ymd') . '-' . str_pad((string)$payslip_id, 4, '0', STR_PAD_LEFT);
+    }
+
+    // Transfer succeeded!
+    $pdo->beginTransaction();
+    try {
+        // 1. Mark payslip as paid
+        $pdo->prepare("
+            UPDATE payslips
+            SET payment_status = 'paid',
+                transfer_id = :tid,
+                transfer_error = NULL,
+                transfer_channel = :ch,
+                payout_account_info = :info,
+                paid_at = NOW(),
+                released_by = :uid
+            WHERE id = :id
+        ")->execute([
+            ':tid'  => $transfer_id,
+            ':ch'   => $chosen_method,
+            ':info' => $dest_display,
+            ':uid'  => $actor_id,
+            ':id'   => $payslip_id,
+        ]);
+
+        // 2. Post loan deductions if applicable
+        if ((float)$slip['loan_deduction'] > 0) {
+            $remaining = (float)$slip['loan_deduction'];
+            $loan_stmt = $pdo->prepare(
+                "SELECT id, balance, per_period_amount FROM employee_loans
+                  WHERE employee_id = :e AND status = 'active' AND balance > 0
+                  ORDER BY start_date"
+            );
+            $loan_stmt->execute([':e' => (int)$slip['employee_id']]);
+            $repay_ins = $pdo->prepare(
+                'INSERT INTO loan_repayments (loan_id, payslip_id, amount, paid_on)
+                 VALUES (:l, :p, :a, :d)'
+            );
+            $loan_upd = $pdo->prepare(
+                "UPDATE employee_loans
+                    SET balance = GREATEST(0, balance - :a),
+                        status = CASE WHEN balance - :a2 <= 0 THEN 'completed' ELSE status END
+                  WHERE id = :id"
+            );
+
+            foreach ($loan_stmt->fetchAll() as $loan) {
+                if ($remaining <= 0) break;
+                $take = min($remaining, (float)$loan['per_period_amount'], (float)$loan['balance']);
+                if ($take <= 0) continue;
+
+                $repay_ins->execute([
+                    ':l' => $loan['id'], ':p' => $payslip_id,
+                    ':a' => $take, ':d' => date('Y-m-d'),
+                ]);
+                $loan_upd->execute([':a' => $take, ':a2' => $take, ':id' => $loan['id']]);
+                $remaining -= $take;
+            }
+        }
+
+        // 3. Sync period status
+        sync_period_payment_status($pdo, $period_id);
+
+        payroll_audit($period_id, $payslip_id, 'transfer_paid', "Released ₱" . number_format($net_pay, 2) . " to {$employee_name} via {$chosen_method} (Ref: {$transfer_id})", $actor_id);
+
+        $pdo->commit();
+
+        // 4. Notify employee
+        try {
+            if (!empty($slip['user_id']) && function_exists('notify_user')) {
+                notify_user((int)$slip['user_id'], 'payroll_payout', 'Salary Released', "Your payout of ₱" . number_format($net_pay, 2) . " has been successfully released via {$chosen_method}.", 'my_payslips.php');
+            }
+        } catch (Throwable $e) {}
+
+        return [
+            'ok'            => true,
+            'status'        => 'paid',
+            'transfer_id'   => $transfer_id,
+            'employee_name' => $employee_name,
+            'message'       => "Payment of ₱" . number_format($net_pay, 2) . " released to {$employee_name} successfully."
+        ];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        return ['ok' => false, 'error' => 'Database error recording release: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Batch release multiple employees with isolated transfer execution per employee.
+ */
+function batch_release_employees(PDO $pdo, int $period_id, array $payslip_ids, int $actor_id): array {
+    if (empty($payslip_ids)) {
+        return ['ok' => false, 'error' => 'No employees selected for payout release.'];
+    }
+
+    $results = [];
+    $success_count = 0;
+    $failed_count  = 0;
+
+    foreach ($payslip_ids as $id) {
+        $id = (int)$id;
+        $res = release_single_employee_payslip($pdo, $id, $actor_id);
+        if ($res['ok']) {
+            $success_count++;
+            $results[] = [
+                'payslip_id'    => $id,
+                'status'        => 'paid',
+                'employee_name' => $res['employee_name'] ?? "Payslip #$id",
+                'transfer_id'   => $res['transfer_id'] ?? '',
+                'message'       => $res['message'] ?? 'Paid'
+            ];
+        } else {
+            $failed_count++;
+            $results[] = [
+                'payslip_id'    => $id,
+                'status'        => 'failed',
+                'employee_name' => $res['employee_name'] ?? "Payslip #$id",
+                'error'         => $res['error'] ?? 'Transfer failed'
+            ];
+        }
+    }
+
+    $msg = "Batch release processed: {$success_count} succeeded" . ($failed_count > 0 ? ", {$failed_count} failed." : " successfully.");
+
+    return [
+        'ok'            => true,
+        'success_count' => $success_count,
+        'failed_count'  => $failed_count,
+        'results'       => $results,
+        'message'       => $msg,
+    ];
+}
+
+/**
+ * Finance review and approval action for a payroll period.
+ */
+function finance_review_payroll(PDO $pdo, int $period_id, string $decision, int $actor_id, string $note = ''): array {
+    $stmt = $pdo->prepare("SELECT * FROM payroll_periods WHERE id = :id");
+    $stmt->execute([':id' => $period_id]);
+    $period = $stmt->fetch();
+
+    if (!$period) {
+        return ['ok' => false, 'error' => 'Payroll period not found.'];
+    }
+
+    if ($decision === 'approve') {
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare("
+                UPDATE payroll_periods
+                SET status = 'approved', approved_by = :u, approved_at = NOW(),
+                    notes = COALESCE(NULLIF(:n, ''), notes)
+                WHERE id = :id
+            ")->execute([':u' => $actor_id, ':n' => $note, ':id' => $period_id]);
+
+            $pdo->prepare("
+                UPDATE payslips
+                SET payment_status = 'approved'
+                WHERE period_id = :pid AND payment_status IN ('unpaid', 'pending_finance')
+            ")->execute([':pid' => $period_id]);
+
+            payroll_audit($period_id, null, 'finance_approved', "Finance approved payroll period for payout release. Note: " . ($note ?: 'None'), $actor_id);
+
+            $pdo->commit();
+            return ['ok' => true, 'message' => 'Payroll period approved by Finance and ready for payout release.'];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            return ['ok' => false, 'error' => 'Error approving payroll: ' . $e->getMessage()];
+        }
+    } else {
+        // Request correction / Reject
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare("
+                UPDATE payroll_periods
+                SET status = 'draft',
+                    notes = CONCAT('Finance rejected/requested correction: ', :n)
+                WHERE id = :id
+            ")->execute([':n' => $note ?: 'Corrections needed', ':id' => $period_id]);
+
+            $pdo->prepare("
+                UPDATE payslips
+                SET payment_status = 'unpaid'
+                WHERE period_id = :pid
+            ")->execute([':pid' => $period_id]);
+
+            payroll_audit($period_id, null, 'finance_rejected', "Finance returned payroll for revision: " . ($note ?: 'Corrections needed'), $actor_id);
+
+            $pdo->commit();
+            return ['ok' => true, 'message' => 'Payroll returned to draft for corrections.'];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            return ['ok' => false, 'error' => 'Error returning payroll: ' . $e->getMessage()];
+        }
+    }
+}
+
+/**
+ * Progressive Step Payroll Run Creation.
+ * Creates the run with individually selected employees, customized amounts, payment methods,
+ * and sets status to 'pending_finance' for Finance review.
+ */
+function create_step_payroll_run(PDO $pdo, array $period_meta, array $employees_data, int $actor_id): array {
+    $start     = trim($period_meta['period_start'] ?? '');
+    $end       = trim($period_meta['period_end'] ?? '');
+    $pay_date  = trim($period_meta['pay_date'] ?? '');
+    $frequency = trim($period_meta['frequency'] ?? 'semimonthly');
+    $label     = trim($period_meta['label'] ?? '');
+    $notes     = trim($period_meta['notes'] ?? '');
+
+    if (!$start || !$end || !$pay_date) {
+        return ['ok' => false, 'error' => 'Period start date, end date, and pay date are required.'];
+    }
+
+    if (!$label) {
+        $label = date('M j', strtotime($start)) . ' - ' . date('M j, Y', strtotime($end));
+    }
+
+    if (empty($employees_data)) {
+        return ['ok' => false, 'error' => 'Please select at least one employee for this payroll run.'];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO payroll_periods
+                (label, frequency, period_start, period_end, pay_date, branch, status, headcount, notes, created_by, created_at)
+            VALUES
+                (:l, :f, :s, :e, :p, NULL, 'pending_finance', :h, :n, :u, NOW())
+        ");
+        $stmt->execute([
+            ':l' => $label,
+            ':f' => $frequency,
+            ':s' => $start,
+            ':e' => $end,
+            ':p' => $pay_date,
+            ':h' => count($employees_data),
+            ':n' => $notes ?: 'Custom employee-selected payroll run submitted for Finance review',
+            ':u' => $actor_id,
+        ]);
+        $period_id = (int)$pdo->lastInsertId();
+
+        $gross_total = 0.0;
+        $deduction_total = 0.0;
+        $net_total = 0.0;
+
+        $slip_stmt = $pdo->prepare("
+            INSERT INTO payslips (
+                period_id, employee_id, days_worked, regular_hours, overtime_hours,
+                basic_pay, overtime_pay, holiday_pay, rest_day_pay, night_diff_pay,
+                commission, tips, allowances, bonus, gross_pay,
+                late_deduction, absence_deduction, sss, philhealth, pagibig,
+                withholding_tax, loan_deduction, other_deduction, total_deductions, net_pay,
+                snapshot_pay_type, snapshot_pay_rate, payment_method, payout_account_info,
+                payment_status, has_exception, exception_note, notes, created_at
+            ) VALUES (
+                :period_id, :employee_id, :days_worked, :regular_hours, :overtime_hours,
+                :basic_pay, :overtime_pay, 0.00, 0.00, 0.00,
+                :commission, :tips, :allowances, :bonus, :gross_pay,
+                0.00, 0.00, :sss, :philhealth, :pagibig,
+                :withholding_tax, :loan_deduction, :other_deduction, :total_deductions, :net_pay,
+                :snapshot_pay_type, :snapshot_pay_rate, :payment_method, :payout_account_info,
+                'pending_finance', :has_exception, :exception_note, :notes, NOW()
+            )
+        ");
+
+        $emp_stmt = $pdo->prepare("SELECT * FROM employees WHERE id = :id");
+
+        foreach ($employees_data as $ed) {
+            $eid = (int)$ed['employee_id'];
+            $emp_stmt->execute([':id' => $eid]);
+            $emp = $emp_stmt->fetch();
+            if (!$emp) continue;
+
+            $time  = aggregate_attendance($eid, $start, $end);
+            $sales = employee_sales_in_period($eid, $start, $end);
+            $rates = derive_rates($emp);
+
+            // Basic pay is strictly synced from clock in / clock out attendance (cannot be overridden):
+            $std_hours   = payroll_setting_num('standard_hours_per_day', 8);
+            $paid_hours  = (float)($time['regular_hours'] ?? 0) + ((float)($time['paid_leave_days'] ?? 0) * (float)$std_hours);
+            $basic       = round($paid_hours * (float)$rates['hourly'], 2);
+            $allowances  = round((float)($ed['allowances'] ?? 0), 2);
+            $bonus       = round((float)($ed['bonus'] ?? 0), 2);
+            $overtime    = round((float)($time['overtime_hours'] * $rates['hourly'] * 1.25), 2);
+            $commission  = round((float)($ed['commission'] ?? ($sales['sales'] * ((float)$emp['commission_rate'] / 100))), 2);
+            $tips        = round((float)($ed['tips'] ?? $sales['tips']), 2);
+
+            $gross       = isset($ed['gross_pay']) && (float)$ed['gross_pay'] > 0
+                         ? round((float)$ed['gross_pay'], 2)
+                         : round($basic + $overtime + $commission + $tips + $allowances + $bonus, 2);
+
+            // Philippine statutory deductions schedule and loan allocation:
+            $freq = $period_meta['frequency'] ?? 'semimonthly';
+            $ph   = compute_ph_statutory_deductions($basic, $gross, $emp, $freq);
+
+            $custom_ded = isset($ed['deductions']) ? round((float)$ed['deductions'], 2) : (isset($ed['total_deductions']) ? round((float)$ed['total_deductions'], 2) : null);
+
+            if ($custom_ded !== null) {
+                $total_ded = $custom_ded;
+                if (abs($custom_ded - $ph['total_deductions']) < 0.01) {
+                    // Default Philippine statutory deductions + loan
+                    $sss        = $ph['sss'];
+                    $philhealth = $ph['philhealth'];
+                    $pagibig    = $ph['pagibig'];
+                    $tax        = $ph['withholding_tax'];
+                    $loan       = $ph['loan_deduction'];
+                    $other_ded  = 0.0;
+                } elseif ($custom_ded > ($ph['statutory_total'] + $ph['loan_deduction'])) {
+                    // Manager added extra custom deductions (uniform, cash advance, damage, etc.)
+                    $sss        = $ph['sss'];
+                    $philhealth = $ph['philhealth'];
+                    $pagibig    = $ph['pagibig'];
+                    $tax        = $ph['withholding_tax'];
+                    $loan       = $ph['loan_deduction'];
+                    $other_ded  = round($custom_ded - ($ph['statutory_total'] + $loan), 2);
+                } elseif ($custom_ded <= 0) {
+                    // Waived deductions
+                    $sss        = 0.0;
+                    $philhealth = 0.0;
+                    $pagibig    = 0.0;
+                    $tax        = 0.0;
+                    $loan       = 0.0;
+                    $other_ded  = 0.0;
+                } else {
+                    // Apportion custom deduction across statutory items
+                    $rem        = $custom_ded;
+                    $loan       = min($rem, $ph['loan_deduction']); $rem -= $loan;
+                    $sss        = min($rem, $ph['sss']); $rem -= $sss;
+                    $philhealth = min($rem, $ph['philhealth']); $rem -= $philhealth;
+                    $pagibig    = min($rem, $ph['pagibig']); $rem -= $pagibig;
+                    $tax        = min($rem, $ph['withholding_tax']); $rem -= $tax;
+                    $other_ded  = max(0.0, round($rem, 2));
+                }
+            } else {
+                $sss        = isset($ed['sss']) ? round((float)$ed['sss'], 2) : $ph['sss'];
+                $philhealth = isset($ed['philhealth']) ? round((float)$ed['philhealth'], 2) : $ph['philhealth'];
+                $pagibig    = isset($ed['pagibig']) ? round((float)$ed['pagibig'], 2) : $ph['pagibig'];
+                $tax        = isset($ed['withholding_tax']) ? round((float)$ed['withholding_tax'], 2) : $ph['withholding_tax'];
+                $loan       = isset($ed['loan_deduction']) ? round((float)$ed['loan_deduction'], 2) : $ph['loan_deduction'];
+                $other_ded  = round((float)($ed['other_deduction'] ?? 0), 2);
+                $total_ded  = round($sss + $philhealth + $pagibig + $tax + $loan + $other_ded, 2);
+            }
+
+            // Gross and Net Pay strictly computed with locked basic pay:
+            $gross = round($basic + $overtime + $commission + $tips + $allowances + $bonus, 2);
+            $net   = max(0, round($gross - $total_ded, 2));
+
+            // Payment method & destination info from Step 3:
+            $pay_method  = $ed['payment_method'] ?? ($emp['payment_method'] ?: 'cash');
+            $payout_info = trim((string)($ed['payout_account_info'] ?? ''));
+
+            $slip_stmt->execute([
+                ':period_id'          => $period_id,
+                ':employee_id'        => $eid,
+                ':days_worked'        => $time['days_worked'],
+                ':regular_hours'      => $time['regular_hours'],
+                ':overtime_hours'     => $time['overtime_hours'],
+                ':basic_pay'          => $basic,
+                ':overtime_pay'       => $overtime,
+                ':commission'         => $commission,
+                ':tips'               => $tips,
+                ':allowances'         => $allowances,
+                ':bonus'              => $bonus,
+                ':gross_pay'          => $gross,
+                ':sss'                => $sss,
+                ':philhealth'         => $philhealth,
+                ':pagibig'            => $pagibig,
+                ':withholding_tax'    => $tax,
+                ':loan_deduction'     => $loan,
+                ':other_deduction'    => $other_ded,
+                ':total_deductions'   => $total_ded,
+                ':net_pay'            => $net,
+                ':snapshot_pay_type'  => $emp['pay_type'],
+                ':snapshot_pay_rate'  => (float)$emp['pay_rate'],
+                ':payment_method'     => $pay_method,
+                ':payout_account_info'=> $payout_info,
+                ':has_exception'      => $net < 0 ? 1 : 0,
+                ':exception_note'     => $net < 0 ? 'Net pay is negative' : null,
+                ':notes'              => $ed['notes'] ?? null,
+            ]);
+
+            $gross_total     += $gross;
+            $deduction_total += $total_ded;
+            $net_total       += $net;
+        }
+
+        // Update period totals
+        $pdo->prepare("
+            UPDATE payroll_periods
+            SET gross_total = :g, deduction_total = :d, net_total = :n
+            WHERE id = :id
+        ")->execute([
+            ':g' => round($gross_total, 2),
+            ':d' => round($deduction_total, 2),
+            ':n' => round($net_total, 2),
+            ':id'=> $period_id,
+        ]);
+
+        payroll_audit($period_id, null, 'created_step_run', "Created payroll run for " . count($employees_data) . " employee(s) and submitted to Finance for review.", $actor_id);
+
+        $pdo->commit();
+
+        return [
+            'ok'        => true,
+            'period_id' => $period_id,
+            'message'   => "Payroll run created with " . count($employees_data) . " employee(s) and submitted for Finance review."
+        ];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('create_step_payroll_run failed: ' . $e->getMessage());
+        return ['ok' => false, 'error' => 'Failed to create payroll run: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Fetch employee roster with calculated payroll estimates and payment details on file.
+ */
+function get_employee_roster_for_payroll(PDO $pdo, string $start = '', string $end = '', string $frequency = 'semimonthly'): array {
+    $stmt = $pdo->query("
+        SELECT e.id, e.employee_code, e.firstname, e.lastname, e.position, e.department,
+               e.branch, e.pay_type, e.pay_rate, e.commission_rate, e.payment_method, e.tax_exempt,
+               epd.payout_type, epd.bank_code, epd.bank_name, epd.account_name, epd.account_number_last4,
+               epd.ewallet_provider, epd.ewallet_account_name, epd.ewallet_mobile_number
+        FROM employees e
+        LEFT JOIN employee_payment_details epd ON epd.employee_id = e.id AND epd.is_active = 1
+        WHERE e.status = 'active'
+        ORDER BY e.lastname, e.firstname
+    ");
+    $employees = $stmt->fetchAll();
+
+    $roster = [];
+    foreach ($employees as $emp) {
+        $eid = (int)$emp['id'];
+        $time = ($start && $end) ? aggregate_attendance($eid, $start, $end) : ['regular_hours' => 0, 'days_worked' => 0, 'overtime_hours' => 0];
+        $sales = ($start && $end) ? employee_sales_in_period($eid, $start, $end) : ['sales' => 0, 'tips' => 0];
+        $rates = derive_rates($emp);
+
+        // Basic calculation baseline strictly synced to clock in / clock out attendance
+        $std_hours  = payroll_setting_num('standard_hours_per_day', 8);
+        $paid_hours = (float)($time['regular_hours'] ?? 0) + ((float)($time['paid_leave_days'] ?? 0) * (float)$std_hours);
+        $basic      = round($paid_hours * (float)$rates['hourly'], 2);
+        $ot_pay     = round($time['overtime_hours'] * $rates['hourly'] * 1.25, 2);
+        $comm       = round($sales['sales'] * ((float)$emp['commission_rate'] / 100), 2);
+        $tips       = round($sales['tips'], 2);
+        $gross      = round($basic + $ot_pay + $comm + $tips, 2);
+
+        // Standard Philippine Statutory Deductions (SSS, PhilHealth, Pag-IBIG, BIR TRAIN Tax + Loans)
+        $ph_stat    = compute_ph_statutory_deductions($basic, $gross, $emp, $frequency);
+        $sss        = $ph_stat['sss'];
+        $philhealth = $ph_stat['philhealth'];
+        $pagibig    = $ph_stat['pagibig'];
+        $tax        = $ph_stat['withholding_tax'];
+        $active_loan= $ph_stat['loan_deduction'];
+        $deductions = $ph_stat['total_deductions'];
+        $net        = max(0, round($gross - $deductions, 2));
+
+        // Format payment destination display
+        $dest_display = 'Not configured (Cash)';
+        $p_type = $emp['payout_type'] ?: ($emp['payment_method'] === 'bank_transfer' ? 'bank' : ($emp['payment_method'] === 'ewallet' ? 'ewallet' : 'cash'));
+        if ($p_type === 'bank' && !empty($emp['bank_name'])) {
+            $dest_display = $emp['bank_name'] . ' •••• ' . ($emp['account_number_last4'] ?: '0000');
+        } elseif ($p_type === 'ewallet' && !empty($emp['ewallet_provider'])) {
+            $dest_display = strtoupper($emp['ewallet_provider']) . ' ' . ($emp['ewallet_mobile_number'] ?: '09XXXXXXXXX');
+        } elseif ($emp['payment_method'] === 'cash') {
+            $dest_display = 'Cash / Over-The-Counter';
+        }
+
+        $roster[] = [
+            'id'                     => $eid,
+            'employee_code'          => $emp['employee_code'],
+            'name'                   => trim($emp['firstname'] . ' ' . $emp['lastname']),
+            'firstname'              => $emp['firstname'],
+            'lastname'               => $emp['lastname'],
+            'position'               => $emp['position'],
+            'department'             => $emp['department'] ?: 'Store Operations',
+            'branch'                 => $emp['branch'] ?: 'Main',
+            'pay_type'               => $emp['pay_type'],
+            'pay_rate'               => (float)$emp['pay_rate'],
+            'regular_hours'          => $time['regular_hours'],
+            'days_worked'            => $time['days_worked'],
+            'overtime_hours'         => $time['overtime_hours'],
+            'basic_pay'              => $basic,
+            'overtime_pay'           => $ot_pay,
+            'commission'             => $comm,
+            'tips'                   => $tips,
+            'allowances'             => 0.00,
+            'bonus'                  => 0.00,
+            'gross_pay'              => $gross,
+            'sss'                    => $sss,
+            'philhealth'             => $philhealth,
+            'pagibig'                => $pagibig,
+            'withholding_tax'        => $tax,
+            'loan_deduction'         => $active_loan,
+            'statutory_total'        => $ph_stat['statutory_total'],
+            'other_deduction'        => 0.00,
+            'total_deductions'       => $deductions,
+            'net_pay'                => $net,
+            'payment_method'         => $emp['payment_method'] ?: 'cash',
+            'payout_type'            => $p_type,
+            'bank_name'              => $emp['bank_name'],
+            'bank_code'              => $emp['bank_code'],
+            'account_number_last4'   => $emp['account_number_last4'],
+            'ewallet_provider'       => $emp['ewallet_provider'],
+            'ewallet_mobile_number'  => $emp['ewallet_mobile_number'],
+            'destination_display'    => $dest_display,
+        ];
+    }
+
+    return $roster;
+}
+
 
 /** The employee record tied to a login account, if any. */
 function employee_for_user(int $user_id): ?array {

@@ -36,12 +36,15 @@ $user = current_user();
       <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
     </svg>
   </div>
-  <h1>No access yet, <?= htmlspecialchars($user['firstname'] ?: $user['username']) ?></h1>
+  <h1>Access Restricted, <?= htmlspecialchars($user['firstname'] ?: $user['username']) ?></h1>
   <p>
-    Your account (<?= htmlspecialchars($user['role']) ?>) doesn't have any
-    permissions assigned right now. Ask an admin to grant access from
-    Manage Permissions, then try logging in again.
+    Your account (<?= htmlspecialchars(implode(', ', $user['roles'] ?? [$user['role']])) ?>) doesn't have permission to access this page<?= !empty($_GET['perm']) ? ' (<code>' . htmlspecialchars($_GET['perm']) . '</code>)' : '' ?>.
+    If you need access to this section, please ask a store administrator to grant the required permission in <strong>Manage Permissions</strong>.
   </p>
-  <button class="btn-logout" onclick="window.location.href='../auth/logout.php'">Log Out</button>
+  <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap">
+    <button class="btn-logout" style="background:#8b7c88" onclick="history.back()">Go Back</button>
+    <button class="btn-logout" onclick="window.location.href='<?= htmlspecialchars(get_dashboard_url()) ?>'">Home / Dashboard</button>
+    <button class="btn-logout" style="background:#555" onclick="window.location.href='../auth/logout.php'">Log Out</button>
+  </div>
 </body>
 </html>

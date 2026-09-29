@@ -41,28 +41,52 @@ foreach ($editableRoles as $r) {
 $selectedLabel = $selectedRole['label'] ?? ucfirst($selected);
 $isSystemRole  = (bool)($selectedRole['is_system'] ?? false);
 
+// Role icons mapping
+$roleIcons = [
+    'admin'       => 'shield',
+    'manager'     => 'award',
+    'cashier'     => 'credit-card',
+    'crew'        => 'coffee',
+    'warehouse'   => 'package',
+    'procurement' => 'shopping-cart',
+    'finance'     => 'coin',
+    'hr'          => 'users',
+    'ops'         => 'scale',
+    'supplier'    => 'truck',
+];
+
 // Standard category icon keys & grouping
 $categoryIcons = [
-    'Procurement' => 'shopping-cart',
-    'Payroll'     => 'coin',
-    'Orders'      => 'credit-card',
-    'Inventory'   => 'package',
-    'Menu'        => 'coffee',
-    'Reports'     => 'bar-chart',
-    'Users'       => 'users',
-    'Hr'          => 'clock',
-    'HR'          => 'clock',
-    'Settings'    => 'lock',
-    'General'     => 'home',
+    'POS & Orders'        => 'credit-card',
+    'Inventory'           => 'package',
+    'Menu'                => 'coffee',
+    'HR & Staff'          => 'users',
+    'Payroll'             => 'coin',
+    'Procurement'         => 'shopping-cart',
+    'Reports & Analytics' => 'bar-chart',
+    'Settings & Store'    => 'lock',
+    'General'             => 'home',
 ];
 
 $permsByCategory = [];
 foreach ($permissions as $p) {
-    $rawCat = strtolower(trim($p['category'] ?? 'general'));
-    if ($rawCat === 'hr') {
-        $cat = 'HR';
-    } elseif ($rawCat === 'payroll') {
+    $rawCat = trim($p['category'] ?? 'General');
+    if (strcasecmp($rawCat, 'hr & staff') === 0 || strcasecmp($rawCat, 'hr') === 0 || strcasecmp($rawCat, 'users') === 0) {
+        $cat = 'HR & Staff';
+    } elseif (strcasecmp($rawCat, 'pos & orders') === 0 || strcasecmp($rawCat, 'orders') === 0) {
+        $cat = 'POS & Orders';
+    } elseif (strcasecmp($rawCat, 'reports & analytics') === 0 || strcasecmp($rawCat, 'reports') === 0) {
+        $cat = 'Reports & Analytics';
+    } elseif (strcasecmp($rawCat, 'settings & store') === 0 || strcasecmp($rawCat, 'settings') === 0) {
+        $cat = 'Settings & Store';
+    } elseif (strcasecmp($rawCat, 'inventory') === 0) {
+        $cat = 'Inventory';
+    } elseif (strcasecmp($rawCat, 'menu') === 0) {
+        $cat = 'Menu';
+    } elseif (strcasecmp($rawCat, 'payroll') === 0) {
         $cat = 'Payroll';
+    } elseif (strcasecmp($rawCat, 'procurement') === 0) {
+        $cat = 'Procurement';
     } else {
         $cat = ucfirst($rawCat);
     }
@@ -70,7 +94,17 @@ foreach ($permissions as $p) {
 }
 
 // Preferred category presentation order
-$categoryOrder = ['Procurement', 'Payroll', 'Orders', 'Inventory', 'Menu', 'Reports', 'Users', 'HR', 'Settings', 'General'];
+$categoryOrder = [
+    'POS & Orders',
+    'Inventory',
+    'Menu',
+    'HR & Staff',
+    'Payroll',
+    'Procurement',
+    'Reports & Analytics',
+    'Settings & Store',
+    'General'
+];
 uksort($permsByCategory, function($a, $b) use ($categoryOrder) {
     $posA = array_search($a, $categoryOrder);
     $posB = array_search($b, $categoryOrder);
@@ -115,38 +149,82 @@ $totalPermsCount = count($permissions);
     <!-- ── Roles Card ── -->
     <div class="roles-card">
       <div class="roles-card-head">
-        <h2><?= icon('permissions', 20) ?> System &amp; Custom Roles</h2>
+        <div>
+          <h2><?= icon('permissions', 20) ?> System &amp; Custom Roles</h2>
+          <p class="roles-subtitle">Select a role below to configure access controls or restore recommended baseline permissions.</p>
+        </div>
         <button type="button" class="btn-add-role" onclick="openAddRole()"><?= icon('plus', 14) ?> Add New Role</button>
       </div>
 
+      <!-- Superuser Admin Notice -->
+      <div class="admin-notice-banner">
+        <div class="admin-notice-left">
+          <span class="admin-shield-icon"><?= icon('shield', 18) ?></span>
+          <div>
+            <strong>System Administrator (admin)</strong> &mdash;
+            <span class="admin-notice-desc">Holds permanent, uneditable full access across all 57 system permissions.</span>
+          </div>
+        </div>
+        <span class="admin-full-badge"><?= icon('lock', 11) ?> 57 / 57 Active</span>
+      </div>
+
       <?php if (empty($editableRoles)): ?>
-        <p class="muted-cell">No editable roles found — click Add Role to create one.</p>
+        <p class="muted-cell">No editable roles found &mdash; click Add Role to create one.</p>
       <?php else: ?>
-        <label class="field-label" for="role-picker">
-          Select a role to inspect and edit permissions
-          <?php if ($selectedRole): ?>
-            <span class="role-info-badge">
-              <?= $isSystemRole ? (icon('lock', 12) . ' System Role') : (icon('sparkles', 12) . ' Custom Role') ?>
-            </span>
-          <?php endif; ?>
-        </label>
-        <div class="role-picker-row">
-          <form method="GET" id="role-picker-form" style="flex:1">
+        <div class="role-cards-grid">
+          <?php foreach ($editableRoles as $r):
+            $rKey = $r['role_key'];
+            $rGrants = $grants[$rKey] ?? [];
+            $rCount = count(array_intersect($allPermKeys, $rGrants));
+            $rIcon = $roleIcons[$rKey] ?? ($r['is_system'] ? 'shield' : 'sparkles');
+            $isActive = ($rKey === $selected);
+          ?>
+            <div class="role-card-item <?= $isActive ? 'active' : '' ?>"
+                 data-role="<?= htmlspecialchars($rKey) ?>"
+                 onclick="selectRoleCard('<?= htmlspecialchars($rKey) ?>')"
+                 role="button"
+                 tabindex="0"
+                 title="Select <?= htmlspecialchars($r['label']) ?>">
+              <div class="role-card-icon-wrap">
+                <?= icon($rIcon, 20) ?>
+              </div>
+              <div class="role-card-content">
+                <div class="role-card-top-row">
+                  <span class="role-card-title"><?= htmlspecialchars($r['label']) ?></span>
+                  <?php if ($r['is_system']): ?>
+                    <span class="badge-role-type system" title="Built-in System Role"><?= icon('lock', 10) ?> System</span>
+                  <?php else: ?>
+                    <span class="badge-role-type custom" title="Custom Role"><?= icon('sparkles', 10) ?> Custom</span>
+                  <?php endif; ?>
+                </div>
+                <div class="role-card-bottom-row">
+                  <code class="role-card-key"><?= htmlspecialchars($rKey) ?></code>
+                  <span class="role-card-active-perms"><?= $rCount ?> / <?= $totalPermsCount ?> Active</span>
+                </div>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+
+        <div class="role-picker-row" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--border)">
+          <form method="GET" id="role-picker-form" style="flex:1;display:flex;align-items:center;gap:10px">
+            <label for="role-picker" style="font-size:12px;font-weight:700;color:var(--text-muted);white-space:nowrap">Direct Selector:</label>
             <select class="role-picker" name="role" id="role-picker" onchange="handleRoleChange(this)">
               <?php foreach ($editableRoles as $r):
                 $rGrants = $grants[$r['role_key']] ?? [];
                 $rCount = count(array_intersect($allPermKeys, $rGrants));
               ?>
                 <option value="<?= htmlspecialchars($r['role_key']) ?>" <?= $r['role_key'] === $selected ? 'selected' : '' ?>>
-                  <?= htmlspecialchars($r['label']) ?><?= $r['is_system'] ? ' (system role)' : '' ?> — <?= $rCount ?> active permissions
+                  <?= htmlspecialchars($r['label']) ?><?= $r['is_system'] ? ' (system role)' : '' ?> &mdash; <?= $rCount ?> active permissions
                 </option>
               <?php endforeach; ?>
             </select>
           </form>
-          <button type="button" class="btn-remove-role" id="btn-remove-role" onclick="removeRole()"
-                  <?= $isSystemRole ? 'disabled style="opacity:0.4;cursor:not-allowed;" title="System roles cannot be removed"' : 'title="Delete custom role"' ?>>
-            <?= icon('trash', 14) ?> Remove Role
-          </button>
+          <?php if (!$isSystemRole): ?>
+            <button type="button" class="btn-remove-role" id="btn-remove-role" onclick="removeRole()" title="Delete custom role">
+              <?= icon('trash', 14) ?> Remove Role
+            </button>
+          <?php endif; ?>
         </div>
       <?php endif; ?>
     </div>
@@ -154,11 +232,21 @@ $totalPermsCount = count($permissions);
     <?php if ($selected): ?>
     <!-- ── Permissions Card for Selected Role ── -->
     <div class="perms-card" style="margin-top: 18px;">
-      <div class="perms-card-head" style="display:flex;align-items:center;justify-content:space-between">
-        <span>PERMISSIONS FOR <?= htmlspecialchars(strtoupper($selectedLabel)) ?></span>
-        <span id="granted-counter" style="font-size:11px;font-weight:800;color:var(--caramel)">
-          <?= $grantedTotal ?> of <?= $totalPermsCount ?> GRANTED
-        </span>
+      <div class="perms-card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span>PERMISSIONS FOR <?= htmlspecialchars(strtoupper($selectedLabel)) ?></span>
+          <span class="role-info-badge">
+            <?= $isSystemRole ? (icon('lock', 12) . ' System Role') : (icon('sparkles', 12) . ' Custom Role') ?>
+          </span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button type="button" class="btn-reset-defaults" onclick="resetToDefaults()" title="Reset this role to recommended baseline permissions">
+            <?= icon('refresh', 13) ?> Reset to Recommended Defaults
+          </button>
+          <span id="granted-counter" style="font-size:11px;font-weight:800;color:var(--caramel)">
+            <?= $grantedTotal ?> of <?= $totalPermsCount ?> GRANTED
+          </span>
+        </div>
       </div>
 
       <!-- ── Category Filter Tabs ── -->
@@ -176,7 +264,7 @@ $totalPermsCount = count($permissions);
         ?>
         <button type="button" class="cat-tab" data-cat="<?= htmlspecialchars($catName) ?>" onclick="selectCategory('<?= htmlspecialchars($catName) ?>', this)">
           <span><?= icon($catIconKey, 14) ?> <?= htmlspecialchars($catName) ?></span>
-          <span class="cat-badge" id="badge-cat-<?= htmlspecialchars($catName) ?>"><?= $catGrantedCount ?>/<?= $catTotalCount ?></span>
+          <span class="cat-badge" data-cat-badge="<?= htmlspecialchars($catName) ?>" id="badge-cat-<?= htmlspecialchars(preg_replace('/[^a-zA-Z0-9_-]/', '_', $catName)) ?>"><?= $catGrantedCount ?>/<?= $catTotalCount ?></span>
         </button>
         <?php endforeach; ?>
       </div>
@@ -194,6 +282,9 @@ $totalPermsCount = count($permissions);
           </button>
           <button type="button" class="btn-cat-action" onclick="bulkSetVisible(false)" title="Revoke all visible permissions in current view">
             <?= icon('x', 13) ?> Revoke All Shown
+          </button>
+          <button type="button" class="btn-cat-action btn-cat-action-reset" onclick="resetToDefaults()" title="Reset this role to recommended baseline permissions">
+            <?= icon('refresh', 13) ?> Reset Role Defaults
           </button>
         </div>
       </div>

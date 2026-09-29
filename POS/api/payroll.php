@@ -117,6 +117,118 @@ try {
                 200, '../php/payroll_run.php?id=' . $new_id);
     }
 
+    // ── Get Employee Roster Preview for Step-by-Step Modal ─
+    if ($action === 'get_employee_roster_preview') {
+        require_permission_json('payroll.view');
+
+        $start = trim((string)($data['period_start'] ?? ''));
+        $end   = trim((string)($data['period_end'] ?? ''));
+        $freq  = trim((string)($data['frequency'] ?? 'semimonthly'));
+
+        $roster = get_employee_roster_for_payroll($pdo, $start, $end, $freq);
+        respond(['ok' => true, 'employees' => $roster]);
+    }
+
+    // ── Create Step-by-Step Payroll Run & Submit to Finance ──
+    if ($action === 'create_step_payroll_run') {
+        require_permission_json('payroll.manage');
+
+        $period_meta    = $data['period_meta'] ?? [];
+        $employees_data = $data['employees'] ?? [];
+
+        if (!is_array($period_meta) || !is_array($employees_data)) {
+            respond(['ok' => false, 'error' => 'Invalid payroll setup payload.'], 422);
+        }
+
+        $res = create_step_payroll_run($pdo, $period_meta, $employees_data, (int)$user['id']);
+        if (!$res['ok']) {
+            respond($res, 422);
+        }
+
+        // Notify Finance officers
+        if (function_exists('notify_role_by_permission')) {
+            notify_role_by_permission('payroll.approve', 'payroll_finance', 'Payroll Submitted for Review', 'A new payroll run with ' . count($employees_data) . ' staff was submitted for Finance review.', 'payroll_run.php?id=' . $res['period_id'], (int)$user['id']);
+        }
+
+        respond($res, 200, 'payroll_run.php?id=' . $res['period_id']);
+    }
+
+    // ── Release Individual Employee Payslip ───
+    if ($action === 'release_individual') {
+        require_permission_json('payroll.release');
+
+        $payslip_id     = (int)($data['payslip_id'] ?? 0);
+        $payment_method = trim((string)($data['payment_method'] ?? ''));
+        $details        = (array)($data['payment_details'] ?? []);
+
+        if ($payslip_id <= 0) {
+            respond(['ok' => false, 'error' => 'Invalid payslip ID.'], 422);
+        }
+
+        $res = release_single_employee_payslip($pdo, $payslip_id, (int)$user['id'], $payment_method ?: null, $details);
+        if (!$res['ok']) {
+            respond($res, 422);
+        }
+
+        respond($res, 200);
+    }
+
+    // ── Batch Release Selected Employees ──────
+    if ($action === 'batch_release_selected') {
+        require_permission_json('payroll.release');
+
+        $period_id   = (int)($data['period_id'] ?? 0);
+        $payslip_ids = array_map('intval', (array)($data['payslip_ids'] ?? []));
+
+        if ($period_id <= 0 || empty($payslip_ids)) {
+            respond(['ok' => false, 'error' => 'Please select at least one employee to release.'], 422);
+        }
+
+        $res = batch_release_employees($pdo, $period_id, $payslip_ids, (int)$user['id']);
+        respond($res, 200);
+    }
+
+    // ── Finance Review & Approval ─────────────
+    if ($action === 'finance_review') {
+        require_permission_json('payroll.approve');
+
+        $period_id = (int)($data['period_id'] ?? 0);
+        $decision  = trim((string)($data['decision'] ?? 'approve'));
+        $note      = trim((string)($data['note'] ?? ''));
+
+        if ($period_id <= 0) {
+            respond(['ok' => false, 'error' => 'Invalid payroll period ID.'], 422);
+        }
+
+        $res = finance_review_payroll($pdo, $period_id, $decision, (int)$user['id'], $note);
+        if (!$res['ok']) {
+            respond($res, 422);
+        }
+
+        respond($res, 200, 'payroll_run.php?id=' . $period_id);
+    }
+
+    // ── Update Payslip Payment Method ─────────
+    if ($action === 'update_payslip_payment_method') {
+        require_permission_json('payroll.manage');
+
+        $payslip_id = (int)($data['payslip_id'] ?? 0);
+        $method     = trim((string)($data['payment_method'] ?? 'cash'));
+        $info       = trim((string)($data['payout_account_info'] ?? ''));
+
+        if ($payslip_id <= 0) {
+            respond(['ok' => false, 'error' => 'Invalid payslip ID.'], 422);
+        }
+
+        $pdo->prepare("
+            UPDATE payslips
+            SET payment_method = :m, payout_account_info = :info
+            WHERE id = :id AND payment_status != 'paid'
+        ")->execute([':m' => $method, ':info' => $info, ':id' => $payslip_id]);
+
+        respond(['ok' => true, 'message' => 'Payment method updated.']);
+    }
+
     // ── Calculate ─────────────────────────────
     if ($action === 'calculate') {
         require_permission_json('payroll.manage');
@@ -186,6 +298,108 @@ try {
         if (!$result['ok']) respond($result, 422, 'payroll_run.php?id=' . $period_id);
         respond(['ok' => true, 'message' => 'Payroll released and period closed.'],
                 200, 'payroll_run.php?id=' . $period_id);
+    }
+
+    // ── PayMongo Payout: Pre-submission Validation ──
+    if ($action === 'paymongo_validate_payout') {
+        require_permission_json('payroll.view');
+        require_once '../includes/paymongo_disbursement_helpers.php';
+
+        $period_id = (int)($data['period_id'] ?? 0);
+        $res = get_period_payout_validation($pdo, $period_id);
+        if (!$res['ok']) respond($res, 422);
+
+        $cfg = get_paymongo_disbursement_config($pdo);
+        $res['config'] = [
+            'mode'    => strtoupper($cfg['mode']),
+            'enabled' => $cfg['enabled'],
+        ];
+
+        // Check if an existing batch exists for this period
+        $b_stmt = $pdo->prepare("SELECT * FROM `paymongo_payout_batches` WHERE `period_id` = :p ORDER BY `id` DESC LIMIT 1");
+        $b_stmt->execute([':p' => $period_id]);
+        $batch = $b_stmt->fetch();
+        if ($batch) {
+            $items_stmt = $pdo->prepare("SELECT * FROM `paymongo_payout_items` WHERE `batch_id` = :bid ORDER BY `id` ASC");
+            $items_stmt->execute([':bid' => $batch['id']]);
+            $batch['items'] = $items_stmt->fetchAll();
+        }
+        $res['existing_batch'] = $batch ?: null;
+
+        respond($res);
+    }
+
+    // ── PayMongo Payout: Dispatch Batch Transfer ──
+    if ($action === 'paymongo_dispatch_payout') {
+        require_permission_json('payroll.release');
+        require_once '../includes/paymongo_disbursement_helpers.php';
+
+        $period_id = (int)($data['period_id'] ?? 0);
+        $selected_ids = array_map('intval', $data['selected_payslip_ids'] ?? []);
+
+        // 1. Create or get batch
+        $batch_res = create_paymongo_payout_batch($pdo, $period_id, (int)$user['id'], $selected_ids);
+        if (!$batch_res['ok']) respond($batch_res, 422);
+
+        $batch_id = $batch_res['batch_id'];
+
+        // 2. Submit batch transfer via PayMongo
+        $submit_res = submit_paymongo_payout_batch($pdo, $batch_id, (int)$user['id']);
+        if (!$submit_res['ok']) respond($submit_res, 422);
+
+        respond([
+            'ok'      => true,
+            'message' => $submit_res['message'],
+            'batch_id'=> $batch_id,
+            'status'  => $submit_res['status'],
+        ], 200, 'payroll_run.php?id=' . $period_id);
+    }
+
+    // ── PayMongo Payout: Retry Failed Item ──
+    if ($action === 'paymongo_retry_item') {
+        require_permission_json('payroll.release');
+        require_once '../includes/paymongo_disbursement_helpers.php';
+
+        $item_id = (int)($data['payout_item_id'] ?? 0);
+        $i_stmt = $pdo->prepare("SELECT * FROM `paymongo_payout_items` WHERE `id` = :id");
+        $i_stmt->execute([':id' => $item_id]);
+        $item = $i_stmt->fetch();
+
+        if (!$item) respond(['ok' => false, 'error' => 'Payout item not found.'], 404);
+        if ($item['status'] === 'paid') respond(['ok' => false, 'error' => 'This item is already paid.'], 422);
+
+        $cfg = get_paymongo_disbursement_config($pdo);
+        $payout_res = execute_paymongo_transfer_call($cfg, $item);
+
+        if ($payout_res['ok']) {
+            $pdo->prepare("
+                UPDATE `paymongo_payout_items`
+                SET `status` = 'paid', `paymongo_transfer_id` = :tid, `error_message` = NULL,
+                    `attempt_count` = `attempt_count` + 1, `last_attempt_at` = NOW(), `paid_at` = NOW()
+                WHERE `id` = :id
+            ")->execute([':tid' => $payout_res['transfer_id'], ':id' => $item_id]);
+
+            $pdo->prepare("UPDATE `payslips` SET `payment_status` = 'paid', `paid_at` = NOW() WHERE `id` = :id")
+                ->execute([':id' => $item['payslip_id']]);
+
+            // Check if all items in batch are now paid
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM `paymongo_payout_items` WHERE `batch_id` = :b AND `status` != 'paid'");
+            $chk->execute([':b' => $item['batch_id']]);
+            if ((int)$chk->fetchColumn() === 0) {
+                $pdo->prepare("UPDATE `paymongo_payout_batches` SET `status` = 'paid', `completed_at` = NOW() WHERE `id` = :b")
+                    ->execute([':b' => $item['batch_id']]);
+            }
+
+            respond(['ok' => true, 'message' => 'Disbursement transfer succeeded.']);
+        } else {
+            $pdo->prepare("
+                UPDATE `paymongo_payout_items`
+                SET `status` = 'failed', `error_message` = :err, `attempt_count` = `attempt_count` + 1, `last_attempt_at` = NOW()
+                WHERE `id` = :id
+            ")->execute([':err' => $payout_res['error'], ':id' => $item_id]);
+
+            respond(['ok' => false, 'error' => $payout_res['error']], 422);
+        }
     }
 
     // ── Adjustments ───────────────────────────
@@ -474,8 +688,15 @@ try {
         if (!$period) {
             respond(['ok' => false, 'error' => 'Pay period not found.'], 404);
         }
-        if (in_array($period['status'], ['approved', 'paid', 'locked'], true)) {
-            respond(['ok' => false, 'error' => 'Cannot delete an approved or released period.'], 409);
+        if (in_array($period['status'], ['paid', 'locked'], true)) {
+            respond(['ok' => false, 'error' => 'Cannot delete a finalized or locked period.'], 409);
+        }
+
+        // Safeguard: Check if any payslips have already been disbursed/paid
+        $paid_check = $pdo->prepare("SELECT COUNT(*) FROM payslips WHERE period_id = :p AND payment_status = 'paid'");
+        $paid_check->execute([':p' => $period_id]);
+        if ((int)$paid_check->fetchColumn() > 0) {
+            respond(['ok' => false, 'error' => 'Cannot delete a period with already disbursed employee payments.'], 409);
         }
 
         $pdo->beginTransaction();
@@ -547,8 +768,8 @@ try {
                     $s['employee_code'],
                     $s['lastname'] . ', ' . $s['firstname'],
                     ucwords(str_replace('_', ' ', $s['payment_method'] ?: $s['emp_pm'] ?: 'cash')),
-                    $s['bank_name'] ?: 'N/A',
-                    $s['bank_account_last4'] ? 'Ending in ' . $s['bank_account_last4'] : 'N/A',
+                    $s['bank_name'] ?: ($s['payout_account_info'] ? 'Configured Account' : 'N/A'),
+                    $s['payout_account_info'] ?: ($s['bank_account_last4'] ? 'Ending in ' . $s['bank_account_last4'] : 'N/A'),
                     number_format((float)$s['net_pay'], 2, '.', ''),
                     ucfirst($s['payment_status']),
                 ]);

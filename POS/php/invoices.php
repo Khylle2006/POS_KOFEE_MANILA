@@ -195,6 +195,10 @@ if ($view_id) {
         $li = $pdo->prepare('SELECT * FROM invoice_items WHERE invoice_id = :id');
         $li->execute([':id' => $view_id]);
         $invoice_items = $li->fetchAll();
+
+        $pay_stmt = $pdo->prepare('SELECT * FROM payments WHERE invoice_id = :id ORDER BY id DESC');
+        $pay_stmt->execute([':id' => $view_id]);
+        $invoice_payments = $pay_stmt->fetchAll();
     }
 }
 
@@ -229,7 +233,7 @@ $eligible_pos = $eligible_stmt->fetchAll();
 
 $filter = $_GET['status'] ?? 'all';
 $where  = '1=1'; $params = [];
-if (in_array($filter, ['submitted','pending','matched','needs_correction','disputed','approved','paid','cancelled'], true)) {
+if (in_array($filter, ['submitted','pending','matched','needs_correction','disputed','approved','partially_paid','paid','cancelled'], true)) {
     $where .= ' AND i.status = :st'; $params[':st'] = $filter;
 }
 $list_stmt = $pdo->prepare("
@@ -367,6 +371,65 @@ $invoices = $list_stmt->fetchAll();
           <div>Total: <strong style="color:var(--espresso)"><?= php_currency($invoice['total_amount']) ?></strong></div>
         </div>
 
+        <?php if (!empty($invoice_payments)): ?>
+          <div style="margin-top:16px;background:var(--cream,#FAF7F2);border:1px solid var(--border,#e8ded2);border-radius:10px;padding:14px 16px">
+            <h4 style="margin:0 0 10px;font-size:13px;display:flex;align-items:center;gap:6px">
+              <?= icon('dollar', 14) ?> Recorded Payments (<?= count($invoice_payments) ?>)
+            </h4>
+            <div style="overflow-x:auto">
+              <table style="width:100%;font-size:12px;border-collapse:collapse">
+                <thead>
+                  <tr style="text-align:left;border-bottom:1px solid var(--border,#e8ded2);color:var(--text-muted)">
+                    <th style="padding:6px 8px">Date</th>
+                    <th style="padding:6px 8px">Method &amp; Account</th>
+                    <th style="padding:6px 8px">Reference</th>
+                    <th style="padding:6px 8px">Amount</th>
+                    <th style="padding:6px 8px">Status</th>
+                    <th style="padding:6px 8px">Supplier Confirmation</th>
+                    <th style="padding:6px 8px">Proof</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($invoice_payments as $ip): ?>
+                    <tr style="border-bottom:1px dashed var(--border,#e8ded2)">
+                      <td style="padding:6px 8px"><?= date('M d, Y', strtotime($ip['payment_date'] ?: $ip['completed_at'] ?: $ip['scheduled_at'])) ?></td>
+                      <td style="padding:6px 8px">
+                        <strong><?= ucwords(str_replace('_',' ',$ip['payment_method'])) ?></strong>
+                        <?php if ($ip['paying_account']): ?>
+                          <div style="font-size:10.5px;color:var(--text-muted)"><?= htmlspecialchars($ip['paying_account']) ?></div>
+                        <?php endif; ?>
+                      </td>
+                      <td style="padding:6px 8px"><?= htmlspecialchars($ip['reference_no'] ?: '—') ?></td>
+                      <td style="padding:6px 8px;font-weight:700"><?= php_currency($ip['amount']) ?></td>
+                      <td style="padding:6px 8px"><span class="status-badge status-<?= $ip['status']==='completed'?'approved':($ip['status']==='failed'?'rejected':'pending') ?>"><?= status_badge($ip['status']) ?></span></td>
+                      <td style="padding:6px 8px">
+                        <?php if ($ip['status'] === 'completed'): ?>
+                          <?php if ($ip['supplier_confirmation_status'] === 'confirmed'): ?>
+                            <span style="color:#16a34a;font-weight:700">● Confirmed</span>
+                          <?php elseif ($ip['supplier_confirmation_status'] === 'disputed'): ?>
+                            <span style="color:#dc2626;font-weight:700">● Disputed</span>
+                          <?php else: ?>
+                            <span style="color:#d97706;font-weight:700">● Awaiting</span>
+                          <?php endif; ?>
+                        <?php else: ?>
+                          &mdash;
+                        <?php endif; ?>
+                      </td>
+                      <td style="padding:6px 8px">
+                        <?php if (!empty($ip['receipt_attachment_path'])): ?>
+                          <a href="../<?= htmlspecialchars($ip['receipt_attachment_path']) ?>" target="_blank" style="color:var(--caramel);font-weight:600">View Proof</a>
+                        <?php else: ?>
+                          &mdash;
+                        <?php endif; ?>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <?php endif; ?>
+
         <?php if (!empty($invoice['correction_notes'])): ?>
           <div style="margin-top:14px;padding:12px 14px;border-radius:10px;background:#FFF3CD;border:1px solid #FFEBAA;color:#856404;font-size:13px">
             <strong><?= icon('alert-triangle', 14) ?> Correction Requested:</strong>
@@ -391,8 +454,8 @@ $invoices = $list_stmt->fetchAll();
             </button>
             <a href="three_way_match.php?invoice_id=<?= $invoice['id'] ?>" class="btn-save"><?= icon('link', 13) ?> Run 3-Way Match</a>
           <?php endif; ?>
-          <?php if ($invoice['status'] === 'approved' && has_permission('procurement.payment.process')): ?>
-            <a href="payments.php?new_for_invoice=<?= $invoice['id'] ?>" class="btn-save"><?= icon('dollar', 13) ?> Schedule Payment</a>
+          <?php if (in_array($invoice['status'], ['approved', 'partially_paid'], true) && has_permission('procurement.payment.process')): ?>
+            <a href="payments.php?new_for_invoice=<?= $invoice['id'] ?>" class="btn-save"><?= icon('dollar', 13) ?> Record Payment</a>
           <?php endif; ?>
         </div>
 
@@ -502,6 +565,7 @@ $invoices = $list_stmt->fetchAll();
         <a href="invoices.php?status=needs_correction" class="filter-pill <?= $filter==='needs_correction'?'active':'' ?>">Needs Correction</a>
         <a href="invoices.php?status=disputed" class="filter-pill <?= $filter==='disputed'?'active':'' ?>">Disputed</a>
         <a href="invoices.php?status=approved" class="filter-pill <?= $filter==='approved'?'active':'' ?>">Approved</a>
+        <a href="invoices.php?status=partially_paid" class="filter-pill <?= $filter==='partially_paid'?'active':'' ?>">Partially Paid</a>
         <a href="invoices.php?status=paid" class="filter-pill <?= $filter==='paid'?'active':'' ?>">Paid</a>
       </div>
       <div class="table-scroll-hint">

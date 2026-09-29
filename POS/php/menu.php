@@ -56,36 +56,6 @@ require_permission('orders.new');
       </div>
 
       <!-- POS Process Workflow Card (Inspired by reference design) -->
-      <div class="pos-process-card">
-        <div class="ppc-left">
-          <div class="ppc-icon"><?= icon('coffee', 20) ?></div>
-          <div class="ppc-info">
-            <strong>Order Workflow</strong>
-            <p>Tap drinks to add to Receipt, choose size, review, and complete payment</p>
-          </div>
-        </div>
-        <div class="ppc-steps">
-          <div class="ppc-step is-active">
-            <span class="ppc-step-icon"><?= icon('coffee', 13) ?></span>
-            <span>1. Drinks</span>
-            <span class="ppc-step-arrow">&rsaquo;</span>
-          </div>
-          <div class="ppc-step">
-            <span class="ppc-step-icon"><?= icon('cup-tea', 13) ?></span>
-            <span>2. Size</span>
-            <span class="ppc-step-arrow">&rsaquo;</span>
-          </div>
-          <div class="ppc-step">
-            <span class="ppc-step-icon"><?= icon('shopping-bag', 13) ?></span>
-            <span>3. Receipt</span>
-            <span class="ppc-step-arrow">&rsaquo;</span>
-          </div>
-          <div class="ppc-step">
-            <span class="ppc-step-icon"><?= icon('credit-card', 13) ?></span>
-            <span>4. Payment</span>
-          </div>
-        </div>
-      </div>
 
       <div class="catalog-controls-bar">
         <div class="category-tabs">

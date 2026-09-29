@@ -6,9 +6,10 @@ require_once '../includes/icons.php';
 require_login();
 
 $user = current_user();
+$roles = $user['roles'] ?? (isset($user['role']) ? [$user['role']] : []);
 
 // Accessible to finance officers, admins, or staff with finance review permission
-if (!has_permission('procurement.finance.review') && !has_permission('finance.view') && ($user['role'] ?? '') !== 'admin') {
+if (!has_permission('procurement.finance.review') && !has_permission('finance.view') && !in_array('admin', $roles, true)) {
     require_permission('procurement.finance.review');
 }
 

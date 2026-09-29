@@ -21,7 +21,17 @@ $method      = trim($_GET['method'] ?? '');
 $date_from   = trim($_GET['date_from'] ?? '');
 $date_to     = trim($_GET['date_to'] ?? '');
 
-$departments = ['manager' => 'Operations', 'crew' => 'Crew', 'finance' => 'Finance', 'hr' => 'HR', 'admin' => 'Admin'];
+$departments = [
+    'manager'     => 'Operations / Store Management',
+    'crew'        => 'Crew',
+    'cashier'     => 'Cashier',
+    'ops'         => 'Ops',
+    'finance'     => 'Finance',
+    'hr'          => 'HR',
+    'procurement' => 'Procurement',
+    'warehouse'   => 'Warehouse & Receiving',
+    'admin'       => 'Admin'
+];
 $suppliers_list = $pdo->query("SELECT id, name FROM suppliers ORDER BY name ASC")->fetchAll();
 
 function apply_date_range(string &$where, array &$params, string $col, string $from, string $to): void {

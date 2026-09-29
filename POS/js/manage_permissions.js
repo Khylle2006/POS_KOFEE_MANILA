@@ -150,11 +150,26 @@ function updateUIStats() {
 
   // Update Category badges
   Object.keys(catCounts).forEach(cat => {
-    const badge = document.getElementById(`badge-cat-${cat}`);
+    const slugCat = cat.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const badge = document.querySelector(`[data-cat-badge="${CSS.escape ? CSS.escape(cat) : cat}"]`)
+      || document.getElementById(`badge-cat-${slugCat}`)
+      || document.getElementById(`badge-cat-${cat}`);
     if (badge) {
       badge.textContent = `${catCounts[cat].granted}/${catCounts[cat].total}`;
     }
   });
+
+  // Update active role card's counter in the roles grid
+  const currentRole = window.CONFIG?.role || '';
+  if (currentRole) {
+    const activeCard = document.querySelector(`.role-card-item[data-role="${CSS.escape ? CSS.escape(currentRole) : currentRole}"]`);
+    if (activeCard) {
+      const cardPerms = activeCard.querySelector('.role-card-active-perms');
+      if (cardPerms) {
+        cardPerms.textContent = `${grantedCount} / ${totalCount} Active`;
+      }
+    }
+  }
 
   // Update Dirty Indicator & Save Button
   const dirtyDot = document.getElementById('dirty-dot');
@@ -171,6 +186,166 @@ function updateUIStats() {
   } else {
     if (dirtyDot) dirtyDot.classList.remove('active');
     if (dirtyText) dirtyText.textContent = 'All changes saved to database';
+  }
+}
+
+// ── Handle Visual Role Card Selection ────────────────────────
+function selectRoleCard(roleKey) {
+  const currentRole = window.CONFIG?.role || '';
+  if (roleKey === currentRole) return;
+
+  const rows = [...document.querySelectorAll('.perm-toggle')];
+  const changed = rows.filter(el => (el.classList.contains('on') ? '1' : '0') !== el.dataset.original);
+
+  if (changed.length > 0 && typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Unsaved Changes!',
+      text: `You have ${changed.length} unsaved permission change(s). Switching roles will discard these changes.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Discard & Switch',
+      cancelButtonText: 'Keep Editing',
+      confirmButtonColor: 'var(--red, #C62828)',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    }).then(result => {
+      if (result.isConfirmed) {
+        window.location.href = 'manage_permissions.php?role=' + encodeURIComponent(roleKey);
+      }
+    });
+  } else {
+    window.location.href = 'manage_permissions.php?role=' + encodeURIComponent(roleKey);
+  }
+}
+
+// ── Reset Role to Recommended Defaults ───────────────────────
+function resetToDefaults() {
+  const roleSelect = document.getElementById('role-picker');
+  const role = roleSelect ? roleSelect.value : (window.CONFIG?.role || '');
+  const roleLabel = roleSelect ? roleSelect.options[roleSelect.selectedIndex].text.split('—')[0].split('&mdash;')[0].trim() : role;
+
+  if (!role) {
+    showToast('No role selected.', 'error');
+    return;
+  }
+
+  const confirmText = `Are you sure you want to reset "${roleLabel}" to its recommended standard permissions? Any custom overrides will be reset to the official role baseline.`;
+
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Reset to Recommended Defaults?',
+      text: confirmText,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Reset Defaults',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: 'var(--caramel, #8B5E3C)',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    }).then(result => {
+      if (result.isConfirmed) {
+        executeResetToDefaults(role, roleLabel);
+      }
+    });
+  } else {
+    if (confirm(confirmText)) {
+      executeResetToDefaults(role, roleLabel);
+    }
+  }
+}
+
+function executeResetToDefaults(role, roleLabel) {
+  const saveBtn = document.getElementById('save-btn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+  }
+
+  fetch('../api/save_permissions.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'reset_defaults', role: role })
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+    }
+
+    if (res.ok && Array.isArray(res.permissions)) {
+      const defaultSet = new Set(res.permissions);
+      const rows = document.querySelectorAll('.perm-toggle');
+
+      rows.forEach(toggle => {
+        const pk = toggle.dataset.perm;
+        const isGranted = defaultSet.has(pk);
+        if (isGranted) {
+          toggle.classList.add('on');
+          toggle.title = 'Granted — click to revoke';
+        } else {
+          toggle.classList.remove('on');
+          toggle.title = 'Not granted — click to grant';
+        }
+        toggle.dataset.original = isGranted ? '1' : '0';
+      });
+
+      updateUIStats();
+      showToast(`Role "${roleLabel}" reset to recommended defaults.`);
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Defaults Restored!',
+          text: `"${roleLabel}" has been reset to its recommended permissions (${res.permissions.length} active).`,
+          icon: 'success',
+          confirmButtonColor: 'var(--caramel, #8B5E3C)',
+          timer: 2400,
+          timerProgressBar: true
+        });
+      }
+    } else {
+      const err = res.error || 'Failed to reset role permissions.';
+      showToast(err, 'error');
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Reset Failed',
+          text: err,
+          icon: 'error',
+          confirmButtonColor: 'var(--red, #C62828)'
+        });
+      }
+    }
+  })
+  .catch(err => {
+    if (saveBtn) saveBtn.disabled = false;
+    const msg = err.message || 'Network error resetting permissions.';
+    showToast(msg, 'error');
+  });
+}
+
+// ── Handle Role Picker Change with Unsaved Changes Guard ─────
+function handleRoleChange(select) {
+  const rows = [...document.querySelectorAll('.perm-toggle')];
+  const changed = rows.filter(el => (el.classList.contains('on') ? '1' : '0') !== el.dataset.original);
+
+  if (changed.length > 0 && typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Unsaved Changes!',
+      text: `You have ${changed.length} unsaved permission change(s). Switching roles will discard these changes.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Discard & Switch',
+      cancelButtonText: 'Keep Editing',
+      confirmButtonColor: 'var(--red, #C62828)',
+      cancelButtonColor: '#6c757d',
+      reverseButtons: true
+    }).then(result => {
+      if (result.isConfirmed) {
+        document.getElementById('role-picker-form').submit();
+      } else {
+        select.value = window.CONFIG?.role || select.value;
+      }
+    });
+  } else {
+    document.getElementById('role-picker-form').submit();
   }
 }
 
@@ -213,7 +388,7 @@ function saveChanges() {
     return;
   }
 
-  const roleLabel = roleSelect ? roleSelect.options[roleSelect.selectedIndex].text.split('—')[0].trim() : role;
+  const roleLabel = roleSelect ? roleSelect.options[roleSelect.selectedIndex].text.split('—')[0].split('&mdash;')[0].trim() : role;
   document.getElementById('save-confirm-role').textContent = roleLabel;
 
   document.getElementById('save-confirm-list').innerHTML = changed.map(el => {
@@ -234,34 +409,6 @@ function saveChanges() {
 function closeSaveConfirm() {
   const modal = document.getElementById('save-confirm-modal');
   if (modal) modal.classList.remove('open');
-}
-
-// ── Handle Role Picker Change with Unsaved Changes Guard ─────
-function handleRoleChange(select) {
-  const rows = [...document.querySelectorAll('.perm-toggle')];
-  const changed = rows.filter(el => (el.classList.contains('on') ? '1' : '0') !== el.dataset.original);
-
-  if (changed.length > 0 && typeof Swal !== 'undefined') {
-    Swal.fire({
-      title: 'Unsaved Changes!',
-      text: `You have ${changed.length} unsaved permission change(s). Switching roles will discard these changes.`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Discard & Switch',
-      cancelButtonText: 'Keep Editing',
-      confirmButtonColor: 'var(--red, #C62828)',
-      cancelButtonColor: '#6c757d',
-      reverseButtons: true
-    }).then(result => {
-      if (result.isConfirmed) {
-        document.getElementById('role-picker-form').submit();
-      } else {
-        select.value = window.CONFIG?.role || select.value;
-      }
-    });
-  } else {
-    document.getElementById('role-picker-form').submit();
-  }
 }
 
 // ── Save Changes: Commit to Server ───────────────────────────
@@ -559,10 +706,15 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// Keyboard shortcuts (Escape closes modals)
+// Keyboard shortcuts (Escape closes modals, Enter/Space activates role card)
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeAddRole();
     closeSaveConfirm();
+  }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('role-card-item')) {
+    e.preventDefault();
+    const roleKey = e.target.dataset.role;
+    if (roleKey) selectRoleCard(roleKey);
   }
 });

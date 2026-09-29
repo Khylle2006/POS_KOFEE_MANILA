@@ -848,10 +848,11 @@ function can_supplier_bid(array $rfq): array {
     $is_open = ($rfq['status'] === 'open');
     $is_expired = false;
     $reason = '';
+    $days_left = 0;
 
     if (!$is_open) {
         $reason = "This RFQ is {$rfq['status']} and is no longer accepting quotations.";
-        return ['can_bid' => false, 'is_expired' => false, 'is_open' => false, 'reason' => $reason];
+        return ['can_bid' => false, 'is_expired' => false, 'is_open' => false, 'reason' => $reason, 'days_left' => 0];
     }
 
     if (!empty($rfq['due_date'])) {
@@ -860,11 +861,12 @@ function can_supplier_bid(array $rfq): array {
             $is_expired = true;
             $formatted_due = date('M d, Y', strtotime($rfq['due_date']));
             $reason = "Quotation submission deadline has passed (expired on {$formatted_due}). Submissions are closed.";
-            return ['can_bid' => false, 'is_expired' => true, 'is_open' => true, 'reason' => $reason];
+            return ['can_bid' => false, 'is_expired' => true, 'is_open' => true, 'reason' => $reason, 'days_left' => 0];
         }
+        $days_left = max(0, (int)ceil((strtotime($rfq['due_date']) - strtotime($today)) / 86400));
     }
 
-    return ['can_bid' => true, 'is_expired' => false, 'is_open' => true, 'reason' => 'RFQ is open for quotations.'];
+    return ['can_bid' => true, 'is_expired' => false, 'is_open' => true, 'reason' => 'RFQ is open for quotations.', 'days_left' => $days_left];
 }
 
 /**

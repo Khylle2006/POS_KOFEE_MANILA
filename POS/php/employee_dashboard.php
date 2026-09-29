@@ -359,11 +359,15 @@ $initials = strtoupper(substr($fname, 0, 1));
         <div class="field-group">
           <label class="field-label">Department</label>
           <select class="field-input" name="department">
-            <option value="crew">Crew</option>
-            <option value="manager">Operations</option>
-            <option value="finance">Finance</option>
-            <option value="hr">HR</option>
-            <option value="admin">Admin</option>
+            <option value="crew" <?= ($employee['department'] ?? '') === 'crew' ? 'selected' : '' ?>>Crew / Barista</option>
+            <option value="cashier" <?= ($employee['department'] ?? '') === 'cashier' ? 'selected' : '' ?>>Cashier</option>
+            <option value="ops" <?= ($employee['department'] ?? '') === 'ops' ? 'selected' : '' ?>>Operations</option>
+            <option value="manager" <?= ($employee['department'] ?? '') === 'manager' ? 'selected' : '' ?>>Store Management</option>
+            <option value="finance" <?= ($employee['department'] ?? '') === 'finance' ? 'selected' : '' ?>>Finance &amp; Accounting</option>
+            <option value="hr" <?= ($employee['department'] ?? '') === 'hr' ? 'selected' : '' ?>>Human Resources</option>
+            <option value="procurement" <?= ($employee['department'] ?? '') === 'procurement' ? 'selected' : '' ?>>Procurement</option>
+            <option value="warehouse" <?= ($employee['department'] ?? '') === 'warehouse' ? 'selected' : '' ?>>Warehouse &amp; Receiving</option>
+            <option value="admin" <?= ($employee['department'] ?? '') === 'admin' ? 'selected' : '' ?>>Admin</option>
           </select>
         </div>
         <div class="field-group">
