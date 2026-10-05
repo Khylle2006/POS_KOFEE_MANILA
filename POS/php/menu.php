@@ -52,7 +52,27 @@ require_permission('orders.new');
             <span class="pos-pulse-ring"></span>
             <span class="pos-shift-text">Active POS Counter</span>
           </div>
+          <div id="pos-net-badge" class="pos-shift-badge" onclick="syncOfflineOrders(true)" style="cursor:pointer;" title="Terminal network status. Click to test connection or sync pending orders.">
+            <span id="pos-net-dot" class="pos-pulse-ring" style="background:#28a745;"></span>
+            <span id="pos-net-text">Online</span>
+          </div>
+          <?php if (has_permission('menu.manage') || has_permission('menu.edit')): ?>
+          <a href="add_item.php" class="pos-manage-link" title="Manage Drinks, Pricing & Recipes" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:12px;background:#FAF5EE;border:1.5px solid #DFCBB5;color:#241A2E;font-size:12px;font-weight:700;text-decoration:none;transition:all .15s ease;">
+            <?= icon('menu', 13) ?> <span>Edit / Add Menu Items</span>
+          </a>
+          <?php endif; ?>
         </div>
+      </div>
+
+      <!-- Offline Alert Ribbon -->
+      <div id="pos-offline-banner" style="display:none;align-items:center;justify-content:space-between;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:12px;padding:9px 16px;margin-bottom:14px;font-size:12.5px;color:#92400E;font-weight:600;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#D97706;"></span>
+          <span id="pos-offline-msg">Offline Mode — You can continue taking orders. Orders are saved safely on this device and will sync when connected.</span>
+        </div>
+        <button id="pos-sync-btn" type="button" onclick="syncOfflineOrders(true)" style="display:none;background:#D97706;color:#fff;border:none;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s ease;">
+          Sync (<span id="pos-pending-count">0</span>) Orders Now
+        </button>
       </div>
 
       <!-- POS Process Workflow Card (Inspired by reference design) -->
@@ -364,6 +384,13 @@ require_permission('orders.new');
 <!-- SweetAlert2 first, then menu.js -->
 <script src="../assets/vendor/sweetalert2/sweetalert2.all.min.js"></script>
 <script src="../js/menu.js?v=<?= filemtime(__DIR__.'/../js/menu.js') ?>"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(err => {
+    console.warn('SW register notice:', err);
+  });
+}
+</script>
 
 </body>
 </html>

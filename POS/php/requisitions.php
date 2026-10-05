@@ -158,6 +158,7 @@ if (isset($_GET['toast'])) {
 
 // ── Budget strip ───────────────────────────────
 // Reviewers see every department; everyone else sees just their own.
+$can_create = has_permission('procurement.requisition.create') || has_permission('procurement.requisitions');
 $can_review = has_permission('procurement.requisition.review');
 if ($can_review) {
     $budgets = $pdo->prepare('SELECT * FROM procurement_budgets WHERE period_label=:p ORDER BY department');
@@ -212,10 +213,11 @@ unset($r);
   <title>Purchase Requisitions — Kofee POS</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
+  <script src="../assets/vendor/sweetalert2/sweetalert2.all.min.js"></script>
   <style>
     .item-row { display:grid; grid-template-columns:minmax(0,1fr) 90px 70px 120px 32px; gap:8px; margin-bottom:8px; align-items:center; }
     .item-row input { min-width:0; width:100%; }
-    .item-row .rm-item { background:var(--red-lt); color:var(--red); border:none; border-radius:8px; width:32px; height:32px; flex-shrink:0; }
+    .item-row .rm-item { background:var(--red-lt); color:var(--red); border:none; border-radius:8px; width:32px; height:32px; flex-shrink:0; cursor:pointer; }
     @media (max-width:560px) {
       .item-row { grid-template-columns:minmax(0,1fr) 80px 32px; }
       .item-row .name { grid-column:1 / -1; }
@@ -226,6 +228,73 @@ unset($r);
     }
     .budget-bar-wrap { background:#f2e6d6; border-radius:999px; height:8px; overflow:hidden; margin-top:6px; }
     .budget-bar-fill { height:100%; background:var(--accent, var(--caramel, #c47d3e)); }
+
+    /* Offline status ribbon & badges */
+    .offline-status-ribbon {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm, 10px);
+      margin-bottom: 16px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all .2s ease;
+    }
+    .offline-status-ribbon.online {
+      background: #E8F5E9;
+      border: 1px solid #C8E6C9;
+      color: #2E7D32;
+    }
+    .offline-status-ribbon.offline {
+      background: #FFF8E1;
+      border: 1px solid #FFE082;
+      color: #B78103;
+    }
+    .offline-status-ribbon.has-pending {
+      background: #FFF3CD;
+      border: 1px solid #FFEBAA;
+      color: #856404;
+    }
+    .osr-left { display: flex; align-items: center; gap: 9px; }
+    .osr-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .osr-dot.dot-online { background: #2E7D32; box-shadow: 0 0 0 3px rgba(46,125,50,0.2); }
+    .osr-dot.dot-offline { background: #B78103; box-shadow: 0 0 0 3px rgba(183,129,3,0.25); animation: osr-pulse 1.8s infinite; }
+    @keyframes osr-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.15); } }
+    .osr-btn-sync {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--caramel, #c47d3e);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .osr-btn-sync:hover { opacity: 0.9; }
+    .osr-btn-sync:disabled { opacity: 0.6; cursor: not-allowed; }
+    .badge-offline {
+      background: #FFF3CD;
+      color: #856404;
+      border: 1px solid #FFEBAA;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
   </style>
 </head>
 <body>
@@ -236,6 +305,18 @@ unset($r);
     <div>
       <h1>Purchase Requisitions</h1>
       <p>Request supplies and review budget-checked requests</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <?php if ($can_review || has_permission('procurement.budget.manage')): ?>
+      <a href="finance_budgets.php" class="btn-cancel" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;">
+        <?= icon('scale', 14) ?> <span>Budget Allocations</span>
+      </a>
+      <?php endif; ?>
+      <?php if ($can_create): ?>
+      <button type="button" class="btn-save" onclick="openCreate()" style="display:inline-flex;align-items:center;gap:6px">
+        <?= icon('plus', 14) ?> <span>File Requisition</span>
+      </button>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -278,11 +359,13 @@ unset($r);
         <thead>
           <tr><th class="col-sticky">Title</th><th>Department</th><th>Requested By</th><th>Est. Total</th><th>Status</th><th>Date</th><th>Actions</th></tr>
         </thead>
-        <tbody>
+        <tbody id="req-tbody">
         <?php if (empty($requisitions)): ?>
-          <tr class="empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No requisitions found.</td></tr>
-        <?php else: foreach ($requisitions as $r): ?>
-          <tr>
+          <tr class="empty-row" id="req-empty-row"><td colspan="7"><?= icon('inbox', 18) ?> No requisitions found.</td></tr>
+        <?php else: foreach ($requisitions as $r):
+          $r_payload_json = htmlspecialchars(json_encode($r, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+        ?>
+          <tr id="req-row-<?= $r['id'] ?>">
             <td class="col-sticky" style="font-weight:700"><?= htmlspecialchars($r['title']) ?></td>
             <td><?= htmlspecialchars($departments[$r['department']] ?? $r['department']) ?></td>
             <td><?= htmlspecialchars($r['firstname'].' '.$r['lastname']) ?></td>
@@ -291,9 +374,9 @@ unset($r);
             <td class="muted-cell"><?= date('M d, Y', strtotime($r['created_at'])) ?></td>
             <td>
               <div class="act-group">
-                <button class="act-btn" onclick='openView(<?= htmlspecialchars(json_encode($r), ENT_QUOTES) ?>)'><?= icon('eye', 13) ?> View</button>
+                <button type="button" class="act-btn" data-req="<?= $r_payload_json ?>" onclick='openView(this)'><?= icon('eye', 13) ?> View</button>
                 <?php if ($r['status'] === 'approved' && has_permission('procurement.rfq.manage')): ?>
-                  <button class="act-btn act-activate" onclick="window.location.href='rfq.php?requisition_id=<?= $r['id'] ?>'"><?= icon('send', 13) ?> Start RFQ</button>
+                  <button type="button" class="act-btn act-activate" onclick="window.location.href='rfq.php?requisition_id=<?= $r['id'] ?>'"><?= icon('send', 13) ?> Start RFQ</button>
                 <?php endif; ?>
               </div>
             </td>
@@ -388,13 +471,242 @@ unset($r);
 
 <script>
 const CAN_REVIEW = <?= json_encode($can_review) ?>;
+const CAN_CREATE = <?= json_encode($can_create) ?>;
 const DEPT_LABELS = <?= json_encode($departments) ?>;
-// Keyed by department so openView() can look up the right budget row for
-// whichever requisition is being reviewed.
 const BUDGETS_BY_DEPT = <?= json_encode(array_column($budgets, null, 'department')) ?>;
+const CURRENT_USER = <?= json_encode([
+  'id'        => (int)$user['id'],
+  'firstname' => $user['firstname'] ?? '',
+  'lastname'  => $user['lastname'] ?? '',
+  'role'      => $user['role'] ?? 'crew'
+]) ?>;
+const PERIOD_LABEL = <?= json_encode($period_label) ?>;
+
 let currentReqNeedsOverride = false;
 
-// ── Create modal: dynamic item rows ────────────
+// ── Offline Storage & Synchronization Plumbing ──
+function getOfflineQueue() {
+  try {
+    const raw = localStorage.getItem('kofee_offline_requisitions');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.warn('Error reading offline queue:', e);
+    return [];
+  }
+}
+
+function saveOfflineQueue(queue) {
+  try {
+    localStorage.setItem('kofee_offline_requisitions', JSON.stringify(queue));
+  } catch (e) {
+    console.error('Error saving offline queue:', e);
+  }
+}
+
+function updateNetworkStatus() {
+  const isOnline = navigator.onLine;
+  const ribbon = document.getElementById('offline-status-bar');
+  const dot = document.getElementById('osr-dot');
+  const msg = document.getElementById('osr-msg');
+  const syncBtn = document.getElementById('osr-btn-sync');
+  const queue = getOfflineQueue();
+
+  if (!ribbon) return;
+  ribbon.style.display = 'flex';
+
+  if (!isOnline) {
+    ribbon.className = 'offline-status-ribbon offline';
+    if (dot) dot.className = 'osr-dot dot-offline';
+    if (msg) msg.innerHTML = `<strong>Offline Mode (No WiFi)</strong> &mdash; You can still file and view requisitions. Data is stored safely on this device (${queue.length} queued).`;
+    if (syncBtn) {
+      syncBtn.style.display = queue.length > 0 ? 'inline-flex' : 'none';
+      syncBtn.innerHTML = `<?= icon('refresh', 13) ?> <span>Sync Queued (${queue.length})</span>`;
+    }
+  } else {
+    if (queue.length > 0) {
+      ribbon.className = 'offline-status-ribbon has-pending';
+      if (dot) dot.className = 'osr-dot dot-online';
+      if (msg) msg.innerHTML = `<strong>Online &bull; ${queue.length} offline requisition(s) ready to sync</strong>`;
+      if (syncBtn) {
+        syncBtn.style.display = 'inline-flex';
+        syncBtn.innerHTML = `<?= icon('refresh', 13) ?> <span>Sync All (${queue.length})</span>`;
+      }
+    } else {
+      ribbon.className = 'offline-status-ribbon online';
+      if (dot) dot.className = 'osr-dot dot-online';
+      if (msg) msg.innerHTML = `<strong>Online</strong> &bull; Requisitions work seamlessly offline without WiFi`;
+      if (syncBtn) syncBtn.style.display = 'none';
+    }
+  }
+}
+
+function renderOfflineRequisitions() {
+  const tbody = document.getElementById('req-tbody');
+  if (!tbody) return;
+
+  // Remove existing rendered offline rows
+  tbody.querySelectorAll('.offline-req-row').forEach(el => el.remove());
+
+  const queue = getOfflineQueue();
+  if (!queue.length) return;
+
+  // Hide empty state if present
+  const emptyRow = document.getElementById('req-empty-row');
+  if (emptyRow) emptyRow.style.display = 'none';
+
+  queue.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.className = 'offline-req-row';
+    tr.id = 'req-offline-' + r.temp_id;
+    tr.style.background = '#FFFDF7';
+
+    const rJson = esc(JSON.stringify(r));
+
+    tr.innerHTML = `
+      <td class="col-sticky" style="font-weight:700">
+        ${esc(r.title)}
+        <div style="margin-top:2px"><span class="badge-offline">⚡ Queued Offline</span></div>
+      </td>
+      <td>${esc(DEPT_LABELS[r.department] || r.department)}</td>
+      <td>${esc(r.firstname || '')} ${esc(r.lastname || '')} <small style="color:var(--text-muted)">(Local Device)</small></td>
+      <td style="font-weight:700">₱${parseFloat(r.estimated_total || 0).toFixed(2)}</td>
+      <td><span class="badge-offline">Pending Sync</span></td>
+      <td class="muted-cell">${esc(r.created_at || 'Just now')}</td>
+      <td>
+        <div class="act-group">
+          <button type="button" class="act-btn" data-req="${rJson}" onclick="openView(this)"><?= icon('eye', 13) ?> View</button>
+          <button type="button" class="act-btn" style="color:var(--red)" onclick="deleteOfflineRequisition('${r.temp_id}')" title="Delete offline draft"><?= icon('trash', 13) ?></button>
+          <button type="button" class="act-btn act-activate" onclick="syncOfflineQueue()" title="Sync now"><?= icon('refresh', 13) ?></button>
+        </div>
+      </td>
+    `;
+
+    tbody.insertBefore(tr, tbody.firstChild);
+  });
+}
+
+function saveToOfflineAndNotify(data) {
+  const tempId = 'offline_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+  const nowStr = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const entry = {
+    temp_id: tempId,
+    id: tempId,
+    title: data.title,
+    department: data.department,
+    notes: data.notes,
+    items: data.items,
+    estimated_total: data.total,
+    status: 'pending',
+    is_offline: true,
+    created_at: nowStr,
+    firstname: CURRENT_USER.firstname || 'Crew',
+    lastname: CURRENT_USER.lastname || 'Member'
+  };
+
+  const queue = getOfflineQueue();
+  queue.unshift(entry);
+  saveOfflineQueue(queue);
+
+  closeCreate();
+  renderOfflineRequisitions();
+  updateNetworkStatus();
+
+  Swal.fire({
+    title: 'Saved Offline!',
+    html: `<p>Your purchase requisition <strong>"${esc(data.title)}"</strong> was stored securely on this device without WiFi.</p><p style="font-size:12.5px;color:#7A4100;margin-top:8px;background:#FFF3CD;padding:8px 12px;border-radius:8px">It will automatically synchronize as soon as WiFi returns, or tap <strong>Sync All</strong> anytime.</p>`,
+    icon: 'info',
+    confirmButtonColor: '#C97B3D'
+  });
+}
+
+async function syncOfflineQueue(isAuto = false) {
+  const queue = getOfflineQueue();
+  if (!queue.length) {
+    if (!isAuto) {
+      Swal.fire({ title: 'All Synced!', text: 'There are no pending offline requisitions.', icon: 'info', timer: 1400, showConfirmButton: false });
+    }
+    return;
+  }
+
+  if (!navigator.onLine) {
+    if (!isAuto) {
+      Swal.fire({ title: 'Still Offline', text: 'Please connect to WiFi before synchronizing.', icon: 'warning', confirmButtonColor: '#C97B3D' });
+    }
+    return;
+  }
+
+  const syncBtn = document.getElementById('osr-btn-sync');
+  if (syncBtn) {
+    syncBtn.disabled = true;
+    syncBtn.innerHTML = `<?= icon('refresh', 13) ?> <span>Syncing…</span>`;
+  }
+
+  try {
+    const res = await fetch('../api/requisitions.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'batch_sync',
+        requisitions: queue
+      })
+    });
+    const result = await res.json();
+
+    if (result.ok && Array.isArray(result.synced)) {
+      const syncedTempIds = result.synced.map(s => s.temp_id);
+      const remaining = queue.filter(q => !syncedTempIds.includes(q.temp_id));
+      saveOfflineQueue(remaining);
+
+      updateNetworkStatus();
+      renderOfflineRequisitions();
+
+      Swal.fire({
+        title: 'Sync Complete!',
+        text: `${result.synced.length} offline requisition(s) synchronized to the server!`,
+        icon: 'success',
+        confirmButtonColor: '#C97B3D',
+        timer: 1800,
+        showConfirmButton: false
+      }).then(() => location.reload());
+    } else {
+      throw new Error(result.error || 'Failed to sync batch');
+    }
+  } catch (err) {
+    console.error('Batch sync error:', err);
+    if (!isAuto) {
+      Swal.fire({
+        title: 'Sync Notice',
+        text: 'Unable to complete server upload right now. Your requisitions remain safely preserved on this device.',
+        icon: 'error',
+        confirmButtonColor: '#C97B3D'
+      });
+    }
+  } finally {
+    if (syncBtn) syncBtn.disabled = false;
+    updateNetworkStatus();
+  }
+}
+
+async function deleteOfflineRequisition(tempId) {
+  const result = await Swal.fire({
+    title: 'Remove Offline Draft?',
+    text: 'Delete this pending offline requisition?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Yes, Remove',
+    confirmButtonColor: 'var(--red)',
+    cancelButtonText: 'Keep'
+  });
+  if (result.isConfirmed) {
+    const queue = getOfflineQueue().filter(q => q.temp_id !== tempId);
+    saveOfflineQueue(queue);
+    renderOfflineRequisitions();
+    updateNetworkStatus();
+  }
+}
+
+// ── Dynamic Item Rows in Create Modal ───────────
 function addItemRow(vals = {}) {
   const wrap = document.getElementById('item-rows');
   const row = document.createElement('div');
@@ -413,6 +725,7 @@ function addItemRow(vals = {}) {
   wrap.appendChild(row);
   updateTotal();
 }
+
 function updateTotal() {
   let total = 0;
   document.querySelectorAll('#item-rows .item-row').forEach(row => {
@@ -423,23 +736,40 @@ function updateTotal() {
   document.getElementById('running-total').textContent = '₱' + total.toFixed(2);
 }
 
-// ── View / Review modal ────────────────────────
 function esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function openView(r) {
-  document.getElementById('v-title').textContent = r.title;
+// ── View / Review Modal ────────────────────────
+function openView(param) {
+  let r = null;
+  if (param && param.getAttribute && param.getAttribute('data-req')) {
+    try { r = JSON.parse(param.getAttribute('data-req')); } catch(e) { console.error(e); }
+  } else if (typeof param === 'string') {
+    try { r = JSON.parse(param); } catch(e) { console.error(e); }
+  } else if (typeof param === 'object' && param !== null) {
+    r = param;
+  }
+  if (!r) return;
+
+  document.getElementById('v-title').textContent = r.title + (r.is_offline ? ' [Offline Draft]' : '');
   document.getElementById('v-meta').textContent =
-    (DEPT_LABELS[r.department] || r.department) + ' · ' + r.firstname + ' ' + r.lastname + ' · ' + r.created_at;
+    (DEPT_LABELS[r.department] || r.department) + ' · ' + (r.firstname || '') + ' ' + (r.lastname || '') +
+    (r.is_offline ? ' · (Stored Locally on this device)' : ' · ' + (r.created_at || ''));
 
-  document.getElementById('v-items').innerHTML = (r.items || []).map(i => `
-    <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0">
-      <span>${esc(i.item_name)} × ${parseFloat(i.quantity)} ${esc(i.unit)}</span>
-      <span>₱${(parseFloat(i.quantity) * parseFloat(i.est_unit_price)).toFixed(2)}</span>
-    </div>`).join('') || '<span class="muted-cell">No items</span>';
+  const itemsList = r.items || [];
+  document.getElementById('v-items').innerHTML = itemsList.map(i => {
+    const qty = parseFloat(i.quantity ?? i.qty ?? 1);
+    const unitPrice = parseFloat(i.est_unit_price ?? i.price ?? 0);
+    const lineTotal = (qty * unitPrice).toFixed(2);
+    return `
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0">
+        <span>${esc(i.item_name || i.name)} × ${qty} ${esc(i.unit || 'pcs')}</span>
+        <span>₱${lineTotal}</span>
+      </div>`;
+  }).join('') || '<span class="muted-cell">No items</span>';
 
-  document.getElementById('v-total').textContent = 'Estimated Total: ₱' + parseFloat(r.estimated_total).toFixed(2);
+  document.getElementById('v-total').textContent = 'Estimated Total: ₱' + parseFloat(r.estimated_total || 0).toFixed(2);
   document.getElementById('v-notes').textContent = r.notes ? '"' + r.notes + '"' : '';
 
   const reviewBlock    = document.getElementById('v-review-block');
@@ -456,7 +786,13 @@ function openView(r) {
   currentReqNeedsOverride = false;
   actions.innerHTML = '';
 
-  if (r.status === 'pending' && CAN_REVIEW) {
+  if (r.is_offline) {
+    actions.innerHTML = `
+      <button type="button" class="btn-cancel" onclick="closeView()">Close</button>
+      <button type="button" class="btn-save" style="background:var(--red)" onclick="closeView(); deleteOfflineRequisition('${r.temp_id}')">Delete Draft</button>
+      <button type="button" class="btn-save" onclick="syncOfflineQueue()">Sync Now</button>
+    `;
+  } else if (r.status === 'pending' && CAN_REVIEW) {
     reviewBlock.style.display = '';
 
     const budget = BUDGETS_BY_DEPT[r.department];
@@ -487,6 +823,7 @@ function openView(r) {
 
   document.getElementById('view-modal').classList.add('open');
 }
+
 function closeView() { document.getElementById('view-modal').classList.remove('open'); }
 
 function openCreate() {
@@ -507,20 +844,24 @@ function closeCreate() {
   }
 }
 
-// Attach create form validation & submission
-document.getElementById('create-form')?.addEventListener('submit', function(e) {
+// ── Create Form Submission with Offline Interception ─────────────
+document.getElementById('create-form')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
   const errBox = document.getElementById('create-form-error');
   if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
 
   const titleInput = document.getElementById('f-title');
-  if (!titleInput.value.trim()) {
-    e.preventDefault();
+  const titleVal   = titleInput.value.trim();
+  if (!titleVal) {
     if (window.KofeeValidator) {
       KofeeValidator.showError(titleInput, 'Title is required.');
     }
     titleInput.focus();
     return;
   }
+
+  const deptVal  = document.querySelector('#create-form select[name="department"]')?.value || CURRENT_USER.role;
+  const notesVal = document.querySelector('#create-form textarea[name="notes"]')?.value.trim() || '';
 
   const items = [];
   let invalidQty = false;
@@ -536,7 +877,6 @@ document.getElementById('create-form')?.addEventListener('submit', function(e) {
   });
 
   if (!items.length) {
-    e.preventDefault();
     if (errBox) {
       errBox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Add at least one item with a name to file this requisition.';
       errBox.style.display = 'block';
@@ -545,7 +885,6 @@ document.getElementById('create-form')?.addEventListener('submit', function(e) {
   }
 
   if (invalidQty) {
-    e.preventDefault();
     if (errBox) {
       errBox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> All items must have a quantity greater than 0.';
       errBox.style.display = 'block';
@@ -553,10 +892,55 @@ document.getElementById('create-form')?.addEventListener('submit', function(e) {
     return;
   }
 
-  document.getElementById('items-json').value = JSON.stringify(items);
   const btn = document.getElementById('create-submit-btn');
   if (btn && window.KofeeValidator) {
     KofeeValidator.setLoading(btn, 'Submitting…');
+  }
+
+  const total = items.reduce((sum, it) => sum + (it.qty * it.price), 0);
+
+  // If offline, save directly without network attempt
+  if (!navigator.onLine) {
+    if (btn && window.KofeeValidator) KofeeValidator.clearLoading(btn);
+    saveToOfflineAndNotify({ title: titleVal, department: deptVal, notes: notesVal, items, total });
+    return;
+  }
+
+  // Attempt online submission via API
+  try {
+    const response = await fetch('../api/requisitions.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create',
+        title: titleVal,
+        department: deptVal,
+        notes: notesVal,
+        items: items
+      })
+    });
+
+    const result = await response.json();
+    if (btn && window.KofeeValidator) KofeeValidator.clearLoading(btn);
+
+    if (result.ok) {
+      closeCreate();
+      await Swal.fire({
+        title: 'Requisition Filed!',
+        text: `"${titleVal}" has been submitted for review.`,
+        icon: 'success',
+        confirmButtonColor: '#C97B3D',
+        timer: 1600,
+        showConfirmButton: false
+      });
+      location.reload();
+    } else {
+      throw new Error(result.error || 'Failed to submit requisition.');
+    }
+  } catch (err) {
+    console.warn('Network error or server unreachable while filing requisition — saving offline:', err);
+    if (btn && window.KofeeValidator) KofeeValidator.clearLoading(btn);
+    saveToOfflineAndNotify({ title: titleVal, department: deptVal, notes: notesVal, items, total });
   }
 });
 
@@ -590,6 +974,27 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) { closeCreate(); closeView(); } });
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCreate(); closeView(); } });
+
+// ── Lifecycle Initialization: Online / Offline Listeners & Service Worker ──
+document.addEventListener('DOMContentLoaded', () => {
+  updateNetworkStatus();
+  renderOfflineRequisitions();
+
+  window.addEventListener('online', () => {
+    updateNetworkStatus();
+    syncOfflineQueue(true);
+  });
+  window.addEventListener('offline', () => {
+    updateNetworkStatus();
+  });
+
+  // Register Service Worker for offline PWA functionality
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(err => {
+      console.warn('Service worker registration note:', err);
+    });
+  }
+});
 </script>
 <script src="../js/validator.js"></script>
 </body>

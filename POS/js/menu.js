@@ -38,8 +38,41 @@ function getProductImage(item, categoryKey) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const res  = await fetch("../api/get_menu.php");
-    const data = await res.json();
+    updateOfflineBanner();
+    await loadMenu();
+    renderGrid();
+    renderOrder();
+    if (navigator.onLine) {
+        syncOfflineOrders(false);
+    }
+});
+
+async function loadMenu() {
+    let data = null;
+    try {
+        const res = await fetch("../api/get_menu.php");
+        if (res.ok) {
+            data = await res.json();
+            try {
+                localStorage.setItem("kofee_cached_menu", JSON.stringify(data));
+            } catch (e) {
+                console.warn("Could not cache menu locally:", e);
+            }
+        }
+    } catch (err) {
+        console.warn("Network error fetching menu, falling back to cache:", err);
+    }
+
+    if (!data) {
+        const cached = localStorage.getItem("kofee_cached_menu");
+        if (cached) {
+            try { data = JSON.parse(cached); } catch (e) {}
+        }
+    }
+
+    if (!data || !Array.isArray(data)) {
+        data = [];
+    }
 
     menuData = {
         "ice-coffee": [],
@@ -49,7 +82,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
     data.forEach(item => {
-        const key = item.category_name.toLowerCase().replace(" ", "-");
+        const key = (item.category_name || '').toLowerCase().replace(" ", "-");
         if (!menuData[key]) menuData[key] = [];
         menuData[key].push({
             id:         item.id,
@@ -60,10 +93,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             stock:      parseInt(item.stock, 10) || 0
         });
     });
-
-    renderGrid();
-    renderOrder();
-});
+}
 
 let currentCat  = "ice-coffee";
 let currentSize = "small";
@@ -170,28 +200,37 @@ async function addToOrder(itemId) {
     if (item.stock <= 0) return;
 
     cartBusy = true;
-    try {
-        const res = await fetch('../api/cart_stock.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'deduct',
-                product_id: itemId,
-                size: currentSize,
-                qty: 1
-            })
-        });
-        const data = await res.json();
-        if (!data.success) {
-            Swal.fire({
-                title: "Out of Stock!",
-                text: data.error || "Cannot add item due to insufficient ingredients in storage.",
-                icon: "warning",
-                confirmButtonColor: '#C97B3D'
-            });
-            return;
-        }
+    let allowed = true;
 
+    if (navigator.onLine) {
+        try {
+            const res = await fetch('../api/cart_stock.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'deduct',
+                    product_id: itemId,
+                    size: currentSize,
+                    qty: 1
+                })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                Swal.fire({
+                    title: "Out of Stock!",
+                    text: data.error || "Cannot add item due to insufficient ingredients in storage.",
+                    icon: "warning",
+                    confirmButtonColor: '#C97B3D'
+                });
+                allowed = false;
+            }
+        } catch (err) {
+            console.warn("cart_stock network unreachable, allowing offline addition:", err);
+            allowed = true; // Fallback to optimistic offline mode
+        }
+    }
+
+    if (allowed) {
         const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
         const key      = itemId + '_' + currentSize;
         const existing = orderItems.find(o => o.key === key);
@@ -210,17 +249,8 @@ async function addToOrder(itemId) {
             });
         }
         renderOrder();
-    } catch (err) {
-        console.error("Storage deduction error:", err);
-        Swal.fire({
-            title: "Error!",
-            text: "Failed to communicate with inventory storage.",
-            icon: "error",
-            confirmButtonColor: '#C97B3D'
-        });
-    } finally {
-        cartBusy = false;
     }
+    cartBusy = false;
 }
 
 function renderOrder() {
@@ -267,44 +297,57 @@ async function changeQty(index, delta) {
     cartBusy = true;
     try {
         if (delta > 0) {
-            const res = await fetch('../api/cart_stock.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'deduct',
-                    product_id: item.id,
-                    size: item.size,
-                    qty: 1
-                })
-            });
-            const data = await res.json();
-            if (!data.success) {
-                Swal.fire({
-                    title: "Out of Stock!",
-                    text: data.error || "Cannot add more due to shortage in storage.",
-                    icon: "warning",
-                    confirmButtonColor: '#C97B3D'
-                });
-                return;
-            }
-            item.qty += 1;
-        } else if (delta < 0) {
-            const res = await fetch('../api/cart_stock.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'refund',
-                    product_id: item.id,
-                    size: item.size,
-                    qty: 1
-                })
-            });
-            const data = await res.json();
-            if (data.success) {
-                item.qty -= 1;
-                if (item.qty <= 0) {
-                    orderItems.splice(index, 1);
+            let allowed = true;
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch('../api/cart_stock.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'deduct',
+                            product_id: item.id,
+                            size: item.size,
+                            qty: 1
+                        })
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        Swal.fire({
+                            title: "Out of Stock!",
+                            text: data.error || "Cannot add more due to shortage in storage.",
+                            icon: "warning",
+                            confirmButtonColor: '#C97B3D'
+                        });
+                        allowed = false;
+                    }
+                } catch (err) {
+                    console.warn("Cart deduction offline fallback:", err);
+                    allowed = true;
                 }
+            }
+            if (allowed) {
+                item.qty += 1;
+            }
+        } else if (delta < 0) {
+            if (navigator.onLine) {
+                try {
+                    await fetch('../api/cart_stock.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'refund',
+                            product_id: item.id,
+                            size: item.size,
+                            qty: 1
+                        })
+                    });
+                } catch (err) {
+                    console.warn("Cart refund offline fallback:", err);
+                }
+            }
+            item.qty -= 1;
+            if (item.qty <= 0) {
+                orderItems.splice(index, 1);
             }
         }
         renderOrder();
@@ -322,16 +365,22 @@ async function removeItem(index) {
 
     cartBusy = true;
     try {
-        await fetch('../api/cart_stock.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'refund',
-                product_id: item.id,
-                size: item.size,
-                qty: item.qty
-            })
-        });
+        if (navigator.onLine) {
+            try {
+                await fetch('../api/cart_stock.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'refund',
+                        product_id: item.id,
+                        size: item.size,
+                        qty: item.qty
+                    })
+                });
+            } catch (err) {
+                console.warn("Remove item refund offline fallback:", err);
+            }
+        }
         orderItems.splice(index, 1);
         renderOrder();
     } catch (err) {
@@ -841,6 +890,7 @@ async function submitConfirmedOrder() {
         btn.textContent = 'Processing Order…';
     }
 
+    const placedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const payload = {
         total,
         payment_method: selectedPaymentMethod,
@@ -848,6 +898,7 @@ async function submitConfirmedOrder() {
         change_amount: change,
         payment_reference: paymentRef,
         order_type: typeMap[orderType] || "Dine In",
+        placed_at: placedAt,
         items: snapshot.map(o => ({
             id:    o.id,
             qty:   o.qty,
@@ -856,6 +907,23 @@ async function submitConfirmedOrder() {
             name:  o.name
         }))
     };
+
+    const paymentInfo = {
+        method: selectedPaymentMethod === 'cash' ? 'Cash' : (selectedPaymentMethod === 'ewallet' ? currentWalletVendor : 'Card POS'),
+        tendered,
+        change,
+        reference: paymentRef
+    };
+
+    // If device is offline, record locally without waiting for server network failure
+    if (!navigator.onLine) {
+        saveOfflineOrder(payload, subtotal, vat, total, snapshot, paymentInfo);
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Confirm & Complete';
+        }
+        return;
+    }
 
     try {
         const res = await fetch('../api/checkout.php', {
@@ -881,20 +949,213 @@ async function submitConfirmedOrder() {
         orderSubmitted = true;
         closeConfirmOrder(false);
 
-        showReceipt(data.order_id, subtotal, vat, total, snapshot, {
-            method: selectedPaymentMethod === 'cash' ? 'Cash' : (selectedPaymentMethod === 'ewallet' ? currentWalletVendor : 'Card POS'),
-            tendered,
-            change,
-            reference: paymentRef
-        });
+        showReceipt(data.order_id, subtotal, vat, total, snapshot, paymentInfo);
 
     } catch (err) {
-        console.error('Checkout error:', err);
-        showSimpleError(err.message || 'Error communicating with server.');
+        console.warn('Checkout connection issue, falling back to local offline order queue:', err);
+        saveOfflineOrder(payload, subtotal, vat, total, snapshot, paymentInfo);
     } finally {
-        if (btn) btn.disabled = false;
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Confirm & Complete';
+        }
     }
 }
+
+// ── Offline Orders Management ─────────────────
+function saveOfflineOrder(payload, subtotal, vat, total, snapshot, paymentInfo) {
+    const offlineId = 'OFF-' + String(Math.floor(1000 + Math.random() * 9000));
+    const offlineOrder = {
+        id: offlineId,
+        payload: payload,
+        subtotal,
+        vat,
+        total,
+        snapshot,
+        paymentInfo,
+        savedAt: new Date().toISOString()
+    };
+
+    let queued = [];
+    try {
+        queued = JSON.parse(localStorage.getItem('kofee_offline_orders') || '[]');
+    } catch (e) {
+        queued = [];
+    }
+
+    queued.push(offlineOrder);
+    localStorage.setItem('kofee_offline_orders', JSON.stringify(queued));
+
+    orderSubmitted = true;
+    closeConfirmOrder(false);
+
+    showReceipt(offlineId, subtotal, vat, total, snapshot, paymentInfo);
+    updateOfflineBanner();
+
+    Swal.fire({
+        title: "Order Stored Offline",
+        html: `Order <b>#${offlineId}</b> saved locally on this terminal.<br><span style="font-size:12px;color:#8B4513;">It will be automatically synced with the server database when connection returns.</span>`,
+        icon: "info",
+        confirmButtonColor: '#C97B3D',
+        timer: 4500
+    });
+}
+
+let isSyncingOrders = false;
+async function syncOfflineOrders(showFeedback = true) {
+    if (isSyncingOrders) return;
+    const raw = localStorage.getItem('kofee_offline_orders');
+    if (!raw) {
+        updateOfflineBanner();
+        if (showFeedback) {
+            Swal.fire({
+                title: "All Synced!",
+                text: "No pending offline orders found on this terminal.",
+                icon: "info",
+                confirmButtonColor: '#C97B3D'
+            });
+        }
+        return;
+    }
+
+    let orders = [];
+    try { orders = JSON.parse(raw); } catch (e) { return; }
+    if (!orders.length) {
+        updateOfflineBanner();
+        if (showFeedback) {
+            Swal.fire({
+                title: "All Synced!",
+                text: "No pending offline orders found on this terminal.",
+                icon: "info",
+                confirmButtonColor: '#C97B3D'
+            });
+        }
+        return;
+    }
+
+    isSyncingOrders = true;
+    const syncBtn = document.getElementById('pos-sync-btn');
+    if (syncBtn) {
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Syncing Orders…';
+    }
+
+    let syncedCount = 0;
+    const remaining = [];
+
+    for (const order of orders) {
+        try {
+            const res = await fetch('../api/checkout.php', {
+                method:  "POST",
+                headers: { "Content-Type": "application/json" },
+                body:    JSON.stringify(order.payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                syncedCount++;
+            } else {
+                console.warn("Server refused offline order:", data);
+                remaining.push(order);
+            }
+        } catch (err) {
+            console.warn("Offline order sync failed, preserving in queue:", err);
+            remaining.push(order);
+        }
+    }
+
+    localStorage.setItem('kofee_offline_orders', JSON.stringify(remaining));
+    isSyncingOrders = false;
+    updateOfflineBanner();
+
+    if (syncedCount > 0) {
+        Swal.fire({
+            title: "Orders Synced!",
+            html: `Successfully synced <b>${syncedCount}</b> offline order(s) to the server database.` +
+                  (remaining.length > 0 ? `<br><small style="color:#C97B3D;">${remaining.length} order(s) remaining in queue.</small>` : ''),
+            icon: "success",
+            confirmButtonColor: '#C97B3D'
+        });
+    } else if (showFeedback && remaining.length > 0) {
+        Swal.fire({
+            title: "Server Unreachable",
+            text: "Could not connect to the database. All orders remain safely queued locally.",
+            icon: "warning",
+            confirmButtonColor: '#C97B3D'
+        });
+    }
+}
+
+function updateOfflineBanner() {
+    const isOnline = navigator.onLine;
+    let queued = [];
+    try {
+        queued = JSON.parse(localStorage.getItem('kofee_offline_orders') || '[]');
+    } catch (e) {
+        queued = [];
+    }
+    const count = queued.length;
+
+    // Status badge in top right
+    const dot = document.getElementById('pos-net-dot');
+    const txt = document.getElementById('pos-net-text');
+    if (dot && txt) {
+        if (!isOnline) {
+            dot.style.background = '#DC2626';
+            dot.style.boxShadow = '0 0 0 3px rgba(220, 38, 38, 0.22)';
+            txt.textContent = count > 0 ? `Offline (${count} Queued)` : 'Offline';
+        } else if (count > 0) {
+            dot.style.background = '#D97706';
+            dot.style.boxShadow = '0 0 0 3px rgba(217, 119, 6, 0.22)';
+            txt.textContent = `Online (${count} Pending)`;
+        } else {
+            dot.style.background = '#28a745';
+            dot.style.boxShadow = '0 0 0 3px rgba(40, 167, 69, 0.22)';
+            txt.textContent = 'Online';
+        }
+    }
+
+    // Yellow warning ribbon
+    const banner  = document.getElementById('pos-offline-banner');
+    const msg     = document.getElementById('pos-offline-msg');
+    const syncBtn = document.getElementById('pos-sync-btn');
+    const countEl = document.getElementById('pos-pending-count');
+
+    if (banner) {
+        if (!isOnline || count > 0) {
+            banner.style.display = 'flex';
+            if (!isOnline) {
+                if (msg) msg.textContent = `Offline Mode — Orders are being saved locally on this terminal until WiFi reconnects (${count} queued).`;
+            } else {
+                if (msg) msg.textContent = `Connection active. You have ${count} pending offline order(s) waiting to sync.`;
+            }
+
+            if (syncBtn && countEl) {
+                countEl.textContent = count;
+                if (count > 0 && isOnline) {
+                    syncBtn.style.display = 'inline-block';
+                    syncBtn.disabled = false;
+                    syncBtn.textContent = `Sync (${count}) Orders Now`;
+                } else if (count > 0 && !isOnline) {
+                    syncBtn.style.display = 'inline-block';
+                    syncBtn.disabled = true;
+                    syncBtn.textContent = `${count} Queued (Offline)`;
+                } else {
+                    syncBtn.style.display = 'none';
+                }
+            }
+        } else {
+            banner.style.display = 'none';
+        }
+    }
+}
+
+window.addEventListener('online', () => {
+    updateOfflineBanner();
+    syncOfflineOrders(false);
+});
+window.addEventListener('offline', () => {
+    updateOfflineBanner();
+});
 
 function showSimpleError(message) {
     Swal.fire({
@@ -917,7 +1178,10 @@ function showReceipt(orderId, subtotal, vat, total, items, paymentInfo = {}) {
     const typeLabels = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
 
     const orderNumEl = document.getElementById('r-order-num');
-    if (orderNumEl) orderNumEl.textContent = '#' + String(orderId).padStart(4, '0');
+    if (orderNumEl) {
+        const idStr = String(orderId);
+        orderNumEl.textContent = idStr.startsWith('OFF-') ? '#' + idStr : '#' + idStr.padStart(4, '0');
+    }
 
     const typeEl = document.getElementById('r-type');
     if (typeEl) typeEl.textContent = typeLabels[orderType] || 'Dine In';
