@@ -445,6 +445,8 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
           </td></tr>
         <?php else: foreach ($ingredients as $i):
             $badge = $i['expiry_badge'];
+          $unit_cost = $i['unit_cost'] ?? null;
+          $cost_unit = $i['cost_unit'] ?? null;
             $stock_map = [
               'ok'  => ['Healthy',      'bg-emerald-50 text-emerald-700 border-emerald-200'],
               'low' => ['Low stock',    'bg-amber-50 text-amber-700 border-amber-200'],
@@ -459,8 +461,8 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
                 'default_supplier_id' => (int)$i['default_supplier_id'],
                 'auto_reorder' => (int)$i['auto_reorder'],
                 'quantity' => (float)$i['quantity'],
-                'unit_cost' => $i['unit_cost'] !== null ? (float)$i['unit_cost'] : null,
-                'cost_unit' => $i['cost_unit'] ?? null,
+                'unit_cost' => $unit_cost !== null ? (float)$unit_cost : null,
+                'cost_unit' => $cost_unit,
             ]), ENT_QUOTES, 'UTF-8');
         ?>
           <tr class="border-t border-[var(--latte,#efe0cc)] hover:bg-[var(--accent-lt,#fcefe1)] transition
@@ -476,16 +478,16 @@ $fmt = fn($n) => rtrim(rtrim(number_format((float)$n, 2), '0'), '.');
                   <span class="ml-1 text-emerald-600 font-semibold">· auto</span>
                   <?php
                     $reorder_target_qty = (float)$i['reorder_quantity'] ?: max((float)$i['reorder_at'] * 2, 10);
-                    if ($i['unit_cost'] !== null && (float)$i['unit_cost'] > 0):
-                      $est_total = $reorder_target_qty * (float)$i['unit_cost'];
+                    if ($unit_cost !== null && (float)$unit_cost > 0):
+                      $est_total = $reorder_target_qty * (float)$unit_cost;
                   ?>
                     <span class="text-stone-500 font-normal">· est. ₱<?= number_format($est_total, 2) ?></span>
                   <?php else: ?>
                     <span class="text-stone-400 font-normal">· (cost unset)</span>
                   <?php endif; ?>
                 <?php endif; ?>
-                <?php if ($i['unit_cost'] !== null && (float)$i['unit_cost'] > 0): ?>
-                  <span class="text-stone-400">· ₱<?= number_format((float)$i['unit_cost'], 2) ?>/<?= htmlspecialchars($i['cost_unit'] ?: $i['unit']) ?></span>
+                <?php if ($unit_cost !== null && (float)$unit_cost > 0): ?>
+                  <span class="text-stone-400">· ₱<?= number_format((float)$unit_cost, 2) ?>/<?= htmlspecialchars($cost_unit ?: $i['unit']) ?></span>
                 <?php endif; ?>
               </div>
             </td>

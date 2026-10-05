@@ -443,6 +443,7 @@ if (!$job) {
       <p style="font-size: 14px; color: var(--km-text-muted); line-height: 1.6; margin-bottom: 22px;">
         Thank you for applying to join the Kofee Manila team. We have received your information and resume.
       </p>
+      <p id="applicationEmailStatus" role="status" style="font-size: 13px; color: var(--km-text-muted); margin: -10px 0 18px;"></p>
 
       <div style="background: #FAF7F2; border: 1.5px dashed var(--km-caramel); border-radius: 12px; padding: 18px; margin-bottom: 24px;">
         <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--km-text-muted); display: block; margin-bottom: 6px;">Your Application Tracking Code</span>
@@ -452,7 +453,7 @@ if (!$job) {
             Copy
           </button>
         </div>
-        <p style="font-size: 11.5px; color: var(--km-text-faint); margin-top: 8px;">Save this code or check your email to track your application stage at any time.</p>
+        <p style="font-size: 11.5px; color: var(--km-text-faint); margin-top: 8px;">Save this code to track your application stage at any time.</p>
       </div>
 
       <div style="display: flex; gap: 12px; justify-content: center;">
@@ -630,6 +631,9 @@ if (!$job) {
         // Show Success Modal
         lastTrackingCode = result.tracking_code;
         document.getElementById('submittedCodeText').innerText = result.tracking_code;
+        document.getElementById('applicationEmailStatus').textContent = result.email_sent
+          ? `A confirmation email was sent to ${result.email}.`
+          : 'Your application was submitted, but the confirmation email could not be sent. Save your tracking code.';
         document.getElementById('successModalBackdrop').classList.add('open');
         appForm.reset();
         removeSelectedFile();

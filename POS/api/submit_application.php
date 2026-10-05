@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/mailer.php';
 
 try {
     $pdo = get_db();
@@ -173,13 +174,30 @@ try {
         ':city'        => $city,
         ':experience'  => $experience,
         ':start_date'  => $start_date,
-        ':filename'    => $cleanOrigName,
+        ':filename'    => $uniqueFilename,
         ':path'        => $relativeDbPath,
         ':message'     => $message,
         ':ip'          => $clientIp,
     ]);
 
     $appId = (int)$pdo->lastInsertId();
+
+    // A mail delivery failure must not undo or misreport a saved application.
+    $emailSent = false;
+    try {
+        $mailResult = send_application_received_email(
+            $email,
+            trim($first_name . ' ' . $last_name),
+            $jobRow['title'],
+            $trackingCode
+        );
+        $emailSent = !empty($mailResult['sent']);
+        if (!$emailSent && !empty($mailResult['error'])) {
+            error_log('Application confirmation email error: ' . $mailResult['error']);
+        }
+    } catch (Throwable $mailError) {
+        error_log('Application confirmation email error: ' . $mailError->getMessage());
+    }
 
     echo json_encode([
         'success'         => true,
@@ -189,6 +207,7 @@ try {
         'job_title'       => $jobRow['title'],
         'candidate_name'  => $first_name . ' ' . $last_name,
         'email'           => $email,
+        'email_sent'      => $emailSent,
     ]);
 
 } catch (Throwable $e) {

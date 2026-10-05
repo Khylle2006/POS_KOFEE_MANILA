@@ -154,3 +154,34 @@ function send_password_reset_email(string $toEmail, string $userName, string $re
     return send_kofee_email($toEmail, $userName, $subject, $html);
 }
 
+/** Send an application receipt to a job candidate. */
+function send_application_received_email(string $toEmail, string $candidateName, string $jobTitle, string $trackingCode): array {
+    $subject = 'We received your application — Kofee Manila';
+    $safeName = htmlspecialchars($candidateName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeJobTitle = htmlspecialchars($jobTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeTrackingCode = htmlspecialchars($trackingCode, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+    $html = '
+    <!DOCTYPE html>
+    <html><head><meta charset="utf-8"></head>
+    <body style="font-family:Arial,sans-serif;background:#FBF3E9;color:#2B2130;padding:24px;">
+      <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #EFE0CC;border-radius:14px;overflow:hidden;">
+        <div style="background:#241A2E;color:#FBF3E9;padding:24px;text-align:center;">
+          <h1 style="margin:0;font-size:24px;">Kofee Manila</h1>
+          <p style="margin:8px 0 0;color:#E6A25C;">APPLICATION RECEIVED</p>
+        </div>
+        <div style="padding:28px;line-height:1.6;">
+          <p>Hello ' . $safeName . ',</p>
+          <p>Thank you for applying for <strong>' . $safeJobTitle . '</strong>. Our recruitment team has received your application and resume.</p>
+          <p>Your tracking code is:</p>
+          <p style="padding:14px;background:#FAF7F2;border:1px dashed #C97B3D;border-radius:8px;text-align:center;font-family:monospace;font-size:20px;font-weight:bold;">' . $safeTrackingCode . '</p>
+          <p>Please keep this code to check your application status. We appreciate your interest in joining our team.</p>
+          <p style="color:#8B7C88;font-size:12px;">This is an automated confirmation. Please do not reply to this message.</p>
+        </div>
+      </div>
+    </body></html>';
+
+    $altBody = "Hello {$candidateName},\n\nWe received your application for {$jobTitle}. Your tracking code is {$trackingCode}. Please keep this code to check your application status.";
+    return send_kofee_email($toEmail, $candidateName, $subject, $html, $altBody);
+}
+
