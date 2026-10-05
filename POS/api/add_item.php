@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
 
      if ($action === 'add') {
-        if (!has_permission('menu.edit')) {
+        if (!has_permission('menu.edit') && !has_permission('menu.manage')) {
             http_response_code(403);
             echo json_encode(['ok' => false, 'error' => 'You do not have permission to add menu items.']);
             exit;
@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Check permissions
-    if (in_array($action, ['edit', 'toggle'], true) && !has_permission('menu.edit')) {
+    if (in_array($action, ['edit', 'toggle'], true) && !has_permission('menu.edit') && !has_permission('menu.manage')) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'You do not have permission to edit menu items.']);
         exit;

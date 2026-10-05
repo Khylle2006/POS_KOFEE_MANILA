@@ -49,18 +49,23 @@ try {
     $empStmt->execute([':uid' => $user_id]);
     $employee_id = $empStmt->fetchColumn() ?: null;
 
+    $placed_at    = (!empty($data['placed_at']) && strtotime($data['placed_at'])) ? $data['placed_at'] : date('Y-m-d H:i:s');
+    $created_date = substr($placed_at, 0, 10);
+
     $stmt = $pdo->prepare("
         INSERT INTO orders (user_id, employee_id, total_amount, payment_method, status, payment_status, amount_tendered, change_amount, payment_reference, stock_deducted, ingredients_deducted_at, created_at, placed_at)
-        VALUES (:uid, :eid, :total, :payment, 'pending', 'paid', :tendered, :change, :ref, 0, NULL, CURDATE(), NOW())
+        VALUES (:uid, :eid, :total, :payment, 'pending', 'paid', :tendered, :change, :ref, 0, NULL, :cdate, :placed_at)
     ");
     $stmt->execute([
-        ':uid'      => $user_id,
-        ':eid'      => $employee_id,
-        ':total'    => $total,
-        ':payment'  => $payment,
-        ':tendered' => $tendered,
-        ':change'   => $change,
-        ':ref'      => $reference !== '' ? $reference : null,
+        ':uid'       => $user_id,
+        ':eid'       => $employee_id,
+        ':total'     => $total,
+        ':payment'   => $payment,
+        ':tendered'  => $tendered,
+        ':change'    => $change,
+        ':ref'       => $reference !== '' ? $reference : null,
+        ':cdate'     => $created_date,
+        ':placed_at' => $placed_at,
     ]);
 
     $order_id = (int)$pdo->lastInsertId();

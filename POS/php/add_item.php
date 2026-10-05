@@ -47,8 +47,8 @@ if (empty($categories) || !isset($categories[0]['category_name'])) {
     
       
     </div>
-     <?php if ($view === 'active'): ?>
-     <button class="btn-msave" onclick="openAdd()"><?= icon('plus', 14) ?> Add Item</button>
+     <?php if ($view === 'active' && (has_permission('menu.manage') || has_permission('menu.edit'))): ?>
+     <button type="button" class="btn-msave" onclick="openAdd()"><?= icon('plus', 14) ?> Add Item</button>
      <?php endif; ?>
   </div>
 
@@ -111,15 +111,20 @@ if (empty($categories) || !isset($categories[0]['category_name'])) {
               } else {
                 $rowImgSrc = $cat_default_images[$cat_name] ?? $default_fallback_img;
               }
-              $edit_data = htmlspecialchars(json_encode([
-                'id'          => $p['id'],
-                'name'        => $p['name'],
-                'description' => $p['description'],
-                'price_small' => $p['price_small'],
-                'price_large' => $p['price_large'],
-                'category_id' => $p['category_id'],
-                'image_path'  => $p['image_path'] ?? '',
-              ]), ENT_QUOTES);
+              $edit_payload = [
+                'id'          => (int)$p['id'],
+                'name'        => (string)$p['name'],
+                'description' => (string)($p['description'] ?? ''),
+                'price_small' => (float)$p['price_small'],
+                'price_large' => (float)$p['price_large'],
+                'category_id' => (int)$p['category_id'],
+                'image_path'  => (string)($p['image_path'] ?? ''),
+              ];
+              $edit_data_json = htmlspecialchars(
+                json_encode($edit_payload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE),
+                ENT_QUOTES,
+                'UTF-8'
+              );
             ?>
             <tr class="menu-row" id="prow-<?= $p['id'] ?>"
                 data-cat="<?= (int)$p['category_id'] ?>"
@@ -147,14 +152,14 @@ if (empty($categories) || !isset($categories[0]['category_name'])) {
               </td>
               <td>
                 <div class="act-group">
-                  <?php if ($view === 'active' && has_permission('menu.edit')): ?>
+                  <?php if ($view === 'active' && (has_permission('menu.edit') || has_permission('menu.manage'))): ?>
                   <button class="act-btn <?= $available ? 'act-hold' : 'act-activate' ?>"
                           id="toggle-<?= $p['id'] ?>"
                           data-state="<?= $available ? 'on' : 'off' ?>"
                           onclick="toggleAvail(<?= $p['id'] ?>, this)">
                     <?= $available ? 'Mark Unavailable' : 'Mark Available' ?>
                   </button>
-                  <button class="act-btn" onclick='openEdit(<?= $edit_data ?>)'><?= icon('edit', 13) ?> Edit</button>
+                  <button type="button" class="act-btn act-edit" data-product="<?= $edit_data_json ?>" onclick="openEdit(this)"><?= icon('edit', 13) ?> Edit</button>
                   <?php endif; ?>
                   <?php if ($view === 'active' && has_permission('menu.delete')): ?>
                   <button class="act-btn act-block" onclick='confirmDelete(<?= (int)$p['id'] ?>, <?= htmlspecialchars(json_encode($p['name']), ENT_QUOTES, 'UTF-8') ?>)'><?= icon('trash', 13) ?></button>
@@ -178,7 +183,7 @@ if (empty($categories) || !isset($categories[0]['category_name'])) {
 </div>
 
 <!-- ── Progressive Multi-Step "Add / Edit Item" Modal (Warm Cafe Theme) ── -->
-<div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="prog-modal-overlay opacity-0 pointer-events-none" style="display:none">
+<div id="progressive-add-modal" onclick="onProgressiveBackdropClick(event)" class="prog-modal-overlay" style="display:none">
   <div id="progressive-modal-dialog" class="prog-modal-dialog">
     
     <!-- Hidden input to store item ID in edit mode -->
@@ -466,6 +471,7 @@ window.EXISTING_PRODUCT_NAMES = <?= json_encode($existingProductNames) ?>;
 let currentStep = 1;
 let isDirty = false;
 let editingOriginalName = '';
+let editInitialSnapshot = null;
 
 function openProgressiveModal(mode = 'add', itemData = null) {
   currentStep = 1;
@@ -495,6 +501,14 @@ function openProgressiveModal(mode = 'add', itemData = null) {
   if (mode === 'edit' && itemData) {
     idInput.value = itemData.id;
     editingOriginalName = (itemData.name || '').trim();
+    editInitialSnapshot = {
+      name: itemData.name || '',
+      cat: String(itemData.category_id || ''),
+      desc: itemData.description || '',
+      ps: itemData.price_small ? parseFloat(itemData.price_small).toFixed(2) : '',
+      pl: itemData.price_large ? parseFloat(itemData.price_large).toFixed(2) : ''
+    };
+
     if (modalTitle) modalTitle.textContent = 'Edit Menu Item & Recipe';
     if (modalSubtitle) modalSubtitle.textContent = 'Update beverage details, photo, and recipe composition';
     if (modalBadge) modalBadge.innerHTML = '<?= icon('edit', 18) ?>';
@@ -576,6 +590,7 @@ function openProgressiveModal(mode = 'add', itemData = null) {
     // Add mode
     idInput.value = '';
     editingOriginalName = '';
+    editInitialSnapshot = null;
     if (modalTitle) modalTitle.textContent = 'Add Menu Item & Recipe';
     if (modalSubtitle) modalSubtitle.textContent = 'Step-by-step beverage identity, photo, and recipe composition';
     if (modalBadge) modalBadge.innerHTML = '<?= icon('sparkles', 18) ?>';
@@ -611,15 +626,42 @@ function openProgressiveModal(mode = 'add', itemData = null) {
   goToStep(1);
 
   const modal = document.getElementById('progressive-add-modal');
-  modal.classList.add('open');
-  modal.classList.remove('opacity-0', 'pointer-events-none');
-  setTimeout(() => document.getElementById('prog-name').focus(), 60);
+  if (modal) {
+    modal.style.display = 'flex';
+    void modal.offsetHeight;
+    modal.classList.add('open');
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+  }
+  setTimeout(() => document.getElementById('prog-name')?.focus(), 60);
 }
 
 // Aliases for unified invocation
 function openAdd() { openProgressiveModal('add'); }
 function openProgressiveAddModal() { openProgressiveModal('add'); }
-function openEdit(p) { openProgressiveModal('edit', p); }
+function openEdit(param) {
+  let itemData = null;
+  if (param && typeof param === 'object' && param.getAttribute && param.getAttribute('data-product')) {
+    try {
+      itemData = JSON.parse(param.getAttribute('data-product'));
+    } catch (e) {
+      console.error('Failed to parse data-product:', e);
+    }
+  } else if (typeof param === 'string') {
+    try {
+      itemData = JSON.parse(param);
+    } catch (e) {
+      console.error('Failed to parse string item data:', e);
+    }
+  } else if (param && typeof param === 'object') {
+    itemData = param;
+  }
+
+  if (itemData) {
+    openProgressiveModal('edit', itemData);
+  } else {
+    console.error('openEdit was called with invalid itemData:', param);
+  }
+}
 function closeAdd() { closeProgressiveAddModal(); }
 function closeEdit() { closeProgressiveAddModal(); }
 
@@ -628,9 +670,15 @@ function closeProgressiveAddModal() {
   if (modal) {
     modal.classList.remove('open');
     modal.classList.add('opacity-0', 'pointer-events-none');
+    setTimeout(() => {
+      if (!modal.classList.contains('open')) {
+        modal.style.display = 'none';
+      }
+    }, 220);
   }
   isDirty = false;
   editingOriginalName = '';
+  editInitialSnapshot = null;
 }
 
 function onProgressiveBackdropClick(e) {
@@ -650,11 +698,29 @@ function requestCloseProgressiveModal() {
 }
 
 function isFormDirty() {
+  if (!isDirty) return false;
+  if (editInitialSnapshot) {
+    const name = document.getElementById('prog-name')?.value.trim() || '';
+    const cat = document.getElementById('prog-category')?.value || '';
+    const desc = document.getElementById('prog-desc')?.value.trim() || '';
+    const ps = document.getElementById('prog-price-small')?.value.trim() || '';
+    const pl = document.getElementById('prog-price-large')?.value.trim() || '';
+    const hasImage = Boolean(document.getElementById('prog-image-input')?.files?.length > 0);
+    const removeImg = document.getElementById('prog-remove-image')?.value === '1';
+    return (
+      name !== editInitialSnapshot.name ||
+      cat !== editInitialSnapshot.cat ||
+      desc !== editInitialSnapshot.desc ||
+      ps !== editInitialSnapshot.ps ||
+      pl !== editInitialSnapshot.pl ||
+      hasImage || removeImg
+    );
+  }
   const name = document.getElementById('prog-name')?.value.trim();
-  const priceSmall = document.getElementById('prog-price-small')?.value.trim();
-  const priceLarge = document.getElementById('prog-price-large')?.value.trim();
-  const hasImage = document.getElementById('prog-image-input')?.files?.length > 0;
-  return isDirty || Boolean(name || priceSmall || priceLarge || hasImage);
+  const ps = document.getElementById('prog-price-small')?.value.trim();
+  const pl = document.getElementById('prog-price-large')?.value.trim();
+  const hasImage = Boolean(document.getElementById('prog-image-input')?.files?.length > 0);
+  return Boolean(name || ps || pl || hasImage);
 }
 
 // ── Item Photo Handlers ──────────────────────────────────────────
@@ -1255,8 +1321,8 @@ function updateRowInDOM(id, p) {
   row.dataset.name = (p.name || '').toLowerCase();
 
   // Keep the Edit button's stored data current for the next click
-  const editBtn = row.querySelector('.act-group button:nth-child(2)');
-  if (editBtn) editBtn.setAttribute('onclick', `openEdit(${JSON.stringify(p).replace(/"/g, '&quot;')})`);
+  const editBtn = row.querySelector('.act-group .act-edit, .act-group button[data-product]');
+  if (editBtn) editBtn.setAttribute('data-product', JSON.stringify(p));
 }
 
 // Delete and archive actions
@@ -1343,5 +1409,12 @@ document.addEventListener('keydown', e => {
 </script>
 
 <script src="../js/validator.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(err => {
+    console.warn('SW register notice:', err);
+  });
+}
+</script>
 </body>
 </html>

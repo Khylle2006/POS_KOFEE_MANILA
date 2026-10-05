@@ -230,7 +230,12 @@ try {
         $productId = (int)$pdo->lastInsertId();
     }
 
-    // 2. Insert Regular Size Recipe Lines into product_ingredients
+    // 2. Clear existing recipes if editing, then insert Regular Size Recipe Lines into product_ingredients
+    if ($isUpdate) {
+        $delPi = $pdo->prepare('DELETE FROM product_ingredients WHERE product_id = :pid');
+        $delPi->execute([':pid' => $productId]);
+    }
+
     $piStmt = $pdo->prepare("
         INSERT INTO product_ingredients (product_id, size, ingredient_id, qty_used)
         VALUES (:pid, :size, :ing, :qty)

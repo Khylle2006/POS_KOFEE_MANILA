@@ -2,7 +2,11 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_login();
-require_permission('menu.manage');
+if (!has_permission('menu.manage') && !has_permission('menu.edit')) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'error' => 'Permission denied.']);
+    exit;
+}
 
 header('Content-Type: application/json');
 

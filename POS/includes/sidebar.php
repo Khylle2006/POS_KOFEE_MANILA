@@ -77,6 +77,7 @@ $access = [
     'procurement_requisitions' => has_permission('procurement.requisitions') || has_permission('procurement.requisition.create'),
     'procurement_rfq'          => has_permission('procurement.rfq.manage') || has_permission('procurement.bidding.review'),
     'procurement_finance_review' => has_permission('procurement.finance.review') || has_permission('finance.view') || in_array('admin', $roles, true),
+    'finance_budgets'            => has_permission('procurement.budget.manage') || has_permission('finance.view') || in_array('admin', $roles, true) || in_array('finance', $roles, true),
     'procurement_po'           => has_permission('procurement.po.manage'),
     'procurement_receiving'    => has_permission('procurement.receiving'),
     'procurement_invoices'     => has_permission('procurement.invoice.create'),
@@ -561,6 +562,13 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'icon'   => 'file-text',
                     'access' => $access['payroll_own'],
                     'active' => ($current === 'my_payslips.php') || ($current === 'payslip.php' && !$access['payroll']),
+                ],
+                [
+                    'label'  => 'Budget Allocations',
+                    'url'    => 'finance_budgets.php',
+                    'icon'   => 'scale',
+                    'access' => $access['finance_budgets'],
+                    'active' => ($current === 'finance_budgets.php'),
                 ],
                 [
                     'label'  => 'Purchase Approvals',

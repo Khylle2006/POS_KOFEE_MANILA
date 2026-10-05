@@ -228,6 +228,9 @@ $current_qty_tol   = (float)get_procurement_setting('three_way_match_qty_toleran
       <p>Review high-value quotations exceeding the finance threshold before purchase contracts are issued</p>
     </div>
     <div style="display:flex;gap:8px">
+      <a href="finance_budgets.php" class="btn-cancel" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;">
+        <?= icon('scale', 14) ?> Manage Budget Allocations
+      </a>
       <button type="button" class="btn-cancel" onclick="openSettingsDrawer()" style="display:inline-flex;align-items:center;gap:6px">
         <?= icon('sliders', 14) ?> Policy Thresholds &amp; Tolerances
       </button>
