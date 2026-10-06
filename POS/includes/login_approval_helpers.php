@@ -433,9 +433,15 @@ function count_pending_login_authorizations(PDO $pdo): int {
 function get_pending_login_authorizations(PDO $pdo): array {
     ensure_login_approval_tables($pdo);
     $stmt = $pdo->query("
-        SELECT la.*, u.firstname, u.lastname, u.email, u.role
+        SELECT la.*, u.firstname, u.lastname, u.email, u.role, u.avatar_path,
+               e.id AS emp_id, e.employee_code, e.position, e.department, e.branch,
+               (SELECT att.time_in_photo 
+                  FROM attendance att 
+                 WHERE att.employee_id = e.id AND att.time_in_photo IS NOT NULL AND att.time_in_photo != ''
+                 ORDER BY att.id DESC LIMIT 1) AS selfie_photo
         FROM login_authorizations la
         JOIN users u ON u.id = la.user_id
+        LEFT JOIN employees e ON e.user_id = u.id
         WHERE la.status = 'pending' AND la.expires_at > NOW()
         ORDER BY la.id DESC
     ");
@@ -448,11 +454,13 @@ function get_pending_login_authorizations(PDO $pdo): array {
 function get_login_authorizations_history(PDO $pdo, int $limit = 60): array {
     ensure_login_approval_tables($pdo);
     $stmt = $pdo->prepare("
-        SELECT la.*, u.firstname, u.lastname, u.role,
+        SELECT la.*, u.firstname, u.lastname, u.role, u.avatar_path,
+               e.id AS emp_id, e.employee_code, e.position, e.department, e.branch,
                app_u.firstname AS approved_by_name,
                rej_u.firstname AS rejected_by_name
         FROM login_authorizations la
         JOIN users u ON u.id = la.user_id
+        LEFT JOIN employees e ON e.user_id = u.id
         LEFT JOIN users app_u ON app_u.id = la.approved_by
         LEFT JOIN users rej_u ON rej_u.id = la.rejected_by
         ORDER BY la.id DESC

@@ -1,0 +1,620 @@
+/* ============================================================
+   Kofee Manila — HR Staff Login Approvals & Geolocation Radar
+   Matches user mockup with warm Latte & Espresso design tokens
+   ============================================================ */
+
+:root {
+  --kfs-espresso: #241A2E;
+  --kfs-espresso-deep: #181120;
+  --kfs-cream: #FBF3E9;
+  --kfs-bg: #F8F5EE;
+  --kfs-caramel: #C97B3D;
+  --kfs-caramel-light: #E6A25C;
+  --kfs-latte: #EFE0CC;
+  --kfs-border: rgba(226, 212, 195, 0.7);
+  --kfs-green: #16A34A;
+  --kfs-green-hover: #15803D;
+  --kfs-red: #DC2626;
+  --kfs-red-hover: #B91C1C;
+}
+
+body {
+  background-color: var(--kfs-bg) !important;
+  color: var(--kfs-espresso) !important;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  margin: 0;
+  padding: 0;
+}
+
+/* Page Layout */
+.kfs-approvals-wrap {
+  margin-left: var(--sidebar-w, 256px);
+  margin-top: 56px;
+  padding: 24px 32px 60px 32px;
+  min-height: calc(100vh - 56px);
+  box-sizing: border-box;
+  transition: margin-left 0.2s ease;
+}
+
+html.sidebar-minimized .kfs-approvals-wrap,
+body.sidebar-minimized .kfs-approvals-wrap {
+  margin-left: var(--sidebar-w-min, 68px);
+}
+
+@media (max-width: 1024px) {
+  .kfs-approvals-wrap {
+    margin-left: 0 !important;
+    padding: 16px 16px 40px 16px;
+  }
+}
+
+.kfs-approvals-container {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* Header & Real-time clock */
+.kfs-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.kfs-page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1F1626;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.kfs-time-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6B7280;
+}
+
+.kfs-refresh-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #E5E7EB;
+  color: #4B5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.kfs-refresh-btn:hover {
+  background: #F3F4F6;
+  color: #111827;
+}
+
+/* Top 4 Metrics Cards Grid */
+.kfs-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+  .kfs-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .kfs-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kfs-metric-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+  border: 1px solid var(--kfs-border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.kfs-metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.kfs-metric-icon.orange {
+  background: #FFF4E5;
+  color: #EA8023;
+}
+.kfs-metric-icon.green {
+  background: #E8F8F0;
+  color: #10B981;
+}
+.kfs-metric-icon.red {
+  background: #FDF2F2;
+  color: #EF4444;
+}
+.kfs-metric-icon.stone {
+  background: #F3EFEA;
+  color: #57534E;
+}
+
+.kfs-icon-pill {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #EA8023;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(234, 128, 35, 0.4);
+}
+
+.kfs-metric-info {
+  min-width: 0;
+}
+.kfs-metric-label {
+  font-size: 12px;
+  color: #78716C;
+  font-weight: 500;
+  margin: 0;
+}
+.kfs-metric-val {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1F1626;
+  margin: 2px 0 0 0;
+  line-height: 1.1;
+}
+
+/* Two-Column Hero Grid */
+.kfs-hero-grid {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 22px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 1024px) {
+  .kfs-hero-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Left Card: Live GPS Radar Map */
+.kfs-radar-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.035);
+  border: 1px solid var(--kfs-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.kfs-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #F3EDE6;
+}
+
+.kfs-card-head-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1F1626;
+  margin: 0;
+}
+
+.kfs-status-pill {
+  background: #F4EFEA;
+  border: 1px solid var(--kfs-latte);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #57534E;
+}
+
+.kfs-map-container {
+  position: relative;
+  width: 100%;
+  height: 480px;
+  min-height: 480px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #E5E7EB;
+  background: #EAE6DF;
+}
+
+#radarMap {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 480px !important;
+  z-index: 10;
+}
+
+.kfs-map-legend-pill {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 400;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  padding: 7px 16px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #374151;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.14);
+  border: 1px solid rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.kfs-map-legend-pill .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #10B981;
+}
+
+/* Right Card: Pending Login Request */
+.kfs-request-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px 26px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.035);
+  border: 1px solid var(--kfs-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.kfs-req-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #1F1626;
+  margin: 0;
+}
+
+.kfs-emp-name {
+  font-size: 23px;
+  font-weight: 700;
+  color: #1F1626;
+  margin: 12px 0 2px 0;
+  line-height: 1.2;
+}
+
+.kfs-emp-subtitle {
+  font-size: 12.5px;
+  color: #6B7280;
+  font-weight: 500;
+  margin: 0 0 20px 0;
+}
+
+/* Photo & Details Side-by-Side */
+.kfs-profile-section {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+
+.kfs-photo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.kfs-photo-ring {
+  width: 114px;
+  height: 114px;
+  border-radius: 50%;
+  padding: 3.5px;
+  background: linear-gradient(135deg, #C97B3D 0%, #E6A25C 50%, #241A2E 100%);
+  box-shadow: 0 6px 16px rgba(201, 123, 61, 0.22);
+}
+
+.kfs-photo-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #F5EFEB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kfs-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.kfs-photo-avatar {
+  font-size: 32px;
+  font-weight: 700;
+  color: #C97B3D;
+  font-family: 'Playfair Display', serif;
+}
+
+.kfs-photo-caption {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6B7280;
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* Details Table/List */
+.kfs-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5.5px;
+  font-size: 12.5px;
+  color: #374151;
+  flex: 1;
+  min-width: 0;
+}
+
+.kfs-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kfs-detail-lbl {
+  color: #8C827A;
+  font-weight: 500;
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.kfs-detail-val {
+  font-weight: 600;
+  color: #1F1626;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kfs-detail-val.mono {
+  font-family: monospace;
+  font-size: 11.5px;
+  color: #4B5563;
+}
+
+/* Geofence Status Pill */
+.kfs-geofence-pill {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.kfs-geofence-pill.inside {
+  background: #E8F8F0;
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.kfs-geofence-pill.outside {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.kfs-geofence-pill.unknown {
+  background: #FFFBEB;
+  color: #D97706;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+/* Action Buttons */
+.kfs-actions-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kfs-trust-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: #6B7280;
+  padding: 0 2px 2px 2px;
+}
+
+.kfs-btn-approve {
+  width: 100%;
+  background: var(--kfs-green);
+  color: #ffffff;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.28);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.kfs-btn-approve:hover {
+  background: var(--kfs-green-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(22, 163, 74, 0.35);
+}
+.kfs-btn-approve:active {
+  transform: translateY(0);
+}
+
+.kfs-btn-reject {
+  width: 100%;
+  background: var(--kfs-red);
+  color: #ffffff;
+  padding: 13px 20px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.28);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.kfs-btn-reject:hover {
+  background: var(--kfs-red-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.35);
+}
+.kfs-btn-reject:active {
+  transform: translateY(0);
+}
+
+/* Bottom Tabs Card */
+.kfs-bottom-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.035);
+  border: 1px solid var(--kfs-border);
+}
+
+.kfs-tab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #F3EDE6;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.kfs-tab-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #F5EFEB;
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.kfs-tab-pill {
+  padding: 6px 16px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6B7280;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.kfs-tab-pill.active {
+  background: #1F1626;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+/* Tables in Bottom Section */
+.kfs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+.kfs-table th {
+  background: #FAF7F2;
+  color: #78716C;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 14px;
+  border-bottom: 1px solid #EFE6DC;
+}
+.kfs-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #F5EFEB;
+  color: #374151;
+}
+.kfs-table tr:hover td {
+  background: #FDFBF7;
+}
+
+/* Status Badges */
+.badge-app {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.badge-app.approved {
+  background: #E8F8F0;
+  color: #059669;
+}
+.badge-app.rejected {
+  background: #FDF2F2;
+  color: #DC2626;
+}
+.badge-app.pending {
+  background: #FFF4E5;
+  color: #EA8023;
+}
+.badge-app.expired {
+  background: #F3F4F6;
+  color: #6B7280;
+}
