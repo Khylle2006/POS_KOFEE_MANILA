@@ -257,6 +257,9 @@ $suggested = suggest_payroll_period('semimonthly');
 
         <a class="btn-ghost" href="payroll_reports.php" style="padding:7px 12px;font-size:12.5px"><?= icon('bar-chart', 14) ?> <span>Reports</span></a>
         <?php if (has_permission('payroll.settings')): ?>
+        <a class="btn-ghost" href="payroll_settings.php#paymongo" style="padding:7px 12px;font-size:12.5px" title="PayMongo Automated Salary Disbursements">
+          <?= icon('credit-card', 14) ?> <span>PayMongo Gateway</span>
+        </a>
         <a class="btn-ghost" href="payroll_settings.php" style="padding:7px 12px;font-size:12.5px"><?= icon('permissions', 14) ?> <span>Settings &amp; Loans</span></a>
         <?php endif; ?>
       </div>

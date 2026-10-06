@@ -12,6 +12,24 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/procurement_helpers.php';
 
 /**
+ * Ensure notification schema integrity.
+ */
+function ensure_notifications_table(?PDO $pdo = null): void {
+    static $ensured = false;
+    if ($ensured) return;
+    try {
+        $db = $pdo ?? get_db();
+        $cols = $db->query("SHOW COLUMNS FROM notifications LIKE 'read_at'")->fetchAll();
+        if (empty($cols)) {
+            $db->exec("ALTER TABLE notifications ADD COLUMN read_at DATETIME NULL AFTER is_read");
+        }
+    } catch (Throwable $e) {}
+    $ensured = true;
+}
+ensure_notifications_table();
+
+
+/**
  * Every user who can see a given module, resolved through RBAC.
  * Admins are always included. Returns a list of user ids.
  */

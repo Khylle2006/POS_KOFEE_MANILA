@@ -24,16 +24,17 @@ $reset_entry = null;
 // Validate token
 if ($token !== '') {
     try {
+        $hashed_token = hash('sha256', $token);
         $stmt = $pdo->prepare("
             SELECT pr.*, u.username, u.firstname, u.lastname, u.email 
             FROM password_resets pr
             JOIN users u ON u.id = pr.user_id
-            WHERE pr.token = :token 
+            WHERE (pr.token = :htoken OR pr.token = :rtoken)
               AND pr.used_at IS NULL 
               AND pr.expires_at > NOW()
             LIMIT 1
         ");
-        $stmt->execute([':token' => $token]);
+        $stmt->execute([':htoken' => $hashed_token, ':rtoken' => $token]);
         $reset_entry = $stmt->fetch();
         $valid = (bool)$reset_entry;
     } catch (Throwable $e) {

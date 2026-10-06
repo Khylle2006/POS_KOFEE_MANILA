@@ -1,4 +1,7 @@
 # ── Security for Uploads Directory ──────────────────────
+# Disable directory listing
+Options -Indexes
+
 # Never execute PHP or any executable script in uploads
 php_flag engine off
 RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .phps
@@ -9,8 +12,8 @@ AddType text/plain .php .phtml .php3 .php4 .php5 .php7
   Require all denied
 </FilesMatch>
 
-# Allow safe image formats for attendance photos and product images
-<FilesMatch "\.(jpg|jpeg|png|gif|webp|ico|svg)$">
+# Allow safe raster image formats for attendance photos and product images
+<FilesMatch "\.(jpg|jpeg|png|gif|webp|ico)$">
   Require all granted
 </FilesMatch>
 

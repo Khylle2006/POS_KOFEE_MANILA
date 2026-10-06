@@ -1331,9 +1331,13 @@ async function loadPaymongoAudit() {
     const data = await post({ action: 'paymongo_validate_payout', period_id: PERIOD_ID });
     pmAuditData = data;
 
-    document.getElementById('pm-total-amount').textContent = '₱' + Number(data.total_net || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    document.getElementById('pm-valid-count').textContent = data.valid_count + ' / ' + (data.valid_count + data.invalid_count);
-    document.getElementById('pm-invalid-count').textContent = data.invalid_count;
+    const totalPayable = Number(data.total_net ?? data.total_payable ?? 0);
+    const validCount   = Number(data.valid_count || 0);
+    const invalidCount = Number(data.invalid_count || 0);
+
+    document.getElementById('pm-total-amount').textContent = '₱' + totalPayable.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('pm-valid-count').textContent = validCount + ' / ' + (validCount + invalidCount);
+    document.getElementById('pm-invalid-count').textContent = invalidCount;
     document.getElementById('pm-gateway-mode').textContent = data.config?.mode || 'SANDBOX';
 
     // Existing batch check
@@ -1347,25 +1351,27 @@ async function loadPaymongoAudit() {
       batchCard.style.display = 'none';
     }
 
-    // Alert banner
-    if (data.invalid_count > 0) {
+    // Alert banner & dispatch button gating
+    if (validCount === 0) {
       alertBox.innerHTML = `
         <div style="background:#fee2e2;border:1px solid #f87171;color:#991b1b;border-radius:8px;padding:11px 14px;font-size:12.5px;display:flex;align-items:center;gap:10px">
-          <span>⚠️ <strong>Batch Transfer Blocked:</strong> ${data.invalid_count} employee(s) have missing or unverified payment destinations. Please ask employees to complete payment details in Profile for HR approval, or use Manual Release.</span>
+          <span>⚠️ <strong>No Valid Payment Accounts:</strong> None of the payable employees have approved bank or e-wallet destinations on file. Please have staff enter details in Profile or use Manual Release.</span>
         </div>`;
       dispatchBtn.disabled = true;
-    } else if (data.valid_count === 0) {
+    } else if (invalidCount > 0) {
       alertBox.innerHTML = `
-        <div style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:11px 14px;font-size:12.5px">
-          <span>ℹ️ No payable employees found for disbursement in this pay period.</span>
+        <div style="background:#fffbeb;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:11px 14px;font-size:12.5px;display:flex;align-items:center;gap:10px">
+          <span>⚠️ <strong>Partial Batch Transfer Ready:</strong> <strong>${validCount}</strong> verified employee(s) (₱${totalPayable.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}) will be disbursed via PayMongo. <strong>${invalidCount}</strong> employee(s) lack complete payment details and will not be charged; they can be released manually or once updated.</span>
         </div>`;
-      dispatchBtn.disabled = true;
+      dispatchBtn.disabled = (data.existing_batch && data.existing_batch.status === 'paid');
+      dispatchBtn.innerHTML = `<span><?= icon('credit-card', 15) ?> Dispatch PayMongo Payout (${validCount} Staff)</span>`;
     } else {
       alertBox.innerHTML = `
         <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:8px;padding:11px 14px;font-size:12.5px">
-          <span>✅ <strong>All ${data.valid_count} recipients verified:</strong> Payout batch will disburse <strong>₱${Number(data.total_net).toFixed(2)}</strong> via PayMongo API with automated idempotency protection.</span>
+          <span>✅ <strong>All ${validCount} recipients verified:</strong> Payout batch will disburse <strong>₱${totalPayable.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong> via PayMongo API with automated idempotency protection.</span>
         </div>`;
       dispatchBtn.disabled = (data.existing_batch && data.existing_batch.status === 'paid');
+      dispatchBtn.innerHTML = `<span><?= icon('credit-card', 15) ?> Dispatch PayMongo Payout (${validCount} Staff)</span>`;
     }
 
     // Render items table
@@ -1429,14 +1435,18 @@ async function loadPaymongoAudit() {
 }
 
 async function dispatchPaymongoPayout() {
-  if (!pmAuditData || !pmAuditData.can_dispatch) {
-    Swal.fire({ icon: 'warning', title: 'Action Blocked', text: 'Cannot dispatch payout batch with missing or invalid employee details.' });
+  const canDispatch = pmAuditData && (pmAuditData.can_dispatch || pmAuditData.can_submit || (pmAuditData.valid_count > 0));
+  if (!canDispatch) {
+    Swal.fire({ icon: 'warning', title: 'Action Blocked', text: 'No verified employee records are ready for PayMongo disbursement in this period.' });
     return;
   }
 
+  const totalAmount = Number(pmAuditData.total_net ?? pmAuditData.total_payable ?? 0);
+  const count = Number(pmAuditData.valid_count || 0);
+
   const res = await Swal.fire({
     title: 'Confirm Automated Payout',
-    html: `Are you sure you want to dispatch <strong>₱${Number(pmAuditData.total_net).toFixed(2)}</strong> to <strong>${pmAuditData.valid_count}</strong> employees via PayMongo?<br><br><small style="color:#6b7280">This will initiate batch bank and e-wallet transfers and mark verified records as paid.</small>`,
+    html: `Are you sure you want to dispatch <strong>₱${totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong> to <strong>${count}</strong> employees via PayMongo?<br><br><small style="color:#6b7280">This will execute batch bank and e-wallet transfers, notify staff, and mark verified records as paid.</small>`,
     icon: 'question',
     showCancelButton: true,
     confirmButtonColor: '#8B4513',

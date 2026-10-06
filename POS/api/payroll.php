@@ -402,6 +402,76 @@ try {
         }
     }
 
+    // ── PayMongo: Test API Credentials & Connection ──
+    if ($action === 'paymongo_test_connection') {
+        require_permission_json('payroll.settings');
+        require_once '../includes/paymongo_disbursement_helpers.php';
+
+        $mode = trim((string)($data['mode'] ?? 'sandbox'));
+        $secret_key = trim((string)($data['secret_key'] ?? ''));
+
+        if ($secret_key === '') {
+            $cfg = get_paymongo_disbursement_config($pdo);
+            $secret_key = $cfg['secret_key'];
+            $mode = $cfg['mode'];
+        }
+
+        if ($secret_key === '') {
+            respond(['ok' => false, 'error' => 'Please enter a PayMongo Secret Key before testing.'], 422);
+        }
+
+        // Demo key simulation
+        if (str_starts_with($secret_key, 'demo') || str_contains($secret_key, 'demo') || $secret_key === 'sandbox') {
+            respond([
+                'ok'      => true,
+                'message' => 'PayMongo Sandbox Demo is active. Transfers are simulated in high-fidelity test mode.',
+                'mode'    => 'sandbox',
+            ]);
+        }
+
+        // Real API check against PayMongo endpoint
+        $ch = curl_init('https://api.paymongo.com/v1/payment_methods');
+        $curl_opts = [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_HTTPHEADER     => [
+                'Accept: application/json',
+                'Authorization: Basic ' . base64_encode($secret_key . ':'),
+            ],
+        ];
+
+        $caBundle = getenv('CURL_CA_BUNDLE') ?: 'C:/xampp/apache/bin/curl-ca-bundle.crt';
+        if (is_file($caBundle)) {
+            $curl_opts[CURLOPT_CAINFO] = $caBundle;
+        } else {
+            $curl_opts[CURLOPT_SSL_VERIFYPEER] = false;
+        }
+
+        curl_setopt_array($ch, $curl_opts);
+        $resp = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_err = curl_error($ch);
+        curl_close($ch);
+
+        if ($curl_err) {
+            respond(['ok' => false, 'error' => 'Network error connecting to PayMongo: ' . $curl_err], 502);
+        }
+
+        $json = json_decode($resp, true);
+        if ($http_code >= 200 && $http_code < 300) {
+            respond([
+                'ok'      => true,
+                'message' => 'Connection verified successfully! PayMongo API keys are authenticated.',
+                'mode'    => $mode,
+            ]);
+        } elseif ($http_code === 401) {
+            respond(['ok' => false, 'error' => 'Authentication failed (HTTP 401). Please check that your Secret Key is correct.'], 401);
+        } else {
+            $err_msg = $json['errors'][0]['detail'] ?? ('PayMongo API returned HTTP ' . $http_code);
+            respond(['ok' => false, 'error' => $err_msg], 422);
+        }
+    }
+
     // ── Adjustments ───────────────────────────
     if ($action === 'list_adjustments') {
         require_permission_json('payroll.view');
@@ -636,7 +706,12 @@ try {
             'night_diff_multiplier',
             'grace_period_minutes',
             'tip_pool_mode',
-            'auto_approve_attendance'
+            'auto_approve_attendance',
+            'paymongo_mode',
+            'paymongo_secret_key',
+            'paymongo_public_key',
+            'paymongo_webhook_secret',
+            'paymongo_disbursement_enabled',
         ];
 
         $settings = $data['settings'] ?? [];
@@ -656,8 +731,12 @@ try {
             $val = trim((string)$val);
             if ($key === 'tip_pool_mode') {
                 if (!in_array($val, ['hours', 'equal'], true)) $val = 'hours';
-            } elseif ($key === 'auto_approve_attendance') {
+            } elseif ($key === 'auto_approve_attendance' || $key === 'paymongo_disbursement_enabled') {
                 $val = ($val === '1' || $val === 'true') ? '1' : '0';
+            } elseif ($key === 'paymongo_mode') {
+                $val = ($val === 'live') ? 'live' : 'sandbox';
+            } elseif (in_array($key, ['paymongo_secret_key', 'paymongo_public_key', 'paymongo_webhook_secret'], true)) {
+                // Keep string keys verbatim
             } else {
                 if (!is_numeric($val)) continue;
                 $f = (float)$val;

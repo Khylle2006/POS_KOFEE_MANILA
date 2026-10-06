@@ -1,0 +1,26 @@
+<?php
+// ─────────────────────────────────────────────────────────────
+//  config.local.php.example
+//  Template for local and production environment configuration.
+//  DO NOT COMMIT config.local.php with real credentials to git!
+// ─────────────────────────────────────────────────────────────
+
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'kofeedb');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+define('APP_ENV', 'development'); // Set to 'production' on live deployment
+
+// ── PayMongo Payment Gateway Configuration ────────────────────
+define('PAYMONGO_SECRET_KEY', 'demo');
+define('PAYMONGO_PUBLIC_KEY', 'demo');
+define('PAYMONGO_WEBHOOK_SECRET', '');
+
+// ── SMTP Email Configuration (PHPMailer) ──────────────────────
+define('SMTP_HOST', 'smtp.gmail.com');
+define('SMTP_PORT', 587);
+define('SMTP_USER', ''); // Your email address
+define('SMTP_PASS', ''); // Your 16-character App Password
+define('SMTP_SECURE', 'tls');
+define('SMTP_FROM_EMAIL', '');
+define('SMTP_FROM_NAME', 'Kofee Manila');

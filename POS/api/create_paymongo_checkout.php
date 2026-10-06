@@ -17,12 +17,11 @@ if (!is_array($data)) {
     exit;
 }
 
-$total     = (float)($data['total'] ?? 0);
 $orderType = trim($data['order_type'] ?? 'Dine In');
 $items     = $data['items'] ?? [];
 
-if ($total <= 0 || !is_array($items) || empty($items)) {
-    echo json_encode(['success' => false, 'error' => 'No items or invalid total for checkout.']);
+if (!is_array($items) || empty($items)) {
+    echo json_encode(['success' => false, 'error' => 'No items for checkout.']);
     exit;
 }
 
@@ -37,6 +36,63 @@ if (!paymongo_is_configured() && !paymongo_is_demo()) {
 try {
     $pdo = get_db();
     paymongo_ensure_order_columns($pdo);
+
+    // Fetch real product prices from database to defeat client-side price tampering
+    $prodIds = array_unique(array_filter(array_map(fn($it) => (int)($it['id'] ?? 0), $items)));
+    if (empty($prodIds)) {
+        echo json_encode(['success' => false, 'error' => 'No valid products in cart.']);
+        exit;
+    }
+    $inClause = implode(',', array_fill(0, count($prodIds), '?'));
+    $pStmt = $pdo->prepare("SELECT id, name, price_small, price_large, price FROM products WHERE id IN ($inClause) AND is_deleted = 0");
+    $pStmt->execute(array_values($prodIds));
+    $dbProducts = [];
+    foreach ($pStmt->fetchAll() as $p) {
+        $dbProducts[(int)$p['id']] = $p;
+    }
+
+    $computed_total = 0.0;
+    $validated_items = [];
+    $lineItems = [];
+
+    foreach ($items as $item) {
+        $pid = (int)($item['id'] ?? 0);
+        if (!isset($dbProducts[$pid])) {
+            echo json_encode(['success' => false, 'error' => "Product #$pid is unavailable or discontinued."]);
+            exit;
+        }
+        $prod = $dbProducts[$pid];
+        $size = in_array($item['size'] ?? 'small', ['small', 'large'], true) ? $item['size'] : 'small';
+        $real_price = ($size === 'large')
+            ? ((float)$prod['price_large'] > 0 ? (float)$prod['price_large'] : (float)$prod['price_small'])
+            : ((float)$prod['price_small'] > 0 ? (float)$prod['price_small'] : (float)$prod['price']);
+
+        $qty = max(1, (int)($item['qty'] ?? 1));
+        $subtotal = $real_price * $qty;
+        $computed_total += $subtotal;
+
+        $validated_items[] = [
+            'id'       => $pid,
+            'qty'      => $qty,
+            'price'    => $real_price,
+            'subtotal' => $subtotal,
+            'size'     => $size,
+            'name'     => $prod['name'],
+        ];
+
+        $lineItems[] = [
+            'currency' => 'PHP',
+            'amount'   => (int)round($real_price * 100),
+            'name'     => trim($prod['name']) . ' (' . ucfirst($size) . ')',
+            'quantity' => $qty
+        ];
+    }
+
+    $total = round($computed_total, 2);
+    if ($total <= 0) {
+        echo json_encode(['success' => false, 'error' => 'Calculated order total must be greater than zero.']);
+        exit;
+    }
 
     $user_id = (int)$_SESSION['user_id'];
     $empStmt = $pdo->prepare("SELECT id FROM employees WHERE user_id = :uid LIMIT 1");
@@ -61,31 +117,15 @@ try {
         VALUES (:order_id, :product_id, :qty, :price, :subtotal, :size)
     ");
 
-    $lineItems = [];
-    foreach ($items as $item) {
-        if (!isset($item['id'], $item['qty'], $item['price'])) {
-            throw new RuntimeException('Invalid item format in order.');
-        }
-        $qty = max(1, (int)$item['qty']);
-        $price = (float)$item['price'];
-        $size = in_array($item['size'] ?? 'small', ['small', 'large'], true) ? $item['size'] : 'small';
-        $subtotal = $price * $qty;
-
+    foreach ($validated_items as $item) {
         $itemStmt->execute([
             ':order_id'   => $orderId,
-            ':product_id' => (int)$item['id'],
-            ':qty'        => $qty,
-            ':price'      => $price,
-            ':subtotal'   => $subtotal,
-            ':size'       => $size
+            ':product_id' => $item['id'],
+            ':qty'        => $item['qty'],
+            ':price'      => $item['price'],
+            ':subtotal'   => $item['subtotal'],
+            ':size'       => $item['size'],
         ]);
-
-        $lineItems[] = [
-            'currency' => 'PHP',
-            'amount'   => (int)round($price * 100),
-            'name'     => trim($item['name'] ?? ('Item #' . (int)$item['id'])) . ' (' . ucfirst($size) . ')',
-            'quantity' => $qty
-        ];
     }
 
     $logStmt = $pdo->prepare(<<<'SQL'

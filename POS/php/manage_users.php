@@ -66,7 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $etype      = in_array($_POST['employment_type'] ?? '', $emp_types) ? $_POST['employment_type'] : 'Full-time';
         $salary     = (float)($_POST['base_salary'] ?? 0);
 
-        if (!$firstname || !$lastname) {
+        // Privilege Escalation Guard: Only existing admins can assign the admin role
+        if (in_array('admin', $roles_selected, true) && !is_admin()) {
+            $toast = 'Forbidden: Only system administrators can assign the Admin role.';
+            $toast_type = 'error';
+        } elseif (!$firstname || !$lastname) {
             $toast = 'First and last name are required.'; $toast_type = 'error';
         } elseif (!$want_account && !$want_employee) {
             $toast = 'Enable at least a login account or an employee profile.'; $toast_type = 'error';
@@ -76,6 +80,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
                 $user_id = $existing_user_id ?: null;
+
+                // Protect existing admin accounts from modification by non-admins
+                if ($existing_user_id && !is_admin()) {
+                    $chkAdm = $pdo->prepare("SELECT 1 FROM users WHERE id = :id AND role = 'admin' UNION SELECT 1 FROM user_roles WHERE user_id = :id AND role = 'admin'");
+                    $chkAdm->execute([':id' => $existing_user_id]);
+                    if ($chkAdm->fetchColumn()) {
+                        throw new Exception('Forbidden: Only system administrators can modify administrator accounts.');
+                    }
+                }
 
                 // ── Account side ──
                 if ($want_account) {
@@ -175,9 +188,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id     = (int)($_POST['user_id'] ?? 0);
         $status = $_POST['status'] ?? '';
         if ($id && in_array($status, ['active','blocked','on_hold'], true)) {
-            $pdo->prepare('UPDATE users SET status=:s, updated_at=NOW() WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
-            $labels = ['active'=>'Activated','blocked'=>'Blocked','on_hold'=>'Put on Hold'];
-            $toast  = 'Account ' . $labels[$status] . '.';
+            // Protect admin accounts from being modified by non-admins
+            $chkAdm = $pdo->prepare("SELECT 1 FROM users WHERE id = :id AND role = 'admin' UNION SELECT 1 FROM user_roles WHERE user_id = :id AND role = 'admin'");
+            $chkAdm->execute([':id' => $id]);
+            if ($chkAdm->fetchColumn() && !is_admin()) {
+                $toast = 'Forbidden: Only administrators can modify administrator status.';
+                $toast_type = 'error';
+            } else {
+                $pdo->prepare('UPDATE users SET status=:s, updated_at=NOW() WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
+                $labels = ['active'=>'Activated','blocked'=>'Blocked','on_hold'=>'Put on Hold'];
+                $toast  = 'Account ' . $labels[$status] . '.';
+            }
         }
     }
 

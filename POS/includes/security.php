@@ -54,7 +54,15 @@ function send_security_headers(): void {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('X-XSS-Protection: 1; mode=block');
     header('Permissions-Policy: geolocation=(), microphone=(), camera=(self)');
+
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+          || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    if ($https) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+
     header_remove('X-Powered-By');
 }
 
@@ -189,24 +197,42 @@ function record_login_attempt(string $identifier, bool $succeeded): void {
  */
 function login_lockout_seconds(string $identifier): int {
     try {
+        $ip    = client_ip();
+        $ident = strtolower(trim($identifier));
+
+        // 1. Account-specific lockout (e.g. 6 failed attempts for this username)
         $stmt = get_db()->prepare(
             'SELECT MAX(attempted_at) AS last_try, COUNT(*) AS failures
                FROM auth_throttle
               WHERE succeeded = 0
                 AND attempted_at > DATE_SUB(NOW(), INTERVAL :win MINUTE)
-                AND (identifier = :i OR ip_address = :ip)'
+                AND identifier = :i'
         );
-        $stmt->execute([
-            ':win' => THROTTLE_WINDOW_MIN,
-            ':i'   => strtolower(trim($identifier)),
-            ':ip'  => client_ip(),
-        ]);
+        $stmt->execute([':win' => THROTTLE_WINDOW_MIN, ':i' => $ident]);
         $row = $stmt->fetch();
 
-        if (!$row || (int)$row['failures'] < THROTTLE_MAX_ATTEMPTS) return 0;
+        if ($row && (int)$row['failures'] >= THROTTLE_MAX_ATTEMPTS) {
+            $unlock = strtotime($row['last_try']) + (THROTTLE_LOCKOUT_MIN * 60);
+            return max(0, $unlock - time());
+        }
 
-        $unlock = strtotime($row['last_try']) + (THROTTLE_LOCKOUT_MIN * 60);
-        return max(0, $unlock - time());
+        // 2. High-volume IP brute force guard (prevents attacking many accounts from 1 IP, 24 attempts threshold)
+        $ipStmt = get_db()->prepare(
+            'SELECT MAX(attempted_at) AS last_try, COUNT(*) AS failures
+               FROM auth_throttle
+              WHERE succeeded = 0
+                AND attempted_at > DATE_SUB(NOW(), INTERVAL :win MINUTE)
+                AND ip_address = :ip'
+        );
+        $ipStmt->execute([':win' => THROTTLE_WINDOW_MIN, ':ip' => $ip]);
+        $ipRow = $ipStmt->fetch();
+
+        if ($ipRow && (int)$ipRow['failures'] >= (THROTTLE_MAX_ATTEMPTS * 4)) {
+            $unlock = strtotime($ipRow['last_try']) + (THROTTLE_LOCKOUT_MIN * 60);
+            return max(0, $unlock - time());
+        }
+
+        return 0;
     } catch (Throwable $e) {
         error_log('login_lockout_seconds failed: ' . $e->getMessage());
         return 0;   // never lock everyone out because of a DB hiccup

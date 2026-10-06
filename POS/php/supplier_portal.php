@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
+require_once '../includes/paymongo_disbursement_helpers.php';
 require_once '../includes/icons.php';
 require_login();
 
@@ -408,13 +409,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
         } else {
             $dispute_attachment_path = null;
             if (!empty($_FILES['dispute_attachment']) && $_FILES['dispute_attachment']['error'] === UPLOAD_ERR_OK) {
-                $ext = strtolower(pathinfo($_FILES['dispute_attachment']['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true) && $_FILES['dispute_attachment']['size'] <= 10 * 1024 * 1024) {
-                    $upload_dir = __DIR__ . '/../uploads/receipts';
-                    if (!is_dir($upload_dir)) @mkdir($upload_dir, 0755, true);
-                    $fname = 'dispute_' . date('Ymd_His') . '_' . bin2hex(random_bytes(3)) . '.' . $ext;
-                    if (move_uploaded_file($_FILES['dispute_attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
-                        $dispute_attachment_path = 'uploads/receipts/' . $fname;
+                if ($_FILES['dispute_attachment']['size'] <= 10 * 1024 * 1024) {
+                    $mime = detect_upload_mime($_FILES['dispute_attachment']['tmp_name']);
+                    $mime_map = [
+                        'application/pdf' => 'pdf',
+                        'image/jpeg'      => 'jpg',
+                        'image/png'       => 'png',
+                    ];
+                    if (isset($mime_map[$mime])) {
+                        $ext = $mime_map[$mime];
+                        $upload_dir = __DIR__ . '/../uploads/receipts';
+                        if (!is_dir($upload_dir)) @mkdir($upload_dir, 0755, true);
+                        $fname = 'dispute_' . date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+                        if (move_uploaded_file($_FILES['dispute_attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
+                            $dispute_attachment_path = 'uploads/receipts/' . $fname;
+                        }
                     }
                 }
             }
@@ -451,6 +460,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 exit;
             } catch (Exception $e) {
                 $toast = 'Error filing dispute: ' . $e->getMessage();
+                $toast_type = 'error';
+            }
+        }
+    }
+
+    if ($action === 'update_payout_details') {
+        $payout_type           = in_array($_POST['payout_type'] ?? '', ['bank', 'ewallet'], true) ? $_POST['payout_type'] : 'bank';
+        $bank_name             = trim($_POST['bank_name'] ?? '');
+        $bank_code             = trim($_POST['bank_code'] ?? '');
+        $account_name          = trim($_POST['account_name'] ?? '');
+        $account_number        = trim($_POST['account_number'] ?? '');
+        $ewallet_provider      = trim($_POST['ewallet_provider'] ?? '');
+        $ewallet_account_name  = trim($_POST['ewallet_account_name'] ?? '');
+        $ewallet_mobile_number = trim($_POST['ewallet_mobile_number'] ?? '');
+
+        if ($payout_type === 'bank') {
+            if (!$bank_name || !$account_name || !$account_number) {
+                $toast = 'Please provide bank name, account holder name, and account number.';
+                $toast_type = 'error';
+            }
+        } else {
+            if (!$ewallet_provider || !$ewallet_account_name || !$ewallet_mobile_number) {
+                $toast = 'Please provide e-wallet provider, account name, and mobile number.';
+                $toast_type = 'error';
+            }
+        }
+
+        if (empty($toast)) {
+            try {
+                $upd_stmt = $pdo->prepare('
+                    UPDATE suppliers SET
+                        payout_type = :pt,
+                        bank_name = :bn,
+                        bank_code = :bc,
+                        account_name = :an,
+                        account_number = :anum,
+                        ewallet_provider = :ep,
+                        ewallet_account_name = :ean,
+                        ewallet_mobile_number = :emn
+                    WHERE id = :id
+                ');
+                $upd_stmt->execute([
+                    ':pt'   => $payout_type,
+                    ':bn'   => $bank_name ?: null,
+                    ':bc'   => $bank_code ?: null,
+                    ':an'   => $account_name ?: null,
+                    ':anum' => $account_number ?: null,
+                    ':ep'   => $ewallet_provider ?: null,
+                    ':ean'  => $ewallet_account_name ?: null,
+                    ':emn'  => $ewallet_mobile_number ?: null,
+                    ':id'   => $supplier['id'],
+                ]);
+
+                audit_log('supplier', (int)$supplier['id'], 'payout_updated', "Supplier {$supplier['name']} updated PayMongo receiving payout account details.");
+                $toast = 'Payout receiving account updated successfully. Kofee Manila Finance disbursements will be routed to this account.';
+                header('Location: supplier_portal.php?tab=invoices' . $admin_sup_qs . '&toast=' . urlencode($toast));
+                exit;
+            } catch (Exception $e) {
+                $toast = 'Error updating payout details: ' . $e->getMessage();
                 $toast_type = 'error';
             }
         }
@@ -646,9 +714,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                     if (!is_dir($upload_dir)) {
                         @mkdir($upload_dir, 0755, true);
                     }
-                    $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-                    if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
-                        $fname = 'inv_sup_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+                    $mime = detect_upload_mime($_FILES['attachment']['tmp_name']);
+                    $mime_map = [
+                        'application/pdf' => 'pdf',
+                        'image/jpeg'      => 'jpg',
+                        'image/png'       => 'png',
+                    ];
+                    if (isset($mime_map[$mime])) {
+                        $ext = $mime_map[$mime];
+                        $fname = 'inv_sup_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
                         if (move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
                             $attachment_path = 'uploads/invoices/' . $fname;
                         }
@@ -1710,6 +1784,71 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
           <?php endif; ?>
         </h3>
 
+        <!-- PayMongo Receiving Payout Account Card -->
+        <div style="background:#fff;border:1.5px solid #E8DED2;border-radius:12px;padding:16px 20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+            <div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg, #10b981, #059669);color:#fff">
+                  <?= icon('credit-card', 18) ?>
+                </span>
+                <div>
+                  <h4 style="margin:0;font-size:14.5px;color:var(--espresso);font-weight:700">Receiving Payout Account (PayMongo Automated)</h4>
+                  <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">Destination where Kofee Manila Finance disburses invoice payments automatically.</p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <button type="button" class="btn-save" style="padding:6px 14px;font-size:12px;display:inline-flex;align-items:center;gap:6px" onclick="openPayoutAccountModal()">
+                <?= icon('edit', 12) ?> <?= (!empty($supplier['payout_type']) && (!empty($supplier['account_number']) || !empty($supplier['ewallet_mobile_number']))) ? 'Update Payout Details' : 'Configure Payout Account' ?>
+              </button>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;padding-top:14px;border-top:1px dashed #E8DED2;display:flex;gap:20px;flex-wrap:wrap;align-items:center;font-size:12.5px">
+            <?php
+              $p_type = $supplier['payout_type'] ?? 'bank';
+              $has_payout = false;
+              if ($p_type === 'ewallet' && !empty($supplier['ewallet_mobile_number'])) {
+                  $has_payout = true;
+              } elseif ($p_type === 'bank' && !empty($supplier['account_number'])) {
+                  $has_payout = true;
+              }
+            ?>
+            <?php if ($has_payout): ?>
+              <?php if ($p_type === 'ewallet'): ?>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-weight:700;background:#EFF6FF;color:#1D4ED8;padding:3px 8px;border-radius:6px;font-size:11.5px">
+                    <?= htmlspecialchars(strtoupper($supplier['ewallet_provider'] ?: 'E-Wallet')) ?>
+                  </span>
+                  <span><strong>Mobile:</strong> <?= htmlspecialchars($supplier['ewallet_mobile_number']) ?></span>
+                  <?php if (!empty($supplier['ewallet_account_name'])): ?>
+                    <span style="color:var(--text-muted)">· <?= htmlspecialchars($supplier['ewallet_account_name']) ?></span>
+                  <?php endif; ?>
+                </div>
+              <?php else: ?>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-weight:700;background:#F3F4F6;color:#374151;padding:3px 8px;border-radius:6px;font-size:11.5px">
+                    <?= htmlspecialchars($supplier['bank_name'] ?: 'Bank Transfer') ?>
+                  </span>
+                  <span><strong>Account:</strong> <?= htmlspecialchars($supplier['account_number']) ?></span>
+                  <?php if (!empty($supplier['account_name'])): ?>
+                    <span style="color:var(--text-muted)">· <?= htmlspecialchars($supplier['account_name']) ?></span>
+                  <?php endif; ?>
+                </div>
+              <?php endif; ?>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:6px;color:#16a34a;font-weight:600;font-size:12px">
+                <?= icon('check-circle', 14) ?> Ready for Instant PayMongo Transfer
+              </div>
+            <?php else: ?>
+              <div style="display:flex;align-items:center;gap:8px;color:#b45309">
+                <?= icon('alert-triangle', 16) ?>
+                <span>No receiving account saved yet. Please configure your Bank Account or GCash/Maya number so Kofee Manila Finance can send instant electronic disbursements.</span>
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+
         <?php if (!empty($awaiting_payment_conf_count)): ?>
           <div style="background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:10px;padding:14px 18px;margin-bottom:18px;color:#92400E;display:flex;align-items:center;gap:12px">
             <?= icon('clock', 22, '', 'color:#92400E;flex-shrink:0') ?>
@@ -1915,7 +2054,14 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                           <tr style="border-bottom:1px dashed #E8DED2">
                             <td style="padding:8px 10px"><?= date('M d, Y', strtotime($pay['payment_date'] ?: $pay['completed_at'] ?: $pay['scheduled_at'])) ?></td>
                             <td style="padding:8px 10px">
-                              <strong><?= ucwords(str_replace('_',' ',$pay['payment_method'])) ?></strong>
+                              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                                <strong><?= ucwords(str_replace('_',' ',$pay['payment_method'])) ?></strong>
+                                <?php if (!empty($pay['paymongo_channel']) || !empty($pay['paymongo_payout_id']) || !empty($pay['paymongo_checkout_id'])): ?>
+                                  <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:#dcfce7;color:#15803d">
+                                    ⚡ PayMongo
+                                  </span>
+                                <?php endif; ?>
+                              </div>
                               <?php if ($pay['paying_account']): ?>
                                 <div style="font-size:11px;color:var(--text-muted)"><?= htmlspecialchars($pay['paying_account']) ?></div>
                               <?php endif; ?>
@@ -1925,7 +2071,7 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
                             <td style="padding:8px 10px;text-align:center">
                               <?php if (!empty($pay['receipt_attachment_path'])): ?>
                                 <a href="../<?= htmlspecialchars($pay['receipt_attachment_path']) ?>" target="_blank" class="btn-ghost" style="padding:2px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">
-                                  <?= icon('file-text', 12) ?> <span>View Proof</span>
+                                  <?= icon('file-text', 12) ?> <span><?= str_contains($pay['receipt_attachment_path'], 'paymongo_voucher') ? '⚡ PayMongo Voucher' : 'View Proof' ?></span>
                                 </a>
                               <?php else: ?>
                                 <span style="color:var(--text-muted);font-size:11px">—</span>
@@ -2111,6 +2257,101 @@ $needs_corr_count  = count(array_filter($my_invoices, fn($i) => $i['status'] ===
 
     <?php endif; ?>
 
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PAYOUT RECEIVING ACCOUNT MODAL                  -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-payout-account">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3 style="display:flex;align-items:center;gap:6px;color:var(--espresso)">
+        <?= icon('credit-card', 16) ?> Payout Receiving Account
+      </h3>
+      <button class="modal-close" onclick="closePayoutAccountModal()"><?= icon('x', 14) ?></button>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="update_payout_details"/>
+      <input type="hidden" name="tab" value="invoices"/>
+      <?php if ($is_admin_mode && $supplier): ?>
+        <input type="hidden" name="supplier_id" value="<?= (int)$supplier['id'] ?>"/>
+      <?php endif; ?>
+
+      <div class="modal-body" style="padding:18px 20px">
+        <p style="margin:0 0 14px;font-size:12px;color:var(--text-muted)">
+          Configure where Kofee Manila Finance should automatically disburse payments for your approved invoices using the PayMongo automated payment network.
+        </p>
+
+        <div class="field-group" style="margin-bottom:14px">
+          <label class="field-label">Receiving Destination Type</label>
+          <div style="display:flex;gap:16px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+              <input type="radio" name="payout_type" value="bank" <?= ($supplier['payout_type'] ?? 'bank') !== 'ewallet' ? 'checked' : '' ?> onchange="togglePortalPayoutType('bank')">
+              <strong>Bank Account (BDO, BPI, etc.)</strong>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+              <input type="radio" name="payout_type" value="ewallet" <?= ($supplier['payout_type'] ?? '') === 'ewallet' ? 'checked' : '' ?> onchange="togglePortalPayoutType('ewallet')">
+              <strong>E-Wallet (GCash, Maya)</strong>
+            </label>
+          </div>
+        </div>
+
+        <!-- Bank fields -->
+        <div id="portal-bank-fields" style="<?= ($supplier['payout_type'] ?? 'bank') === 'ewallet' ? 'display:none;' : '' ?>">
+          <div class="field-group" style="margin-bottom:12px">
+            <label class="field-label">Bank Name</label>
+            <select name="bank_name" id="portal_bank_select" class="field-input" onchange="syncPortalBankCode(this)">
+              <option value="">-- Select Bank --</option>
+              <?php foreach (get_supported_payout_destinations()['banks'] as $bcode => $binfo): ?>
+                <option value="<?= htmlspecialchars($binfo['name']) ?>" data-code="<?= $binfo['code'] ?>" <?= ($supplier['bank_name'] ?? '') === $binfo['name'] ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($binfo['name']) ?> (<?= $binfo['code'] ?>)
+                </option>
+              <?php endforeach; ?>
+            </select>
+            <input type="hidden" name="bank_code" id="portal_bank_code" value="<?= htmlspecialchars($supplier['bank_code'] ?? '') ?>">
+          </div>
+          <div class="field-group" style="margin-bottom:12px">
+            <label class="field-label">Bank Account Holder Name</label>
+            <input type="text" name="account_name" class="field-input" placeholder="e.g. Acme Supplies Corp." value="<?= htmlspecialchars($supplier['account_name'] ?? '') ?>"/>
+          </div>
+          <div class="field-group" style="margin-bottom:0">
+            <label class="field-label">Bank Account Number</label>
+            <input type="text" name="account_number" class="field-input" placeholder="e.g. 1092837465" value="<?= htmlspecialchars($supplier['account_number'] ?? '') ?>"/>
+          </div>
+        </div>
+
+        <!-- E-Wallet fields -->
+        <div id="portal-ewallet-fields" style="<?= ($supplier['payout_type'] ?? '') === 'ewallet' ? '' : 'display:none;' ?>">
+          <div class="field-group" style="margin-bottom:12px">
+            <label class="field-label">E-Wallet Provider</label>
+            <select name="ewallet_provider" class="field-input">
+              <option value="">-- Select Provider --</option>
+              <?php foreach (get_supported_payout_destinations()['ewallets'] as $wcode => $winfo): ?>
+                <option value="<?= $wcode ?>" <?= strtolower($supplier['ewallet_provider'] ?? '') === $wcode ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($winfo['name']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="field-group" style="margin-bottom:12px">
+            <label class="field-label">Account Holder Name</label>
+            <input type="text" name="ewallet_account_name" class="field-input" placeholder="e.g. Juan Dela Cruz" value="<?= htmlspecialchars($supplier['ewallet_account_name'] ?? '') ?>"/>
+          </div>
+          <div class="field-group" style="margin-bottom:0">
+            <label class="field-label">Mobile Number (11 Digits)</label>
+            <input type="text" name="ewallet_mobile_number" class="field-input" placeholder="09171234567" maxlength="11" value="<?= htmlspecialchars($supplier['ewallet_mobile_number'] ?? '') ?>"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#FAF8F5;border-top:1px solid var(--border)">
+        <button type="button" class="btn-cancel" onclick="closePayoutAccountModal()">Cancel</button>
+        <button type="submit" class="btn-save">
+          <?= icon('save', 13) ?> Save Receiving Account
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -2801,6 +3042,32 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+function openPayoutAccountModal() {
+  const m = document.getElementById('modal-payout-account');
+  if (m) m.classList.add('open');
+}
+function closePayoutAccountModal() {
+  const m = document.getElementById('modal-payout-account');
+  if (m) m.classList.remove('open');
+}
+function togglePortalPayoutType(type) {
+  const b = document.getElementById('portal-bank-fields');
+  const w = document.getElementById('portal-ewallet-fields');
+  if (type === 'ewallet') {
+    if (b) b.style.display = 'none';
+    if (w) w.style.display = 'block';
+  } else {
+    if (b) b.style.display = 'block';
+    if (w) w.style.display = 'none';
+  }
+}
+function syncPortalBankCode(select) {
+  const opt = select.options[select.selectedIndex];
+  const code = opt ? (opt.getAttribute('data-code') || '') : '';
+  const hidden = document.getElementById('portal_bank_code');
+  if (hidden) hidden.value = code;
+}
+
 function openConfirmPaymentModal(payId, invNum, amt) {
   document.getElementById('m-conf-pay-id').value = payId;
   document.getElementById('m-conf-inv-num').textContent = invNum;
@@ -2829,6 +3096,7 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
       closeContractModal();
       closeIssueModal();
       closeAsnModal();
+      closePayoutAccountModal();
       closeConfirmPaymentModal();
       closeDisputePaymentModal();
     }
@@ -2839,6 +3107,7 @@ document.addEventListener('keydown', e => {
     closeContractModal();
     closeIssueModal();
     closeAsnModal();
+    closePayoutAccountModal();
     closeConfirmPaymentModal();
     closeDisputePaymentModal();
   }

@@ -1,5 +1,7 @@
 # Local Environment Configuration
+config.local.php
 includes/config.local.php
+POS/includes/config.local.php
 .env
 *.env
 
@@ -7,23 +9,42 @@ includes/config.local.php
 *.sql
 *.sql.gz
 *.sql.bak
-database/*.sql
+POS/*.sql
+POS/database/*.sql
 
 # Node dependencies
 node_modules/
+POS/node_modules/
 
 # Logs & temp files
 *.log
 scratch/
+POS/scratch/
 
 # User uploads (keep directories, ignore uploaded files)
 uploads/resumes/*
 !uploads/resumes/.gitkeep
+POS/uploads/resumes/*
+!POS/uploads/resumes/.gitkeep
 uploads/receipts/*
 !uploads/receipts/.gitkeep
+POS/uploads/receipts/*
+!POS/uploads/receipts/.gitkeep
 uploads/attendance/*
 !uploads/attendance/.gitkeep
+POS/uploads/attendance/*
+!POS/uploads/attendance/.gitkeep
 uploads/invoices/*
 !uploads/invoices/.gitkeep
+POS/uploads/invoices/*
+!POS/uploads/invoices/.gitkeep
 uploads/avatars/*
 !uploads/avatars/.gitkeep
+POS/uploads/avatars/*
+!POS/uploads/avatars/.gitkeep
+
+# OS and Editor metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

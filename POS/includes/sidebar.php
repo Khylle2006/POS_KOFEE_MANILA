@@ -280,11 +280,16 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     border-radius: 999px;
     animation: kfsProgress 1.4s ease-in-out infinite;
   }
-  @keyframes kfsProgress {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(260%); }
+  @keyframes notifWiggle {
+    0%, 100% { transform: rotate(0deg); }
+    20%, 60% { transform: rotate(12deg) scale(1.15); }
+    40%, 80% { transform: rotate(-12deg) scale(1.15); }
+  }
+  .notif-wiggle {
+    animation: notifWiggle 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97);
   }
 </style>
+
 
 <div id="kofee-loader" aria-live="polite" role="status" aria-label="Loading page">
   <div class="kfs-loader-card">
@@ -343,25 +348,63 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     <div class="relative" id="notification-wrap">
         <button id="notification-btn" type="button" onclick="toggleNotifications()"
             class="relative w-9 h-9 flex items-center justify-center rounded-lg
-                   text-[rgba(251,243,233,0.78)] hover:bg-[rgba(251,243,233,0.12)]"
+                   text-[rgba(251,243,233,0.78)] hover:bg-[rgba(251,243,233,0.12)] transition-colors cursor-pointer"
             aria-label="Notifications" aria-expanded="false" aria-controls="notification-panel">
             <?= icon('bell', 18) ?>
-            <?php if ($notification_count > 0): ?>
-            <span id="notification-count" class="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full
-                         bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)] text-[10px] font-extrabold flex items-center justify-center">
+            <span id="notification-count" class="<?= $notification_count > 0 ? '' : 'hidden' ?> absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full
+                         bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)] text-[10px] font-extrabold flex items-center justify-center shadow-xs">
                 <?= $notification_count > 99 ? '99+' : $notification_count ?>
             </span>
-            <?php endif; ?>
         </button>
-        <div id="notification-panel" class="hidden absolute right-0 top-11 w-[340px] max-w-[calc(100vw-24px)]
-                    rounded-xl bg-white text-[var(--text-main,#2b2130)] shadow-2xl border border-[var(--latte,#efe0cc)] overflow-hidden z-[260]">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--latte,#efe0cc)]">
-                <strong class="text-[13px]">Notifications</strong>
-                <button type="button" onclick="markAllNotificationsRead()" class="text-[11px] font-semibold text-[var(--caramel,#c97b3d)]">Mark all read</button>
+
+        <!-- Dropdown Notification Panel -->
+        <div id="notification-panel" class="hidden absolute right-0 top-12 w-[370px] max-w-[calc(100vw-24px)]
+                    rounded-2xl bg-white text-[var(--text-main,#2b2130)] shadow-2xl border border-[var(--latte,#efe0cc)] overflow-hidden z-[260]">
+            <!-- Header with actions and tabs -->
+            <div class="p-3.5 border-b border-[var(--latte,#efe0cc)] bg-[#fcf9f5]">
+                <div class="flex items-center justify-between mb-2.5">
+                    <div class="flex items-center gap-2">
+                        <strong class="text-[13.5px] font-bold text-[var(--espresso,#2c1a0e)]">Notifications</strong>
+                        <span id="notif-header-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)]">
+                            <?= $notification_count ?> unread
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[11px]">
+                        <button type="button" onclick="markAllNotificationsRead()" title="Mark all as read"
+                                class="font-semibold text-[var(--caramel,#c47d3e)] hover:underline flex items-center gap-1 cursor-pointer">
+                            <?= icon('check', 11) ?> Mark all read
+                        </button>
+                        <span class="text-stone-300">&middot;</span>
+                        <button type="button" onclick="clearReadNotifications()" title="Delete all read notifications"
+                                class="font-medium text-[var(--text-muted,#8b7c88)] hover:text-red-600 transition-colors cursor-pointer">
+                            Clear read
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabs: All vs Unread -->
+                <div class="flex items-center gap-1 bg-[#f0e7dc] p-1 rounded-lg text-[11.5px] font-semibold">
+                    <button type="button" id="notif-tab-all" onclick="filterNotifications('all')"
+                            class="flex-1 py-1 rounded-md bg-white text-[var(--espresso,#2c1a0e)] shadow-xs transition-all cursor-pointer">
+                        All (<span id="notif-count-all"><?= count($notifications) ?></span>)
+                    </button>
+                    <button type="button" id="notif-tab-unread" onclick="filterNotifications('unread')"
+                            class="flex-1 py-1 rounded-md text-[var(--text-muted,#8b7c88)] hover:text-[var(--espresso,#2c1a0e)] transition-all cursor-pointer">
+                        Unread (<span id="notif-count-unread"><?= $notification_count ?></span>)
+                    </button>
+                </div>
             </div>
-                        <div id="notification-list" class="max-h-[380px] overflow-y-auto">
+
+            <!-- List of items -->
+            <div id="notification-list" class="max-h-[380px] overflow-y-auto divide-y divide-[var(--latte,#efe0cc)]">
                 <?php if (!$notifications): ?>
-                <div class="px-4 py-8 text-center text-[12px] text-[var(--text-muted,#8b7c88)]">No notifications</div>
+                <div id="notif-empty-state" class="px-4 py-10 text-center text-[var(--text-muted,#8b7c88)]">
+                    <div class="w-10 h-10 mx-auto mb-2.5 rounded-full bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center">
+                        <?= icon('bell', 20) ?>
+                    </div>
+                    <p class="text-[12.5px] font-semibold text-[var(--espresso,#2c1a0e)]">You're all caught up!</p>
+                    <p class="text-[11px] text-[var(--text-muted,#8b7c88)] mt-0.5">No notifications right now.</p>
+                </div>
                 <?php else: foreach ($notifications as $n):
                     $actor = $n['actor_id']
                         ? trim(($n['firstname'] ?? '') . ' ' . ($n['lastname'] ?? '')) ?: ($n['username'] ?? 'Unknown')
@@ -379,47 +422,59 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     };
                     $clean_title = trim(preg_replace('/^[\x{1F000}-\x{1FFFF}\x{2600}-\x{27BF}\x{2300}-\x{23FF}\x{2B50}\s]+/u', '', $n['title']));
                 ?>
-                <button type="button"
-                   class="notification-item w-full text-left px-4 py-3 border-b border-[var(--latte,#efe0cc)]
-                          hover:bg-[var(--accent-lt,#fcefe1)] <?= !$n['is_read'] ? 'bg-[var(--accent-lt,#fcefe1)]' : '' ?>"
-                   data-notification-id="<?= (int)$n['id'] ?>"
-                   onclick="openNotificationDetail(<?= (int)$n['id'] ?>)">
-                    <div class="flex items-start gap-2.5">
-                        <span class="w-7 h-7 rounded-lg bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <?= icon($n_icon, 14) ?>
-                        </span>
-                        <span class="min-w-0 flex-1">
-                            <div class="flex items-center justify-between gap-1">
-                                <strong class="block text-[12px] leading-4 truncate"><?= htmlspecialchars($clean_title) ?></strong>
-                                <span class="notification-dot w-2 h-2 rounded-full flex-shrink-0 <?= $n['is_read'] ? 'opacity-0' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
+                <div class="notification-item group relative flex items-start gap-3 p-3.5 transition-colors cursor-pointer hover:bg-[var(--accent-lt,#fcefe1)] <?= !$n['is_read'] ? 'bg-[rgba(252,239,225,0.45)]' : '' ?>"
+                     data-notification-id="<?= (int)$n['id'] ?>"
+                     data-is-read="<?= $n['is_read'] ? '1' : '0' ?>"
+                     onclick="handleNotificationClick(<?= (int)$n['id'] ?>, '<?= addslashes($n['link_url'] ?? '') ?>')">
+                    
+                    <span class="w-8 h-8 rounded-xl bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
+                        <?= icon($n_icon, 15) ?>
+                    </span>
+
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-1.5">
+                            <strong class="text-[12.5px] leading-4 text-[var(--espresso,#2c1a0e)] truncate font-semibold"><?= htmlspecialchars($clean_title) ?></strong>
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <?php if (!empty($n['link_url'])): ?>
+                                <span class="text-[10px] font-bold text-[var(--caramel,#c47d3e)] group-hover:underline">Open &rarr;</span>
+                                <?php endif; ?>
+                                <span class="notification-dot w-2 h-2 rounded-full <?= $n['is_read'] ? 'hidden' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
                             </div>
-                            <?php if ($n['message']): ?>
-                            <span class="block mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)] line-clamp-2">
-                                <?= htmlspecialchars($n['message']) ?>
-                            </span>
-                            <?php endif; ?>
-                            <span class="flex items-center gap-1.5 mt-1 text-[10px] text-[var(--text-muted,#8b7c88)]">
-                                <span class="font-semibold"><?= htmlspecialchars($actor) ?></span>
+                        </div>
+                        <?php if ($n['message']): ?>
+                        <p class="mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)] line-clamp-2">
+                            <?= htmlspecialchars($n['message']) ?>
+                        </p>
+                        <?php endif; ?>
+                        <div class="flex items-center justify-between mt-1.5 text-[10px] text-[var(--text-muted,#8b7c88)]">
+                            <div class="flex items-center gap-1.5 truncate">
+                                <span class="font-semibold text-stone-700"><?= htmlspecialchars($actor) ?></span>
                                 <span>&middot;</span>
                                 <time><?= htmlspecialchars(relative_time($n['created_at'])) ?></time>
-                            </span>
-                        </span>
+                            </div>
+                            <!-- Quick action buttons on hover -->
+                            <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onclick="event.stopPropagation()">
+                                <button type="button" onclick="openNotificationDetail(<?= (int)$n['id'] ?>, event)"
+                                        title="View activity details"
+                                        class="hover:text-[var(--caramel,#c47d3e)] text-stone-400 p-0.5 cursor-pointer">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                </button>
+                                <button type="button" onclick="toggleReadState(<?= (int)$n['id'] ?>, <?= $n['is_read'] ? '0' : '1' ?>, event)"
+                                        title="<?= $n['is_read'] ? 'Mark as unread' : 'Mark as read' ?>"
+                                        class="hover:text-[var(--caramel,#c47d3e)] text-stone-400 p-0.5 cursor-pointer">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                </button>
+                                <button type="button" onclick="deleteNotification(<?= (int)$n['id'] ?>, event)"
+                                        title="Delete notification"
+                                        class="hover:text-red-600 text-stone-400 p-0.5 cursor-pointer">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </button>
+                </div>
                 <?php endforeach; endif; ?>
             </div>
-            <div id="notif-detail-modal"
-      class="modal-overlay hidden fixed inset-0 z-[800] bg-black/50 items-center justify-center p-4">
-  <div class="w-full max-w-[420px] rounded-2xl bg-white shadow-2xl overflow-hidden">
-    <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] flex items-center justify-between">
-      <strong class="text-[14px] text-[var(--text-main,#2b2130)]">Activity detail</strong>
-      <button onclick="closeNotificationDetail()" class="text-[var(--text-muted,#8b7c88)] hover:text-[var(--text-main,#2b2130)] p-1 rounded-lg flex items-center justify-center"><?= icon('x', 16) ?></button>
-    </div>
-    <div id="notif-detail-body" class="px-5 py-5 text-[13px] text-[var(--text-main,#2b2130)]">
-      <p class="text-center py-6 text-[var(--text-muted,#8b7c88)]">Loading…</p>
-    </div>
-  </div>
-</div>
         </div>
     </div>
 
@@ -431,6 +486,27 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         <?= htmlspecialchars($initials) ?>
     </div>
 </header>
+
+<!-- ── Notification Detail Modal (Outside header to avoid overflow/display issues) ── -->
+<div id="notif-detail-modal"
+     class="modal-overlay hidden fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs items-center justify-center p-4">
+  <div class="w-full max-w-[440px] rounded-2xl bg-white shadow-2xl overflow-hidden animate-fade-in border border-[var(--latte,#efe0cc)]">
+    <div class="px-5 py-4 border-b border-[var(--latte,#efe0cc)] bg-[#fcf9f5] flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <span class="w-7 h-7 rounded-lg bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center">
+          <?= icon('bell', 15) ?>
+        </span>
+        <strong class="text-[14px] font-bold text-[var(--espresso,#2c1a0e)]">Notification Details</strong>
+      </div>
+      <button type="button" onclick="closeNotificationDetail()" class="text-[var(--text-muted,#8b7c88)] hover:text-[var(--espresso,#2c1a0e)] p-1 rounded-lg flex items-center justify-center transition-colors cursor-pointer">
+        <?= icon('x', 16) ?>
+      </button>
+    </div>
+    <div id="notif-detail-body" class="px-5 py-5 text-[13px] text-[var(--text-main,#2b2130)] max-h-[75vh] overflow-y-auto">
+      <p class="text-center py-6 text-[var(--text-muted,#8b7c88)]">Loading…</p>
+    </div>
+  </div>
+</div>
 
 <!-- Spacer so page content (rendered after this include) isn't hidden under the fixed top bar -->
 <div class="kfs-topbar-spacer topbar-spacer h-14"></div>
@@ -863,22 +939,143 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     }, refreshAfterMs);
 })();
 
+let currentNotifFilter = 'all';
+let lastKnownNotifCount = <?= (int)$notification_count ?>;
+
 function toggleNotifications() {
     const panel  = document.getElementById('notification-panel');
     const button = document.getElementById('notification-btn');
+    if (!panel) return;
     const opening = panel.classList.contains('hidden');
     panel.classList.toggle('hidden', !opening);
-    button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (button) button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (opening) {
+        updateListCounts();
+    }
 }
 
-async function openNotificationDetail(id) {
-    document.getElementById('notification-panel')?.classList.add('hidden');
+function filterNotifications(mode) {
+    currentNotifFilter = mode;
+    const tabAll = document.getElementById('notif-tab-all');
+    const tabUnread = document.getElementById('notif-tab-unread');
 
+    if (mode === 'unread') {
+        tabUnread?.classList.add('bg-white', 'text-[var(--espresso,#2c1a0e)]', 'shadow-xs');
+        tabUnread?.classList.remove('text-[var(--text-muted,#8b7c88)]');
+        tabAll?.classList.remove('bg-white', 'text-[var(--espresso,#2c1a0e)]', 'shadow-xs');
+        tabAll?.classList.add('text-[var(--text-muted,#8b7c88)]');
+
+        document.querySelectorAll('.notification-item').forEach(el => {
+            const isRead = el.getAttribute('data-is-read') === '1';
+            el.classList.toggle('hidden', isRead);
+        });
+    } else {
+        tabAll?.classList.add('bg-white', 'text-[var(--espresso,#2c1a0e)]', 'shadow-xs');
+        tabAll?.classList.remove('text-[var(--text-muted,#8b7c88)]');
+        tabUnread?.classList.remove('bg-white', 'text-[var(--espresso,#2c1a0e)]', 'shadow-xs');
+        tabUnread?.classList.add('text-[var(--text-muted,#8b7c88)]');
+
+        document.querySelectorAll('.notification-item').forEach(el => {
+            el.classList.remove('hidden');
+        });
+    }
+    updateListCounts();
+}
+
+function updateListCounts() {
+    const allItems = document.querySelectorAll('.notification-item');
+    const unreadItems = document.querySelectorAll('.notification-item[data-is-read="0"]');
+    const countAllEl = document.getElementById('notif-count-all');
+    const countUnreadEl = document.getElementById('notif-count-unread');
+    if (countAllEl) countAllEl.textContent = allItems.length;
+    if (countUnreadEl) countUnreadEl.textContent = unreadItems.length;
+
+    const list = document.getElementById('notification-list');
+    let emptyEl = document.getElementById('notif-empty-state');
+    const visibleCount = currentNotifFilter === 'unread' ? unreadItems.length : allItems.length;
+
+    if (visibleCount === 0) {
+        if (!emptyEl && list) {
+            emptyEl = document.createElement('div');
+            emptyEl.id = 'notif-empty-state';
+            emptyEl.className = 'px-4 py-10 text-center text-[var(--text-muted,#8b7c88)]';
+            emptyEl.innerHTML = `
+                <div class="w-10 h-10 mx-auto mb-2.5 rounded-full bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+                </div>
+                <p class="text-[12.5px] font-semibold text-[var(--espresso,#2c1a0e)]">You're all caught up!</p>
+                <p class="text-[11px] text-[var(--text-muted,#8b7c88)] mt-0.5">${currentNotifFilter === 'unread' ? 'No unread notifications.' : 'No notifications right now.'}</p>
+            `;
+            list.appendChild(emptyEl);
+        }
+        if (emptyEl) emptyEl.classList.remove('hidden');
+    } else {
+        if (emptyEl) emptyEl.classList.add('hidden');
+    }
+}
+
+function resolveNotificationUrl(url) {
+    if (!url) return '';
+    url = url.trim();
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+        return url;
+    }
+    const path = window.location.pathname;
+    if (!path.includes('/php/') && !url.startsWith('php/')) {
+        return 'php/' + url;
+    }
+    return url;
+}
+
+async function handleNotificationClick(id, targetUrl) {
+    // 1. Visually mark as read immediately
+    const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+    if (item) {
+        item.setAttribute('data-is-read', '1');
+        item.querySelector('.notification-dot')?.classList.add('hidden');
+        item.classList.remove('bg-[rgba(252,239,225,0.45)]');
+    }
+
+    // 2. Mark as read on server with keepalive
+    try {
+        fetch('../api/notifications.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'read', id }),
+            keepalive: true
+        }).then(r => r.json()).then(data => {
+            if (data && data.success) applyUnreadCount(data.unread);
+        }).catch(() => {});
+    } catch (_) {}
+
+    // 3. Direct navigation if link exists, otherwise open modal
+    const resolved = resolveNotificationUrl(targetUrl);
+    if (resolved) {
+        if (typeof showKofeeLoader === 'function') {
+            showKofeeLoader('Navigating…');
+        }
+        window.location.href = resolved;
+    } else {
+        openNotificationDetail(id);
+    }
+}
+
+async function openNotificationDetail(id, event) {
+    if (event) event.stopPropagation();
     const modal = document.getElementById('notif-detail-modal');
     const body  = document.getElementById('notif-detail-body');
-    body.innerHTML = '<p class="text-center py-6 text-[var(--text-muted,#8b7c88)]">Loading…</p>';
+    if (!modal || !body) return;
+
+    body.innerHTML = `
+      <div class="py-8 text-center text-[var(--text-muted,#8b7c88)] flex flex-col items-center gap-2">
+        <svg class="animate-spin text-[var(--caramel,#c47d3e)]" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+        <p class="text-[12px]">Loading notification details…</p>
+      </div>`;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+
+    // Close panel so modal is focused cleanly
+    document.getElementById('notification-panel')?.classList.add('hidden');
 
     try {
         const res = await fetch('../api/notifications.php', {
@@ -891,70 +1088,301 @@ async function openNotificationDetail(id) {
 
         const n = data.notification;
         body.innerHTML = `
-          <strong class="block text-[14px] mb-3">${esc(n.title)}</strong>
-          ${n.message ? `<p class="text-[12.5px] leading-5 text-[var(--text-muted,#8b7c88)] mb-4">${esc(n.message)}</p>` : ''}
-          <dl class="space-y-2.5 text-[12.5px] border-t border-[var(--latte,#efe0cc)] pt-4">
+          <div class="mb-3">
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide uppercase bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] mb-1.5">
+              ${esc(n.action_type || 'ACTIVITY')}
+            </span>
+            <strong class="block text-[15px] font-bold text-[var(--espresso,#2c1a0e)] leading-snug">${esc(n.title)}</strong>
+          </div>
+          ${n.message ? `<div class="p-3 rounded-xl bg-[#faf5ee] border border-[var(--latte,#efe0cc)] text-[12.5px] leading-relaxed text-stone-700 mb-4">${esc(n.message)}</div>` : ''}
+          <dl class="space-y-2.5 text-[12.5px] border-t border-[var(--latte,#efe0cc)] pt-3.5">
             <div class="flex justify-between gap-3">
               <dt class="text-[var(--text-muted,#8b7c88)]">Performed by</dt>
-              <dd class="font-semibold text-right">${esc(n.actor_label)}</dd>
-            </div>
-            <div class="flex justify-between gap-3">
-              <dt class="text-[var(--text-muted,#8b7c88)]">Action</dt>
-              <dd class="font-mono text-[11.5px] text-right">${esc(n.action_type || '—')}</dd>
+              <dd class="font-semibold text-right text-[var(--espresso,#2c1a0e)]">${esc(n.actor_label)}</dd>
             </div>
             ${n.entity_type ? `
             <div class="flex justify-between gap-3">
-              <dt class="text-[var(--text-muted,#8b7c88)]">Record</dt>
-              <dd class="text-right">${esc(n.entity_type)} #${esc(n.entity_id)}</dd>
+              <dt class="text-[var(--text-muted,#8b7c88)]">Reference Record</dt>
+              <dd class="font-mono text-right text-stone-700">${esc(n.entity_type)} #${esc(n.entity_id)}</dd>
             </div>` : ''}
             <div class="flex justify-between gap-3">
               <dt class="text-[var(--text-muted,#8b7c88)]">Timestamp</dt>
-              <dd class="text-right">${esc(n.timestamp_full)}</dd>
+              <dd class="text-right text-stone-700 font-medium">${esc(n.timestamp_full)}</dd>
             </div>
             <div class="flex justify-between gap-3">
-              <dt class="text-[var(--text-muted,#8b7c88)]">When</dt>
-              <dd class="text-right">${esc(n.relative)}</dd>
+              <dt class="text-[var(--text-muted,#8b7c88)]">Received</dt>
+              <dd class="text-right text-stone-500">${esc(n.relative)}</dd>
             </div>
           </dl>
-          <div class="mt-5 flex gap-2">
+          <div class="mt-5 flex items-center gap-2 pt-2 border-t border-[var(--latte,#efe0cc)]">
             <button type="button" onclick="closeNotificationDetail()"
-                    class="flex-1 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--latte,#efe0cc)]">Close</button>
-            ${n.target_url ? `<a href="${esc(n.target_url)}"
-                    class="flex-1 text-center py-2.5 rounded-lg text-[13px] font-bold text-white bg-[var(--caramel,#c47d3e)]">Open</a>` : ''}
+                    class="flex-1 py-2 rounded-xl text-[12.5px] font-semibold border border-[var(--latte,#efe0cc)] hover:bg-stone-50 transition-colors cursor-pointer">
+              Close
+            </button>
+            ${n.target_url ? `
+            <a href="${esc(resolveNotificationUrl(n.target_url))}"
+               class="flex-1 text-center py-2 rounded-xl text-[12.5px] font-bold text-white bg-[var(--caramel,#c47d3e)] hover:bg-[#b56e34] shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>Go to Page</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>` : ''}
           </div>`;
 
-        // Reading it marks it read — reflect that in the bell immediately.
+        // Reading it marks it read — update UI immediately
         applyUnreadCount(data.unread);
-        document.querySelector(`[data-notification-id="${id}"] .notification-dot`)
-                ?.classList.add('opacity-0');
+        const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+        if (item) {
+            item.setAttribute('data-is-read', '1');
+            item.querySelector('.notification-dot')?.classList.add('hidden');
+            item.classList.remove('bg-[rgba(252,239,225,0.45)]');
+        }
+        updateListCounts();
     } catch (e) {
-        body.innerHTML = `<p class="text-center py-6 text-red-600">${esc(e.message)}</p>`;
+        body.innerHTML = `
+          <div class="py-6 text-center">
+            <p class="text-[13px] text-red-600 font-medium mb-3">${esc(e.message)}</p>
+            <button type="button" onclick="closeNotificationDetail()" class="px-4 py-1.5 rounded-lg text-[12px] font-semibold border border-stone-200 cursor-pointer">Close</button>
+          </div>`;
     }
 }
 
 function closeNotificationDetail() {
     const m = document.getElementById('notif-detail-modal');
-    m.classList.add('hidden');
-    m.classList.remove('flex');
+    if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+    }
 }
 
-function markAllNotificationsRead() {
-    fetch('../api/notifications.php', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'all_read' })
-    }).then(r => r.json()).then(data => {
-        document.querySelectorAll('.notification-dot').forEach(dot => dot.classList.add('opacity-0'));
-        document.querySelectorAll('.notification-item').forEach(item =>
-            item.classList.remove('bg-[var(--accent-lt,#fcefe1)]'));
-        applyUnreadCount(data.unread ?? 0);
+async function markAllNotificationsRead() {
+    try {
+        const res = await fetch('../api/notifications.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'all_read' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.querySelectorAll('.notification-dot').forEach(dot => dot.classList.add('hidden'));
+            document.querySelectorAll('.notification-item').forEach(item => {
+                item.setAttribute('data-is-read', '1');
+                item.classList.remove('bg-[rgba(252,239,225,0.45)]');
+            });
+            applyUnreadCount(0);
+            updateListCounts();
+            if (currentNotifFilter === 'unread') {
+                filterNotifications('unread');
+            }
+        }
+    } catch (e) {
+        console.error('Failed to mark all notifications read:', e);
+    }
+}
+
+async function clearReadNotifications() {
+    const readItems = document.querySelectorAll('.notification-item[data-is-read="1"]');
+    if (!readItems.length) return;
+
+    readItems.forEach(item => {
+        item.style.transition = 'all 0.2s ease';
+        item.style.opacity = '0';
+        setTimeout(() => item.remove(), 200);
     });
+    setTimeout(updateListCounts, 250);
+
+    try {
+        const res = await fetch('../api/notifications.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'clear_read' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            applyUnreadCount(data.unread);
+        }
+    } catch (e) {
+        console.error('Failed to clear read notifications:', e);
+    }
+}
+
+async function toggleReadState(id, newState, event) {
+    if (event) event.stopPropagation();
+    const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+    if (!item) return;
+
+    // Optimistic UI
+    item.setAttribute('data-is-read', newState ? '1' : '0');
+    const dot = item.querySelector('.notification-dot');
+    if (dot) dot.classList.toggle('hidden', newState === 1);
+    item.classList.toggle('bg-[rgba(252,239,225,0.45)]', newState === 0);
+
+    try {
+        const res = await fetch('../api/notifications.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: newState ? 'read' : 'unread', id })
+        });
+        const data = await res.json();
+        if (data.success) {
+            applyUnreadCount(data.unread);
+            filterNotifications(currentNotifFilter);
+        }
+    } catch (e) {
+        console.error('Failed to toggle notification state:', e);
+    }
+}
+
+async function deleteNotification(id, event) {
+    if (event) event.stopPropagation();
+    const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+    if (item) {
+        item.style.transition = 'all 0.25s ease';
+        item.style.opacity = '0';
+        item.style.transform = 'translateX(20px)';
+        setTimeout(() => {
+            item.remove();
+            updateListCounts();
+        }, 250);
+    }
+
+    try {
+        const res = await fetch('../api/notifications.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', id })
+        });
+        const data = await res.json();
+        if (data.success) {
+            applyUnreadCount(data.unread);
+        }
+    } catch (e) {
+        console.error('Failed to delete notification:', e);
+    }
 }
 
 function applyUnreadCount(count) {
+    const num = Math.max(0, parseInt(count || 0, 10));
     const badge = document.getElementById('notification-count');
-    if (!count || count < 1) { badge?.remove(); return; }
-    if (badge) badge.textContent = count > 99 ? '99+' : count;
+    const headerBadge = document.getElementById('notif-header-badge');
+    const unreadTabCount = document.getElementById('notif-count-unread');
+
+    if (headerBadge) headerBadge.textContent = num + ' unread';
+    if (unreadTabCount) unreadTabCount.textContent = num;
+
+    if (badge) {
+        if (num < 1) {
+            badge.classList.add('hidden');
+            badge.textContent = '0';
+        } else {
+            badge.classList.remove('hidden');
+            badge.textContent = num > 99 ? '99+' : num;
+        }
+    }
 }
+
+function renderNotificationItems(items) {
+    const list = document.getElementById('notification-list');
+    if (!list) return;
+
+    if (!items || !items.length) {
+        updateListCounts();
+        return;
+    }
+
+    const html = items.map(n => {
+        const isRead = n.is_read ? 1 : 0;
+        const iconSvg = getIconSvg(n.icon);
+        const safeUrl = (n.link_url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `
+            <div class="notification-item group relative flex items-start gap-3 p-3.5 transition-colors cursor-pointer hover:bg-[var(--accent-lt,#fcefe1)] ${!isRead ? 'bg-[rgba(252,239,225,0.45)]' : ''} ${currentNotifFilter === 'unread' && isRead ? 'hidden' : ''}"
+                 data-notification-id="${n.id}"
+                 data-is-read="${isRead}"
+                 onclick="handleNotificationClick(${n.id}, '${safeUrl}')">
+                <span class="w-8 h-8 rounded-xl bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
+                    ${iconSvg}
+                </span>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center justify-between gap-1.5">
+                        <strong class="text-[12.5px] leading-4 text-[var(--espresso,#2c1a0e)] truncate font-semibold">${esc(n.title)}</strong>
+                        <div class="flex items-center gap-1 flex-shrink-0">
+                            ${n.link_url ? '<span class="text-[10px] font-bold text-[var(--caramel,#c47d3e)] group-hover:underline">Open &rarr;</span>' : ''}
+                            <span class="notification-dot w-2 h-2 rounded-full ${isRead ? 'hidden' : 'bg-[var(--caramel,#c97b3d)]'}"></span>
+                        </div>
+                    </div>
+                    ${n.message ? `<p class="mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)] line-clamp-2">${esc(n.message)}</p>` : ''}
+                    <div class="flex items-center justify-between mt-1.5 text-[10px] text-[var(--text-muted,#8b7c88)]">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="font-semibold text-stone-700">${esc(n.actor)}</span>
+                            <span>&middot;</span>
+                            <time>${esc(n.relative)}</time>
+                        </div>
+                        <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onclick="event.stopPropagation()">
+                            <button type="button" onclick="openNotificationDetail(${n.id}, event)"
+                                    title="View activity details"
+                                    class="hover:text-[var(--caramel,#c47d3e)] text-stone-400 p-0.5 cursor-pointer">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            </button>
+                            <button type="button" onclick="toggleReadState(${n.id}, ${isRead ? 0 : 1}, event)"
+                                    title="${isRead ? 'Mark as unread' : 'Mark as read'}"
+                                    class="hover:text-[var(--caramel,#c47d3e)] text-stone-400 p-0.5 cursor-pointer">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                            </button>
+                            <button type="button" onclick="deleteNotification(${n.id}, event)"
+                                    title="Delete notification"
+                                    class="hover:text-red-600 text-stone-400 p-0.5 cursor-pointer">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+
+    list.innerHTML = html;
+    updateListCounts();
+}
+
+function getIconSvg(name) {
+    const icons = {
+        'truck': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/></svg>',
+        'rfq': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
+        'requests': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
+        'coin': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 6.4v1.2M12 16.4v1.2M9.2 15.4c.5.9 1.5 1.5 2.8 1.5 1.8 0 3-1 3-2.3 0-3.2-5.6-1.7-5.6-4.9 0-1.3 1.2-2.3 3-2.3 1.2 0 2.2.5 2.7 1.4"/></svg>',
+        'package': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
+        'users': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6.4 6.5-6.4s6.5 2.8 6.5 6.4"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 13.6c2.6.4 4.6 2.6 4.8 5.4"/></svg>',
+        'bell': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>'
+    };
+    return icons[name] || icons['bell'];
+}
+
+async function pollNotifications() {
+    try {
+        const res = await fetch('../api/notifications.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'poll' })
+        });
+        const data = await res.json();
+        if (!data.success) return;
+
+        const newCount = parseInt(data.unread || 0, 10);
+        if (newCount > lastKnownNotifCount) {
+            const bell = document.getElementById('notification-btn');
+            if (bell) {
+                bell.classList.add('notif-wiggle');
+                setTimeout(() => bell.classList.remove('notif-wiggle'), 700);
+            }
+        }
+        lastKnownNotifCount = newCount;
+        applyUnreadCount(newCount);
+
+        const panel = document.getElementById('notification-panel');
+        if (panel && !panel.classList.contains('hidden') && Array.isArray(data.items)) {
+            renderNotificationItems(data.items);
+        }
+    } catch (_) {}
+}
+
+setInterval(pollNotifications, 20000);
 
 function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c =>
@@ -963,7 +1391,17 @@ function esc(s) {
 
 document.addEventListener('click', event => {
     const wrap = document.getElementById('notification-wrap');
-    if (wrap && !wrap.contains(event.target)) document.getElementById('notification-panel')?.classList.add('hidden');
+    if (wrap && !wrap.contains(event.target)) {
+        document.getElementById('notification-panel')?.classList.add('hidden');
+    }
+});
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeNotificationDetail();
+});
+
+document.getElementById('notif-detail-modal')?.addEventListener('click', e => {
+    if (e.target.id === 'notif-detail-modal') closeNotificationDetail();
 });
 
 function toggleSidebarOrMinimize() {

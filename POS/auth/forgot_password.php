@@ -44,54 +44,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user = $stmt->fetch();
 
                 if ($user && !empty($user['email'])) {
-                    // Generate 64-character secure token
-                    $token = bin2hex(random_bytes(32));
-                    $expires = date('Y-m-d H:i:s', time() + 1800); // 30 minutes
+                    // Generate 64-character secure raw token, store SHA-256 hash in database
+                    $raw_token    = bin2hex(random_bytes(32));
+                    $hashed_token = hash('sha256', $raw_token);
+                    $expires      = date('Y-m-d H:i:s', time() + 1800); // 30 minutes
 
                     // Invalidate previous active tokens for this user
                     $pdo->prepare("UPDATE password_resets SET used_at = NOW() WHERE user_id = :uid AND used_at IS NULL")
                         ->execute([':uid' => $user['id']]);
 
-                    // Store new reset token
+                    // Store hashed reset token (never store raw token in DB)
                     $pdo->prepare("
                         INSERT INTO password_resets (user_id, email, token, expires_at)
                         VALUES (:uid, :email, :token, :expires)
                     ")->execute([
                         ':uid'     => $user['id'],
                         ':email'   => $user['email'],
-                        ':token'   => $token,
+                        ':token'   => $hashed_token,
                         ':expires' => $expires,
                     ]);
 
-                    // Build full URL
+                    // Build full URL using raw token
                     $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? '') == 443;
                     $scheme   = $is_https ? 'https' : 'http';
                     $host     = $_SERVER['HTTP_HOST'] ?? 'localhost';
                     $dir      = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
-                    $reset_url = $scheme . '://' . $host . $dir . '/reset_password.php?token=' . urlencode($token);
+                    $reset_url = $scheme . '://' . $host . $dir . '/reset_password.php?token=' . urlencode($raw_token);
 
                     $fname = $user['firstname'] ?: $user['username'];
                     $mailResult = send_password_reset_email($user['email'], $fname, $reset_url);
 
-                    $masked_email = preg_replace('/(?<=..).(?=.*@)/u', '*', $user['email']);
-
-                    if (!empty($mailResult['sent'])) {
-                        $success = "A password reset link has been dispatched to <b>{$masked_email}</b>. Please check your email inbox and spam folder.";
-                    } elseif (!empty($mailResult['error'])) {
-                        $error = "Could not deliver email: " . htmlspecialchars($mailResult['error']) . ". Please check your SMTP settings in <code>includes/config.local.php</code>.";
-                        $dev_link = $reset_url;
-                    } elseif (empty(SMTP_USER) || empty(SMTP_PASS)) {
-                        $warning = "<b>SMTP Credentials Not Configured:</b> PHPMailer cannot send an email to <b>{$masked_email}</b> across the internet because sender email credentials are not set in <code>includes/config.local.php</code>.<br><br>To receive real emails in your inbox, add your Gmail and 16-character App Password to <code>includes/config.local.php</code>.";
-                        $dev_link = $reset_url;
-                    } else {
-                        $success = "A password reset link has been dispatched to <b>{$masked_email}</b>. Please check your inbox.";
+                    if (!empty($mailResult['error'])) {
+                        error_log('Forgot password mail delivery failed: ' . $mailResult['error']);
                     }
-                } elseif ($user && empty($user['email'])) {
-                    $error = "This account does not have a registered email address. Please contact your manager or HR administrator to reset your password.";
-                } else {
-                    // Constant-time message to prevent username enumeration
-                    $success = "If an account matches that username or email, a password reset link has been dispatched. Please check your inbox.";
                 }
+
+                // Uniform message to prevent username enumeration and never leak reset URLs
+                $success = "If an account matches that username or email, a secure password reset link has been dispatched to the registered address. Please check your inbox and spam folder.";
             } catch (Throwable $e) {
                 error_log('Forgot password error: ' . $e->getMessage());
                 $error = 'An unexpected error occurred. Please try again later.';
@@ -227,17 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
       <?php endif; ?>
 
-      <?php if ($dev_link): ?>
-      <div class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
-        <div class="text-[11px] font-bold text-amber-800 uppercase tracking-wide mb-1">Local Testing Link:</div>
-        <p class="text-[11px] text-amber-700 mb-2">Click below to proceed to password reset form:</p>
-        <a href="<?= htmlspecialchars($dev_link) ?>" class="inline-block w-full text-center py-2 px-3 bg-[var(--caramel)] text-white text-xs font-bold rounded-md hover:opacity-90 transition">
-          Open Password Reset Form →
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (!$success || $dev_link): ?>
+      <?php if (!$success): ?>
       <form class="space-y-4" method="POST" action="forgot_password.php">
         <?= csrf_field() ?>
         <div class="field">

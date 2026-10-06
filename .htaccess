@@ -1,0 +1,26 @@
+# ─────────────────────────────────────────────────────────────
+#  POS_KOFEE_MANILA - Root Web Server Configuration
+# ─────────────────────────────────────────────────────────────
+
+# 1. DISABLE DIRECTORY BROWSING / INDEXING
+# Prevents Apache from listing files and folders when no index exists (403 Forbidden).
+Options -Indexes
+
+# 2. BLOCK DIRECT ACCESS TO SYSTEM, DEPENDENCIES & METADATA
+RedirectMatch 404 /\.git
+RedirectMatch 404 /node_modules
+RedirectMatch 404 /(package|package-lock)\.json$
+RedirectMatch 404 /vite\.config\.js$
+
+# 3. BLOCK ACCESS TO SENSITIVE EXTENSIONS
+<FilesMatch "\.(sql|env|log|md|lock|example|bak|backup)$">
+  Require all denied
+</FilesMatch>
+
+# 4. BASIC SECURITY HEADERS
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always unset X-Powered-By
+</IfModule>

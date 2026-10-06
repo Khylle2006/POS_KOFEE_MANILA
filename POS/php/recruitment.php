@@ -55,9 +55,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $valid_statuses = ['review', 'interview', 'decision', 'hired', 'rejected'];
         if ($app_id > 0 && in_array($new_status, $valid_statuses, true)) {
-            $stmt = $pdo->prepare('UPDATE job_applications SET status = :s, reviewer_notes = :n, updated_at = NOW() WHERE id = :id');
-            $stmt->execute([':s' => $new_status, ':n' => $notes, ':id' => $app_id]);
-            $toast = 'Application status updated to ' . strtoupper($new_status) . '.';
+            // Guard: Once an applicant is hired, their status is locked and cannot be changed!
+            $chk = $pdo->prepare('SELECT status, first_name, last_name FROM job_applications WHERE id = :id LIMIT 1');
+            $chk->execute([':id' => $app_id]);
+            $currentApp = $chk->fetch();
+
+            if ($currentApp && $currentApp['status'] === 'hired') {
+                $toast = 'Candidate "' . htmlspecialchars($currentApp['first_name'] . ' ' . $currentApp['last_name']) . '" is already hired. The hired status is final and cannot be modified.';
+                $toast_type = 'error';
+            } elseif ($currentApp) {
+                $stmt = $pdo->prepare('UPDATE job_applications SET status = :s, reviewer_notes = :n, updated_at = NOW() WHERE id = :id');
+                $stmt->execute([':s' => $new_status, ':n' => $notes, ':id' => $app_id]);
+                $toast = 'Application status updated to ' . strtoupper($new_status) . '.';
+            }
         }
         $active_tab = 'applications';
     }
@@ -66,9 +76,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif ($action === 'delete_application') {
         $app_id = (int)($_POST['application_id'] ?? 0);
         if ($app_id > 0) {
-            $stmt = $pdo->prepare('DELETE FROM job_applications WHERE id = :id');
-            $stmt->execute([':id' => $app_id]);
-            $toast = 'Candidate application record deleted.';
+            $chk = $pdo->prepare('SELECT status FROM job_applications WHERE id = :id LIMIT 1');
+            $chk->execute([':id' => $app_id]);
+            $cur = $chk->fetchColumn();
+            if ($cur === 'hired') {
+                $toast = 'Cannot delete a candidate record who is already hired.';
+                $toast_type = 'error';
+            } else {
+                $stmt = $pdo->prepare('DELETE FROM job_applications WHERE id = :id');
+                $stmt->execute([':id' => $app_id]);
+                $toast = 'Candidate application record deleted.';
+            }
         }
         $active_tab = 'applications';
     }
@@ -821,17 +839,23 @@ $jobs_list = $pdo->query("SELECT id, title, location FROM job_postings ORDER BY 
                       </span>
                     </td>
                     <td style="padding:14px 16px; text-align:right;">
-                      <form method="POST" action="recruitment.php" style="display:inline-flex; align-items:center; gap:6px;">
-                        <input type="hidden" name="action" value="update_status">
-                        <input type="hidden" name="application_id" value="<?= (int)$app['id'] ?>">
-                        <select name="status" onchange="this.form.submit()" style="font-size:11.5px; padding:4px 8px; border-radius:6px; border:1px solid #D6CBC1; background:#FFF; cursor:pointer;">
-                          <option value="review" <?= $app['status']==='review'?'selected':'' ?>>Set Review</option>
-                          <option value="interview" <?= $app['status']==='interview'?'selected':'' ?>>Set Interview</option>
-                          <option value="decision" <?= $app['status']==='decision'?'selected':'' ?>>Set Decision</option>
-                          <option value="hired" <?= $app['status']==='hired'?'selected':'' ?>>Mark Hired</option>
-                          <option value="rejected" <?= $app['status']==='rejected'?'selected':'' ?>>Mark Rejected</option>
-                        </select>
-                      </form>
+                      <?php if ($app['status'] === 'hired'): ?>
+                        <span style="display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700; color:#047857; background:#D1FAE5; padding:5px 11px; border-radius:6px; border:1px solid #A7F3D0;" title="Candidate is hired. Status is locked and finalized.">
+                          <?= icon('lock', 12) ?> <span>Hired (Locked)</span>
+                        </span>
+                      <?php else: ?>
+                        <form method="POST" action="recruitment.php" style="display:inline-flex; align-items:center; gap:6px;">
+                          <input type="hidden" name="action" value="update_status">
+                          <input type="hidden" name="application_id" value="<?= (int)$app['id'] ?>">
+                          <select name="status" onchange="this.form.submit()" style="font-size:11.5px; padding:4px 8px; border-radius:6px; border:1px solid #D6CBC1; background:#FFF; cursor:pointer;">
+                            <option value="review" <?= $app['status']==='review'?'selected':'' ?>>Set Review</option>
+                            <option value="interview" <?= $app['status']==='interview'?'selected':'' ?>>Set Interview</option>
+                            <option value="decision" <?= $app['status']==='decision'?'selected':'' ?>>Set Decision</option>
+                            <option value="hired" <?= $app['status']==='hired'?'selected':'' ?>>Mark Hired</option>
+                            <option value="rejected" <?= $app['status']==='rejected'?'selected':'' ?>>Mark Rejected</option>
+                          </select>
+                        </form>
+                      <?php endif; ?>
                     </td>
                   </tr>
                 <?php endforeach; ?>

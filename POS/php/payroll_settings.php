@@ -29,6 +29,17 @@ $night_mult    = (float)($settings['night_diff_multiplier'] ?? 1.10);
 $tip_mode      = $settings['tip_pool_mode'] ?? 'hours';
 $auto_attend   = (int)($settings['auto_approve_attendance'] ?? 0);
 
+// PayMongo Gateway Configuration
+$pm_mode       = $settings['paymongo_mode'] ?? 'sandbox';
+$pm_secret     = $settings['paymongo_secret_key'] ?? '';
+$pm_public     = $settings['paymongo_public_key'] ?? '';
+$pm_webhook    = $settings['paymongo_webhook_secret'] ?? '';
+$pm_enabled    = ($settings['paymongo_disbursement_enabled'] ?? '1') === '1';
+
+$protocol      = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host          = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$webhook_url   = $protocol . '://' . $host . '/POS/api/paymongo_webhook.php';
+
 // Fetch active employees for loan creation
 $employees = $pdo->query(
     "SELECT id, employee_code, firstname, lastname, position, base_salary
@@ -101,6 +112,12 @@ $audits = $pdo->query(
       </button>
       <button type="button" class="pr-tab-btn" onclick="switchTab('tab-audit', this)">
         <?= icon('history', 16) ?> <span>Audit Trail</span>
+      </button>
+      <button type="button" class="pr-tab-btn" onclick="switchTab('tab-paymongo', this)">
+        <?= icon('credit-card', 16) ?> <span>PayMongo Gateway</span>
+        <?php if ($pm_enabled): ?>
+          <span class="pr-badge pr-badge-green" style="margin-left:6px;font-size:10.5px;padding:2px 7px"><?= strtoupper($pm_mode) ?></span>
+        <?php endif; ?>
       </button>
     </div>
 
@@ -507,6 +524,153 @@ $audits = $pdo->query(
       </div>
     </div>
 
+    <!-- TAB 5: PayMongo Gateway Configuration -->
+    <div id="tab-paymongo" class="pr-tab-pane">
+      <form id="pm-settings-form" onsubmit="savePaymongoSettings(event)">
+        <div class="pr-settings-grid">
+
+          <!-- PayMongo API Credentials Card -->
+          <div class="pr-card">
+            <div class="pr-card-header">
+              <div>
+                <div class="pr-card-title"><?= icon('credit-card', 18) ?> PayMongo API Credentials</div>
+                <div class="pr-card-sub">Secret and public keys for automated salary payouts</div>
+              </div>
+              <span class="pr-badge <?= $pm_mode === 'live' ? 'pr-badge-green' : 'pr-badge-amber' ?>" id="pm-env-badge">
+                <?= $pm_mode === 'live' ? 'Live Environment' : 'Sandbox (Test)' ?>
+              </span>
+            </div>
+
+            <!-- Enable Payouts Toggle -->
+            <div class="field" style="background:var(--cream,#FAF7F2);padding:14px;border-radius:10px;border:1px solid var(--border,#e8ded2);margin-bottom:18px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;font-weight:700">
+                <input type="checkbox" name="paymongo_disbursement_enabled" id="pm-enabled-toggle" value="1" <?= $pm_enabled ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--caramel,#8B4513)">
+                <span>Enable Automated Salary Disbursements via PayMongo</span>
+              </label>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:4px;margin-left:28px">
+                When enabled, the Payroll Run release view unlocks 1-click batch bank and e-wallet transfers directly to employee accounts.
+              </div>
+            </div>
+
+            <!-- Environment Selector -->
+            <div class="field">
+              <label for="pm-mode-select">Gateway Environment</label>
+              <select id="pm-mode-select" name="paymongo_mode" onchange="updatePaymongoModeBadge(this.value)" style="font-weight:600">
+                <option value="sandbox" <?= $pm_mode === 'sandbox' ? 'selected' : '' ?>>Sandbox Mode (Test / Simulation)</option>
+                <option value="live" <?= $pm_mode === 'live' ? 'selected' : '' ?>>Live Mode (Production Real Money Transfers)</option>
+              </select>
+              <div class="field-help">Use Sandbox for testing transfers without actual bank deductions. Switch to Live when ready for official payroll releases.</div>
+            </div>
+
+            <!-- Secret Key -->
+            <div class="field">
+              <label for="pm-secret-key">Secret Key (sk_...)</label>
+              <div style="position:relative">
+                <input type="password" id="pm-secret-key" name="paymongo_secret_key" value="<?= e($pm_secret) ?>" placeholder="sk_test_... or sk_live_..." autocomplete="new-password" style="padding-right:40px;font-family:monospace">
+                <button type="button" onclick="toggleSecretVisibility('pm-secret-key', this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px" title="Show/Hide Key">
+                  <?= icon('shield', 15) ?>
+                </button>
+              </div>
+              <div class="field-help">Secret key used for authenticating disbursement batch transfers. Kept secure on server.</div>
+            </div>
+
+            <!-- Public Key -->
+            <div class="field">
+              <label for="pm-public-key">Public Key (pk_...)</label>
+              <input type="text" id="pm-public-key" name="paymongo_public_key" value="<?= e($pm_public) ?>" placeholder="pk_test_... or pk_live_..." style="font-family:monospace">
+              <div class="field-help">Public key used for client authentication and verification.</div>
+            </div>
+
+            <!-- Webhook Secret -->
+            <div class="field">
+              <label for="pm-webhook-secret">Webhook Secret (whsec_...)</label>
+              <input type="password" id="pm-webhook-secret" name="paymongo_webhook_secret" value="<?= e($pm_webhook) ?>" placeholder="whsec_..." style="font-family:monospace">
+              <div class="field-help">Used to verify genuine webhook callbacks from PayMongo servers.</div>
+            </div>
+
+            <!-- Webhook Endpoint Display -->
+            <div class="field" style="background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0">
+              <label style="font-size:11.5px;color:#475569;margin-bottom:4px">Webhook Listener URL (Configure in PayMongo Dashboard)</label>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="text" readonly value="<?= e($webhook_url) ?>" id="pm-webhook-url" style="font-family:monospace;font-size:12px;background:#fff;cursor:text">
+                <button type="button" class="btn-ghost" onclick="copyWebhookUrl()" style="white-space:nowrap;padding:7px 12px;font-size:12px">
+                  <?= icon('file-text', 13) ?> Copy
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Channel & Connectivity Card -->
+          <div class="pr-card">
+            <div class="pr-card-header">
+              <div>
+                <div class="pr-card-title"><?= icon('check-circle', 18) ?> Supported Channels &amp; Test</div>
+                <div class="pr-card-sub">Beneficiary account channels and connection tester</div>
+              </div>
+            </div>
+
+            <div style="font-size:13px;line-height:1.6;color:var(--text-main);margin-bottom:14px">
+              PayMongo automated disbursements allow Kofee Manila to disburse net pay directly to all major Philippine banks and mobile e-wallets:
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:8px;margin-bottom:18px">
+              <div style="padding:10px;border-radius:8px;border:1px solid var(--border,#e8ded2);background:#fff;text-align:center">
+                <div style="font-weight:700;font-size:12px;color:var(--espresso)">BDO Unibank</div>
+                <div style="font-size:10.5px;color:var(--text-muted)">Direct Bank</div>
+              </div>
+              <div style="padding:10px;border-radius:8px;border:1px solid var(--border,#e8ded2);background:#fff;text-align:center">
+                <div style="font-weight:700;font-size:12px;color:var(--espresso)">BPI</div>
+                <div style="font-size:10.5px;color:var(--text-muted)">Direct Bank</div>
+              </div>
+              <div style="padding:10px;border-radius:8px;border:1px solid var(--border,#e8ded2);background:#fff;text-align:center">
+                <div style="font-weight:700;font-size:12px;color:var(--espresso)">Metrobank</div>
+                <div style="font-size:10.5px;color:var(--text-muted)">Direct Bank</div>
+              </div>
+              <div style="padding:10px;border-radius:8px;border:1px solid var(--border,#e8ded2);background:#fff;text-align:center">
+                <div style="font-weight:700;font-size:12px;color:var(--espresso)">UnionBank</div>
+                <div style="font-size:10.5px;color:var(--text-muted)">Direct Bank</div>
+              </div>
+              <div style="padding:10px;border-radius:8px;border:1px solid #86efac;background:#f0fdf4;text-align:center">
+                <div style="font-weight:800;font-size:12.5px;color:#15803d">GCash</div>
+                <div style="font-size:10.5px;color:#166534">Instant E-Wallet</div>
+              </div>
+              <div style="padding:10px;border-radius:8px;border:1px solid #93c5fd;background:#eff6ff;text-align:center">
+                <div style="font-weight:800;font-size:12.5px;color:#1d4ed8">Maya</div>
+                <div style="font-size:10.5px;color:#1e40af">Instant E-Wallet</div>
+              </div>
+            </div>
+
+            <!-- Testing Box -->
+            <div style="background:var(--cream,#FAF7F2);border:1px solid var(--border,#e8ded2);border-radius:10px;padding:16px;margin-bottom:18px">
+              <div style="font-weight:700;font-size:13.5px;color:var(--espresso);margin-bottom:6px">
+                <?= icon('refresh', 14) ?> Connectivity Diagnostics
+              </div>
+              <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5;margin-bottom:12px">
+                Ping the PayMongo API using the secret key above to verify that authentication and TLS handshakes succeed before initiating salary transfers.
+              </div>
+              <button type="button" class="btn-ghost" id="btn-test-paymongo" onclick="testPaymongoConnection()" style="background:#fff">
+                <?= icon('shield', 14) ?> <span>Test API Connection</span>
+              </button>
+            </div>
+
+            <!-- Payout Safety Notice -->
+            <div class="pr-alert pr-alert-info" style="font-size:12.5px;line-height:1.55">
+              <span>🛡️ <strong>Idempotency Protected:</strong> Every disbursement item generates a unique SHA-256 idempotency key tied to the period and payslip record. Duplicate clicks or network retries will never trigger double payments.</span>
+            </div>
+
+          </div>
+
+        </div>
+
+        <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+          <button type="submit" class="btn-add" id="btn-save-pm-settings">
+            <?= icon('check', 15) ?> <span>Save PayMongo Settings</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
   </div>
 </div>
 
@@ -585,6 +749,9 @@ window.addEventListener('DOMContentLoaded', () => {
   if (location.hash === '#loans' || location.hash === '#tab-loans') {
     const loanBtn = document.querySelector('[onclick*="tab-loans"]');
     if (loanBtn) switchTab('tab-loans', loanBtn);
+  } else if (location.hash === '#paymongo' || location.hash === '#tab-paymongo') {
+    const pmBtn = document.querySelector('[onclick*="tab-paymongo"]');
+    if (pmBtn) switchTab('tab-paymongo', pmBtn);
   }
 });
 
@@ -714,6 +881,114 @@ async function updateLoanStatus(loanId, status) {
     }).then(() => location.reload());
   } catch (err) {
     Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+  }
+}
+
+function updatePaymongoModeBadge(mode) {
+  const badge = document.getElementById('pm-env-badge');
+  if (!badge) return;
+  if (mode === 'live') {
+    badge.textContent = 'Live Environment';
+    badge.className = 'pr-badge pr-badge-green';
+  } else {
+    badge.textContent = 'Sandbox (Test)';
+    badge.className = 'pr-badge pr-badge-amber';
+  }
+}
+
+function toggleSecretVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function copyWebhookUrl() {
+  const input = document.getElementById('pm-webhook-url');
+  if (input) {
+    navigator.clipboard.writeText(input.value);
+    Swal.fire({ icon: 'success', title: 'Copied', text: 'Webhook listener URL copied to clipboard.', timer: 1200, showConfirmButton: false });
+  }
+}
+
+async function testPaymongoConnection() {
+  const btn = document.getElementById('btn-test-paymongo');
+  const secretKey = document.getElementById('pm-secret-key')?.value.trim();
+  const mode = document.getElementById('pm-mode-select')?.value || 'sandbox';
+
+  btn.disabled = true;
+  Swal.fire({
+    title: 'Testing Connection...',
+    text: 'Contacting PayMongo API servers...',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  try {
+    const res = await fetch('../api/payroll.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+      body: JSON.stringify({
+        action: 'paymongo_test_connection',
+        secret_key: secretKey,
+        mode: mode
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Connection test failed.');
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Connection Successful',
+      text: data.message || 'PayMongo API authenticated successfully.'
+    });
+  } catch (err) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Connection Test Failed',
+      text: err.message
+    });
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function savePaymongoSettings(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-save-pm-settings');
+  btn.disabled = true;
+
+  const form = document.getElementById('pm-settings-form');
+  const formData = new FormData(form);
+  const settingsObj = {};
+
+  settingsObj['paymongo_disbursement_enabled'] = form.querySelector('[name="paymongo_disbursement_enabled"]').checked ? '1' : '0';
+
+  formData.forEach((val, key) => {
+    if (key !== 'paymongo_disbursement_enabled') {
+      settingsObj[key] = val;
+    }
+  });
+
+  try {
+    const res = await fetch('../api/payroll.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+      body: JSON.stringify({ action: 'update_settings', settings: settingsObj })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to save PayMongo settings.');
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Settings Saved',
+      text: 'PayMongo gateway settings updated successfully.',
+      timer: 1600,
+      showConfirmButton: false
+    });
+  } catch (err) {
+    Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+  } finally {
+    btn.disabled = false;
   }
 }
 </script>

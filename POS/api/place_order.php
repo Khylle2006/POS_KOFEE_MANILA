@@ -24,14 +24,57 @@ $total   = (float)($data['total']          ?? 0);
 $payment = $data['payment_method']          ?? 'cash';
 $items   = $data['items']                   ?? [];
 
-if (empty($items)) {
+if (empty($items) || !is_array($items)) {
     echo json_encode(["success" => false, "error" => "No items to save"]);
     exit;
 }
 
-// FIX: use PDO (was using $conn / mysqli)
 try {
     $pdo = get_db();
+
+    // Fetch real product prices from database to defeat client-side price tampering
+    $prodIds = array_unique(array_filter(array_map(fn($it) => (int)($it['id'] ?? 0), $items)));
+    if (empty($prodIds)) {
+        echo json_encode(["success" => false, "error" => "No valid products in cart."]);
+        exit;
+    }
+    $inClause = implode(',', array_fill(0, count($prodIds), '?'));
+    $pStmt = $pdo->prepare("SELECT id, name, price_small, price_large, price FROM products WHERE id IN ($inClause) AND is_deleted = 0");
+    $pStmt->execute(array_values($prodIds));
+    $dbProducts = [];
+    foreach ($pStmt->fetchAll() as $p) {
+        $dbProducts[(int)$p['id']] = $p;
+    }
+
+    $computed_total = 0.0;
+    $validated_items = [];
+    foreach ($items as $item) {
+        $pid = (int)($item['id'] ?? 0);
+        if (!isset($dbProducts[$pid])) {
+            echo json_encode(["success" => false, "error" => "Product #$pid is unavailable or deleted."]);
+            exit;
+        }
+        $prod = $dbProducts[$pid];
+        $size = in_array($item['size'] ?? 'small', ['small', 'large'], true) ? $item['size'] : 'small';
+        $real_price = ($size === 'large')
+            ? ((float)$prod['price_large'] > 0 ? (float)$prod['price_large'] : (float)$prod['price_small'])
+            : ((float)$prod['price_small'] > 0 ? (float)$prod['price_small'] : (float)$prod['price']);
+
+        $qty = max(1, (int)($item['qty'] ?? 1));
+        $subtotal = $real_price * $qty;
+        $computed_total += $subtotal;
+
+        $validated_items[] = [
+            'id'       => $pid,
+            'qty'      => $qty,
+            'price'    => $real_price,
+            'subtotal' => $subtotal,
+            'size'     => $size,
+        ];
+    }
+
+    $total = round($computed_total, 2);
+
     $pdo->beginTransaction();
 
     // Insert order — use session user_id
@@ -54,24 +97,14 @@ try {
         VALUES (:order_id, :product_id, :qty, :price, :subtotal, :size)
     ");
 
-    foreach ($items as $item) {
-        if (!isset($item['id'], $item['qty'], $item['price'])) {
-            throw new Exception("Invalid item format");
-        }
-
-        $product_id = (int)$item['id'];
-        $qty        = (int)$item['qty'];
-        $price      = (float)$item['price'];
-        $size       = in_array($item['size'] ?? 'small', ['small', 'large'], true) ? $item['size'] : 'small';
-        $subtotal   = $price * $qty;
-
+    foreach ($validated_items as $item) {
         $stmtItem->execute([
             ':order_id'   => $order_id,
-            ':product_id' => $product_id,
-            ':qty'        => $qty,
-            ':price'      => $price,
-            ':subtotal'   => $subtotal,
-            ':size'       => $size,
+            ':product_id' => $item['id'],
+            ':qty'        => $item['qty'],
+            ':price'      => $item['price'],
+            ':subtotal'   => $item['subtotal'],
+            ':size'       => $item['size'],
         ]);
     }
 

@@ -8,6 +8,9 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/payroll_helpers.php';
 require_once __DIR__ . '/store_helpers.php';
+if (file_exists(__DIR__ . '/notify.php')) {
+    require_once __DIR__ . '/notify.php';
+}
 
 /**
  * Supported Philippine Banks and E-Wallets for PayMongo Payouts.
@@ -161,9 +164,11 @@ function get_period_payout_validation(PDO $pdo, int $period_id): array {
         'period'        => $period,
         'items'         => $items,
         'total_payable' => $total_payable,
+        'total_net'     => $total_payable,
         'valid_count'   => $valid_count,
         'invalid_count' => $invalid_count,
         'can_submit'    => ($valid_count > 0),
+        'can_dispatch'  => ($valid_count > 0),
     ];
 }
 
@@ -197,8 +202,12 @@ function create_paymongo_payout_batch(PDO $pdo, int $period_id, int $user_id, ar
     $batch_ref = 'DISB-' . date('Ymd') . '-' . str_pad((string)$period_id, 4, '0', STR_PAD_LEFT) . '-' . substr(bin2hex(random_bytes(3)), 0, 5);
     $batch_idempotency = 'batch_' . hash('sha256', "period_{$period_id}_{$total_amount}_{$count}_" . time());
 
+    $own_trans = false;
     try {
-        $pdo->beginTransaction();
+        if (!$pdo->inTransaction()) {
+            $pdo->beginTransaction();
+            $own_trans = true;
+        }
 
         $batch_stmt = $pdo->prepare("
             INSERT INTO `paymongo_payout_batches`
@@ -264,10 +273,14 @@ function create_paymongo_payout_batch(PDO $pdo, int $period_id, int $user_id, ar
             details: "Drafted PayMongo payout batch for period #{$period_id} ({$count} staff, " . number_format($total_amount, 2) . " PHP)."
         );
 
-        $pdo->commit();
+        if ($own_trans && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
         return ['ok' => true, 'batch_id' => $batch_id, 'batch_ref' => $batch_ref, 'count' => $count, 'total' => $total_amount];
     } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($own_trans && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         return ['ok' => false, 'error' => $e->getMessage()];
     }
 }
@@ -302,8 +315,12 @@ function submit_paymongo_payout_batch(PDO $pdo, int $batch_id, int $approver_id)
         return ['ok' => false, 'error' => 'No pending items found in this payout batch.'];
     }
 
+    $own_trans = false;
     try {
-        $pdo->beginTransaction();
+        if (!$pdo->inTransaction()) {
+            $pdo->beginTransaction();
+            $own_trans = true;
+        }
 
         $pdo->prepare("
             UPDATE `paymongo_payout_batches`
@@ -321,15 +338,35 @@ function submit_paymongo_payout_batch(PDO $pdo, int $batch_id, int $approver_id)
 
         $mark_slip_paid = $pdo->prepare("
             UPDATE `payslips`
-            SET `payment_status` = 'paid', `paid_at` = NOW()
+            SET `payment_status` = 'paid',
+                `paid_at` = NOW(),
+                `transfer_id` = :tid,
+                `transfer_error` = NULL,
+                `transfer_channel` = 'paymongo',
+                `payout_account_info` = :info,
+                `released_by` = :uid
+            WHERE `id` = :id
+        ");
+
+        $mark_slip_failed = $pdo->prepare("
+            UPDATE `payslips`
+            SET `payment_status` = 'failed',
+                `transfer_error` = :err,
+                `transfer_channel` = 'paymongo',
+                `payout_account_info` = :info
             WHERE `id` = :id
         ");
 
         $all_paid = true;
         $processed_count = 0;
         $failed_count = 0;
+        $notifications_to_send = [];
 
         foreach ($items as $item) {
+            $dest_display = ($item['payout_destination'] === 'ewallet')
+                ? strtoupper($item['ewallet_provider'] ?: 'E-WALLET') . ' ' . ($item['ewallet_mobile_number'] ?: '')
+                : ($item['bank_name'] ?: 'BANK') . ' •••• ' . ($item['account_number_last4'] ?: '');
+
             // Call PayMongo Payout Transfer API
             // In Sandbox / Test environment, we simulate successful PayMongo transfer creation
             // unless error test pattern is provided.
@@ -346,7 +383,64 @@ function submit_paymongo_payout_batch(PDO $pdo, int $batch_id, int $approver_id)
                 ]);
 
                 // Update payslip to paid
-                $mark_slip_paid->execute([':id' => $item['payslip_id']]);
+                $mark_slip_paid->execute([
+                    ':tid'  => $transfer_id,
+                    ':info' => $dest_display,
+                    ':uid'  => $approver_id,
+                    ':id'   => $item['payslip_id'],
+                ]);
+
+                // Loan deduction amortization if applicable
+                $slip_check = $pdo->prepare("SELECT id, loan_deduction FROM `payslips` WHERE id = :id");
+                $slip_check->execute([':id' => $item['payslip_id']]);
+                $slip_row = $slip_check->fetch();
+
+                if ($slip_row && (float)$slip_row['loan_deduction'] > 0) {
+                    $remaining = (float)$slip_row['loan_deduction'];
+                    $loan_stmt = $pdo->prepare(
+                        "SELECT id, balance, per_period_amount FROM employee_loans
+                          WHERE employee_id = :e AND status = 'active' AND balance > 0
+                          ORDER BY start_date"
+                    );
+                    $loan_stmt->execute([':e' => (int)$item['employee_id']]);
+                    $repay_ins = $pdo->prepare(
+                        'INSERT INTO loan_repayments (loan_id, payslip_id, amount, paid_on)
+                         VALUES (:l, :p, :a, :d)'
+                    );
+                    $loan_upd = $pdo->prepare(
+                        "UPDATE employee_loans
+                            SET balance = GREATEST(0, balance - :a),
+                                status = CASE WHEN balance - :a2 <= 0 THEN 'completed' ELSE status END
+                          WHERE id = :id"
+                    );
+
+                    foreach ($loan_stmt->fetchAll() as $loan) {
+                        if ($remaining <= 0) break;
+                        $take = min($remaining, (float)$loan['per_period_amount'], (float)$loan['balance']);
+                        if ($take <= 0) continue;
+
+                        $repay_ins->execute([
+                            ':l' => $loan['id'], ':p' => $item['payslip_id'],
+                            ':a' => $take, ':d' => date('Y-m-d'),
+                        ]);
+                        $loan_upd->execute([':a' => $take, ':a2' => $take, ':id' => $loan['id']]);
+                        $remaining -= $take;
+                    }
+                }
+
+                // Stage notification for employee
+                $emp_usr = $pdo->prepare("SELECT user_id FROM `employees` WHERE id = :eid");
+                $emp_usr->execute([':eid' => $item['employee_id']]);
+                $usr_row = $emp_usr->fetch();
+                if ($usr_row && !empty($usr_row['user_id'])) {
+                    $notifications_to_send[] = [
+                        'user_id' => (int)$usr_row['user_id'],
+                        'amount'  => (float)$item['amount'],
+                        'dest'    => $dest_display,
+                        'ref'     => $transfer_id,
+                    ];
+                }
+
                 $processed_count++;
             } else {
                 $all_paid = false;
@@ -357,6 +451,13 @@ function submit_paymongo_payout_batch(PDO $pdo, int $batch_id, int $approver_id)
                     ':err'     => $payout_res['error'],
                     ':paid_at' => null,
                     ':id'      => $item['id'],
+                ]);
+
+                // Update payslip to failed status
+                $mark_slip_failed->execute([
+                    ':err'  => $payout_res['error'],
+                    ':info' => $dest_display,
+                    ':id'   => $item['payslip_id'],
                 ]);
             }
         }
@@ -373,13 +474,9 @@ function submit_paymongo_payout_batch(PDO $pdo, int $batch_id, int $approver_id)
             ':id'   => $batch_id,
         ]);
 
-        // If batch is fully paid, advance payroll period to 'paid'
-        if ($all_paid) {
-            $pdo->prepare("
-                UPDATE `payroll_periods`
-                SET `status` = 'paid', `paid_at` = NOW()
-                WHERE `id` = :pid AND `status` != 'paid'
-            ")->execute([':pid' => $batch['period_id']]);
+        // Synchronize payroll period payment status
+        if (function_exists('sync_period_payment_status')) {
+            sync_period_payment_status($pdo, (int)$batch['period_id']);
         }
 
         log_operations_activity(
@@ -392,7 +489,35 @@ function submit_paymongo_payout_batch(PDO $pdo, int $batch_id, int $approver_id)
             details: "PayMongo disbursement processed: {$processed_count} paid, {$failed_count} failed."
         );
 
-        $pdo->commit();
+        if (function_exists('payroll_audit')) {
+            payroll_audit(
+                (int)$batch['period_id'],
+                null,
+                'paymongo_disbursed',
+                "Batch {$batch['batch_reference']} processed: {$processed_count} paid, {$failed_count} failed via PayMongo.",
+                $approver_id
+            );
+        }
+
+        if ($own_trans && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
+
+        // Send employee notifications after transaction commits
+        if (function_exists('notify_user')) {
+            foreach ($notifications_to_send as $n) {
+                try {
+                    notify_user(
+                        $n['user_id'],
+                        'payroll_payout',
+                        'Salary Disbursed via PayMongo',
+                        "Your salary payout of ₱" . number_format($n['amount'], 2) . " has been sent to your account ({$n['dest']}). Ref: {$n['ref']}",
+                        'my_payslips.php'
+                    );
+                } catch (Throwable $e) {}
+            }
+        }
+
         return [
             'ok'              => true,
             'status'          => $final_batch_status,
@@ -401,7 +526,9 @@ function submit_paymongo_payout_batch(PDO $pdo, int $batch_id, int $approver_id)
             'message'         => "Disbursement processed: {$processed_count} released" . ($failed_count > 0 ? ", {$failed_count} failed" : " successfully.")
         ];
     } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($own_trans && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         return ['ok' => false, 'error' => $e->getMessage()];
     }
 }
@@ -413,7 +540,7 @@ function execute_paymongo_transfer_call(array $cfg, array $item): array {
     $amount_cents = (int)round(((float)$item['amount']) * 100);
 
     // If sandbox mode and secret key is a demo placeholder, provide high-fidelity sandbox response
-    if ($cfg['mode'] === 'sandbox' && (str_contains($cfg['secret_key'], 'demo') || empty($cfg['secret_key']))) {
+    if ($cfg['mode'] === 'sandbox' && (str_contains($cfg['secret_key'], 'demo') || empty($cfg['secret_key']) || !str_starts_with($cfg['secret_key'], 'sk_'))) {
         // Test failure trigger: if recipient name contains 'FAIL_TEST'
         if (str_contains($item['recipient_name'], 'FAIL_TEST')) {
             return ['ok' => false, 'error' => 'PayMongo Sandbox: Beneficiary account invalid or restricted.'];
@@ -447,7 +574,7 @@ function execute_paymongo_transfer_call(array $cfg, array $item): array {
     ];
 
     $ch = curl_init($endpoint);
-    curl_setopt_array($ch, [
+    $curl_opts = [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => json_encode($payload),
@@ -457,7 +584,16 @@ function execute_paymongo_transfer_call(array $cfg, array $item): array {
             'Idempotency-Key: ' . $item['idempotency_key'],
         ],
         CURLOPT_TIMEOUT        => 30,
-    ]);
+    ];
+
+    $caBundle = getenv('CURL_CA_BUNDLE') ?: 'C:/xampp/apache/bin/curl-ca-bundle.crt';
+    if (is_file($caBundle)) {
+        $curl_opts[CURLOPT_CAINFO] = $caBundle;
+    } else {
+        $curl_opts[CURLOPT_SSL_VERIFYPEER] = false;
+    }
+
+    curl_setopt_array($ch, $curl_opts);
 
     $resp = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -524,6 +660,40 @@ function process_paymongo_disbursement_webhook(PDO $pdo, string $payload, string
     $item = $item_stmt->fetch();
 
     if (!$item) {
+        // Check if this transfer belongs to a procurement supplier disbursement
+        $pmt_stmt = $pdo->prepare("SELECT * FROM `payments` WHERE `paymongo_payout_id` = :tid");
+        $pmt_stmt->execute([':tid' => $transfer_id]);
+        $pmt = $pmt_stmt->fetch();
+        if ($pmt) {
+            $new_pmt_status = match ($status) {
+                'paid', 'succeeded' => 'completed',
+                'failed'            => 'failed',
+                'cancelled'         => 'cancelled',
+                default             => 'scheduled',
+            };
+            if ($new_pmt_status === 'completed') {
+                $pdo->prepare("UPDATE `payments` SET `status` = 'completed', `completed_at` = NOW() WHERE `id` = :id")
+                    ->execute([':id' => $pmt['id']]);
+            } else {
+                $pdo->prepare("UPDATE `payments` SET `status` = :st WHERE `id` = :id")
+                    ->execute([':st' => $new_pmt_status, ':id' => $pmt['id']]);
+            }
+
+            // Re-evaluate invoice status
+            $paid_sum = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = :iid AND status = 'completed'");
+            $paid_sum->execute([':iid' => $pmt['invoice_id']]);
+            $inv_paid = (float)$paid_sum->fetchColumn();
+
+            $inv_tot_stmt = $pdo->prepare("SELECT total_amount FROM invoices WHERE id = :iid");
+            $inv_tot_stmt->execute([':iid' => $pmt['invoice_id']]);
+            $inv_tot = (float)$inv_tot_stmt->fetchColumn();
+
+            $inv_st = ($inv_paid >= $inv_tot - 0.009) ? 'paid' : ($inv_paid > 0 ? 'partially_paid' : 'approved');
+            $pdo->prepare("UPDATE invoices SET status = :st WHERE id = :iid")->execute([':st' => $inv_st, ':iid' => $pmt['invoice_id']]);
+
+            return ['ok' => true, 'procurement_payment_id' => $pmt['id'], 'new_status' => $new_pmt_status];
+        }
+
         return ['ok' => false, 'error' => "No payout item found for transfer ID $transfer_id."];
     }
 

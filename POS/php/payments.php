@@ -3,6 +3,7 @@ require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
 require_once '../includes/store_helpers.php';
+require_once '../includes/paymongo_disbursement_helpers.php';
 require_once '../includes/icons.php';
 require_login();
 require_permission('procurement.view');
@@ -70,6 +71,91 @@ function handle_payment_receipt_upload(?array $file, bool $required = true): arr
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    // Action: Automated PayMongo Disbursement Payout to Supplier
+    if ($action === 'paymongo_disburse') {
+        require_permission('procurement.payment.process');
+
+        $invoice_id = (int)($_POST['invoice_id'] ?? 0);
+        $amount     = (float)($_POST['amount'] ?? 0);
+        $notes      = trim($_POST['notes'] ?? '');
+        $save_payout= !empty($_POST['save_to_supplier_profile']);
+
+        $payout_params = [
+            'payout_type'           => in_array($_POST['payout_type'] ?? '', ['bank','ewallet'], true) ? $_POST['payout_type'] : 'bank',
+            'bank_name'             => trim($_POST['bank_name'] ?? ''),
+            'bank_code'             => trim($_POST['bank_code'] ?? ''),
+            'account_name'          => trim($_POST['account_name'] ?? ''),
+            'account_number'        => trim($_POST['account_number'] ?? ''),
+            'ewallet_provider'      => trim($_POST['ewallet_provider'] ?? ''),
+            'ewallet_account_name'  => trim($_POST['ewallet_account_name'] ?? ''),
+            'ewallet_mobile_number' => trim($_POST['ewallet_mobile_number'] ?? ''),
+        ];
+
+        // Optionally persist verified payout account to supplier profile
+        if ($save_payout && $invoice_id > 0) {
+            $sup_id_stmt = $pdo->prepare('SELECT supplier_id FROM invoices WHERE id = :id');
+            $sup_id_stmt->execute([':id' => $invoice_id]);
+            $sup_id = $sup_id_stmt->fetchColumn();
+            if ($sup_id) {
+                $upd_sup = $pdo->prepare('
+                    UPDATE suppliers 
+                    SET payout_type = :pt, bank_name = :bn, bank_code = :bc,
+                        account_name = :an, account_number = :num,
+                        ewallet_provider = :ep, ewallet_account_name = :ean, ewallet_mobile_number = :emn
+                    WHERE id = :sid
+                ');
+                $upd_sup->execute([
+                    ':pt'  => $payout_params['payout_type'],
+                    ':bn'  => $payout_params['bank_name'] ?: null,
+                    ':bc'  => $payout_params['bank_code'] ?: null,
+                    ':an'  => $payout_params['account_name'] ?: null,
+                    ':num' => $payout_params['account_number'] ?: null,
+                    ':ep'  => $payout_params['ewallet_provider'] ?: null,
+                    ':ean' => $payout_params['ewallet_account_name'] ?: null,
+                    ':emn' => $payout_params['ewallet_mobile_number'] ?: null,
+                    ':sid' => $sup_id,
+                ]);
+            }
+        }
+
+        $res = process_supplier_paymongo_disbursement($pdo, $invoice_id, $amount, $payout_params, (int)$user['id'], $notes);
+        if ($res['ok']) {
+            $toast = 'PayMongo disbursement successful! Ref: ' . $res['transfer_id'] . '. Official electronic voucher generated.';
+            header('Location: payments.php?id=' . $res['payment_id'] . '&toast=' . urlencode($toast) . '&type=success');
+            exit;
+        } else {
+            $toast = $res['error'];
+            $toast_type = 'error';
+            header('Location: payments.php?new_for_invoice=' . $invoice_id . '&toast=' . urlencode($toast) . '&type=error');
+            exit;
+        }
+    }
+
+    // Action: PayMongo Online Checkout Session
+    if ($action === 'paymongo_checkout') {
+        require_permission('procurement.payment.process');
+
+        $invoice_id = (int)($_POST['invoice_id'] ?? 0);
+        $amount     = (float)($_POST['amount'] ?? 0);
+
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base_url = $protocol . $host . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+        $success_url = $base_url . '/payments.php?paymongo_return=1&session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice_id;
+        $cancel_url  = $base_url . '/payments.php?new_for_invoice=' . $invoice_id . '&toast=' . urlencode('Checkout session cancelled.');
+
+        $res = create_supplier_invoice_paymongo_checkout($pdo, $invoice_id, $amount, (int)$user['id'], $success_url, $cancel_url);
+        if ($res['ok']) {
+            header('Location: ' . $res['checkout_url']);
+            exit;
+        } else {
+            $toast = $res['error'];
+            $toast_type = 'error';
+            header('Location: payments.php?new_for_invoice=' . $invoice_id . '&toast=' . urlencode($toast) . '&type=error');
+            exit;
+        }
+    }
 
     // Action 1: Record and complete payment immediately
     // Action 2: Schedule payment for later
@@ -381,6 +467,21 @@ if (isset($_GET['toast'])) {
     $toast_type = $_GET['type'] ?? 'success';
 }
 
+// ── PayMongo Checkout Session Return Callback ─────────────────
+if (isset($_GET['paymongo_return']) && !empty($_GET['session_id'])) {
+    require_permission('procurement.payment.process');
+    $session_id = trim($_GET['session_id']);
+    $res = verify_and_complete_paymongo_procurement_checkout($pdo, $session_id, (int)$user['id']);
+    if ($res['ok']) {
+        $toast = 'PayMongo online payment verified successfully! Proof voucher generated.';
+        header('Location: payments.php?id=' . $res['payment_id'] . '&toast=' . urlencode($toast) . '&type=success');
+        exit;
+    } else {
+        $toast = 'Failed to verify PayMongo payment: ' . ($res['error'] ?? 'Unknown error');
+        $toast_type = 'error';
+    }
+}
+
 // ── "New payment" context ──────────────────────────────
 $new_invoice_id = (int)($_GET['new_for_invoice'] ?? 0);
 $new_invoice = null;
@@ -409,7 +510,11 @@ if ($po_id_param && !$new_invoice_id) {
 
 if ($new_invoice_id) {
     $stmt = $pdo->prepare('
-        SELECT i.*, s.name AS supplier_name, po.id AS po_id
+        SELECT i.*, s.name AS supplier_name, s.user_id AS supplier_user_id,
+               s.payout_type, s.bank_name, s.bank_code, s.account_name, s.account_number,
+               s.ewallet_provider, s.ewallet_account_name, s.ewallet_mobile_number,
+               s.email AS supplier_email, s.phone AS supplier_phone,
+               po.id AS po_id, po.po_number
         FROM invoices i 
         JOIN suppliers s ON s.id = i.supplier_id 
         JOIN purchase_orders po ON po.id = i.po_id
@@ -485,6 +590,8 @@ $store_paying_accounts = [
     'GCash Business (0917 •••• 890)',
     'Maya Business (0928 •••• 123)',
 ];
+$paymongo_cfg = get_procurement_paymongo_config($pdo);
+$payout_dests = get_supported_payout_destinations();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -514,12 +621,21 @@ $store_paying_accounts = [
     <?php endif; ?>
 
     <?php if ($new_invoice): ?>
-      <!-- ── Record / Schedule payment form ── -->
-      <div class="table-card" style="padding:22px 24px;max-width:580px">
-        <h2>Record Supplier Payment</h2>
-        <p class="muted-cell" style="margin-bottom:16px">
-          Invoice <strong><?= htmlspecialchars($new_invoice['invoice_number']) ?></strong> &middot; <?= htmlspecialchars($new_invoice['supplier_name']) ?> &middot; PO #<?= str_pad($new_invoice['po_id'],5,'0',STR_PAD_LEFT) ?>
-        </p>
+      <!-- ── Record / Pay Supplier Invoice ── -->
+      <div class="table-card" style="padding:22px 24px;max-width:640px;margin-bottom:24px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+          <div>
+            <h2 style="margin:0 0 4px">Pay Supplier Invoice</h2>
+            <p class="muted-cell" style="margin:0">
+              Invoice <strong><?= htmlspecialchars($new_invoice['invoice_number']) ?></strong> &middot; <?= htmlspecialchars($new_invoice['supplier_name']) ?> &middot; PO #<?= str_pad($new_invoice['po_id'],5,'0',STR_PAD_LEFT) ?>
+            </p>
+          </div>
+          <?php if (!empty($paymongo_cfg['enabled'])): ?>
+            <span class="status-badge" style="background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;font-size:11px">
+              PayMongo <?= ucfirst($paymongo_cfg['mode']) ?> Active
+            </span>
+          <?php endif; ?>
+        </div>
 
         <!-- Balance overview box -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;background:var(--cream,#FAF7F2);border:1px solid var(--border,#e8ded2);border-radius:10px;padding:12px 14px;margin-bottom:18px;text-align:center">
@@ -537,70 +653,221 @@ $store_paying_accounts = [
           </div>
         </div>
 
-        <form method="POST" id="payment-entry-form" enctype="multipart/form-data">
-          <input type="hidden" name="invoice_id" value="<?= $new_invoice['id'] ?>"/>
+        <!-- Method selection tabs -->
+        <div class="filter-bar" style="margin-bottom:16px;padding:0;display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="filter-pill active" id="tab-btn-disburse" onclick="switchPayTab('disburse')" style="cursor:pointer">
+            <?= icon('dollar', 13) ?> PayMongo Disbursement (Auto-Payout)
+          </button>
+          <button type="button" class="filter-pill" id="tab-btn-checkout" onclick="switchPayTab('checkout')" style="cursor:pointer">
+            <?= icon('credit-card', 13) ?> PayMongo Online Checkout
+          </button>
+          <button type="button" class="filter-pill" id="tab-btn-manual" onclick="switchPayTab('manual')" style="cursor:pointer">
+            <?= icon('file-text', 13) ?> Manual Entry / Check
+          </button>
+        </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px">
-            <label style="font-size:12.5px;font-weight:600;display:block">Amount to Pay (₱) <span style="color:var(--red)">*</span>
-              <input class="field-input" type="number" step="0.01" min="0.01" max="<?= $new_inv_unpaid ?>" name="amount" id="pay-amount" value="<?= $new_inv_unpaid ?>" required style="margin-top:4px"/>
-              <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px">Max payable: <?= php_currency($new_inv_unpaid) ?></small>
+        <!-- TAB 1: PayMongo Automated Disbursement (Direct Bank or GCash Transfer) -->
+        <div id="pane-pay-disburse">
+          <form method="POST" id="form-paymongo-disburse">
+            <input type="hidden" name="action" value="paymongo_disburse"/>
+            <input type="hidden" name="invoice_id" value="<?= $new_invoice['id'] ?>"/>
+
+            <div style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:10px;padding:14px;margin-bottom:16px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <div style="width:22px;height:22px;border-radius:50%;background:#16A34A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800">⚡</div>
+                <strong style="color:#166534;font-size:13.5px">Automated PayMongo Payout Engine</strong>
+              </div>
+              <p style="margin:0;font-size:12px;color:#15803D;line-height:1.4">
+                Instantly transfers funds from your account to the supplier's verified Bank or GCash/Maya wallet. An official electronic PayMongo proof voucher is automatically generated and recorded.
+              </p>
+            </div>
+
+            <div style="margin-bottom:14px">
+              <label style="font-size:12.5px;font-weight:700;color:var(--text-main);display:block;margin-bottom:6px">Disbursement Destination Channel <span style="color:var(--red)">*</span></label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #E8DED2;border-radius:8px;cursor:pointer;background:#fff" id="lbl-dest-bank">
+                  <input type="radio" name="payout_type" value="bank" <?= ($new_invoice['payout_type'] ?? 'bank') === 'bank' ? 'checked' : '' ?> onchange="toggleDisburseType(this.value)"/>
+                  <span style="font-size:13px;font-weight:600">Philippine Bank Transfer</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #E8DED2;border-radius:8px;cursor:pointer;background:#fff" id="lbl-dest-ewallet">
+                  <input type="radio" name="payout_type" value="ewallet" <?= ($new_invoice['payout_type'] ?? '') === 'ewallet' ? 'checked' : '' ?> onchange="toggleDisburseType(this.value)"/>
+                  <span style="font-size:13px;font-weight:600">E-Wallet (GCash / Maya)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Bank Destination Fields -->
+            <div id="fields-bank" style="display:<?= ($new_invoice['payout_type'] ?? 'bank') === 'bank' ? 'block' : 'none' ?>;margin-bottom:14px;background:#FAF7F2;border:1px solid #E8DED2;border-radius:8px;padding:12px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+                <label style="font-size:12px;font-weight:600;display:block">Beneficiary Bank <span style="color:var(--red)">*</span>
+                  <select class="field-input" name="bank_name" id="disb-bank-name" style="margin-top:4px" onchange="syncBankCode(this)">
+                    <option value="">— Select Bank —</option>
+                    <?php foreach ($payout_dests['banks'] as $bkey => $binfo): ?>
+                      <option value="<?= htmlspecialchars($binfo['name']) ?>" data-code="<?= $binfo['code'] ?>" <?= (stripos($new_invoice['bank_name'] ?? '', $binfo['name']) !== false || ($new_invoice['bank_code'] ?? '') === $binfo['code']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($binfo['name']) ?> (<?= $binfo['code'] ?>)
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                </label>
+                <label style="font-size:12px;font-weight:600;display:block">Bank Code
+                  <input class="field-input" type="text" name="bank_code" id="disb-bank-code" value="<?= htmlspecialchars($new_invoice['bank_code'] ?? 'BDO') ?>" style="margin-top:4px"/>
+                </label>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <label style="font-size:12px;font-weight:600;display:block">Account Holder Name <span style="color:var(--red)">*</span>
+                  <input class="field-input" type="text" name="account_name" value="<?= htmlspecialchars($new_invoice['account_name'] ?: $new_invoice['supplier_name']) ?>" required style="margin-top:4px"/>
+                </label>
+                <label style="font-size:12px;font-weight:600;display:block">Bank Account Number <span style="color:var(--red)">*</span>
+                  <input class="field-input" type="text" name="account_number" value="<?= htmlspecialchars($new_invoice['account_number'] ?? '') ?>" placeholder="e.g. 1042889210" style="margin-top:4px"/>
+                </label>
+              </div>
+            </div>
+
+            <!-- E-Wallet Destination Fields -->
+            <div id="fields-ewallet" style="display:<?= ($new_invoice['payout_type'] ?? '') === 'ewallet' ? 'block' : 'none' ?>;margin-bottom:14px;background:#FAF7F2;border:1px solid #E8DED2;border-radius:8px;padding:12px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+                <label style="font-size:12px;font-weight:600;display:block">E-Wallet Provider <span style="color:var(--red)">*</span>
+                  <select class="field-input" name="ewallet_provider" id="disb-ewallet-provider" style="margin-top:4px">
+                    <?php foreach ($payout_dests['ewallets'] as $wkey => $winfo): ?>
+                      <option value="<?= $wkey ?>" <?= (strtolower($new_invoice['ewallet_provider'] ?? '') === $wkey) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($winfo['name']) ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                </label>
+                <label style="font-size:12px;font-weight:600;display:block">Mobile Number (09XXXXXXXXX) <span style="color:var(--red)">*</span>
+                  <input class="field-input" type="text" name="ewallet_mobile_number" value="<?= htmlspecialchars($new_invoice['ewallet_mobile_number'] ?: $new_invoice['supplier_phone']) ?>" placeholder="09171234567" style="margin-top:4px"/>
+                </label>
+              </div>
+              <label style="font-size:12px;font-weight:600;display:block">Registered Account Name <span style="color:var(--red)">*</span>
+                <input class="field-input" type="text" name="ewallet_account_name" value="<?= htmlspecialchars($new_invoice['ewallet_account_name'] ?: $new_invoice['supplier_name']) ?>" style="margin-top:4px"/>
+              </label>
+            </div>
+
+            <!-- Save account checkbox -->
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-main);margin-bottom:14px;cursor:pointer">
+              <input type="checkbox" name="save_to_supplier_profile" value="1" checked/>
+              <span>Save / update this receiving account as default in <strong><?= htmlspecialchars($new_invoice['supplier_name']) ?></strong>'s profile</span>
             </label>
-            <label style="font-size:12.5px;font-weight:600;display:block">Payment Date <span style="color:var(--red)">*</span>
-              <input class="field-input" type="date" name="payment_date" id="pay-date" max="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>" required style="margin-top:4px"/>
-              <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px">Cannot be future-dated for completion</small>
-            </label>
-          </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px">
-            <label style="font-size:12.5px;font-weight:600;display:block">Payment Method <span style="color:var(--red)">*</span>
-              <select class="field-input" name="payment_method" id="pay-method" style="margin-top:4px" onchange="toggleRefReq(this.value)">
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="check">Check</option>
-                <option value="ewallet">E-Wallet (GCash / Maya)</option>
-                <option value="online">Online / Card</option>
-                <option value="cash">Cash (Over the counter)</option>
-              </select>
-            </label>
-            <label style="font-size:12.5px;font-weight:600;display:block">Paying Account <span style="color:var(--red)">*</span>
-              <select class="field-input" name="paying_account" style="margin-top:4px" required>
-                <?php foreach ($store_paying_accounts as $acct): ?>
-                  <option value="<?= htmlspecialchars($acct) ?>"><?= htmlspecialchars($acct) ?></option>
-                <?php endforeach; ?>
-              </select>
-            </label>
-          </div>
+            <!-- Amount and Notes -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+              <label style="font-size:12.5px;font-weight:600;display:block">Disbursement Amount (₱) <span style="color:var(--red)">*</span>
+                <input class="field-input" type="number" step="0.01" min="0.01" max="<?= $new_inv_unpaid ?>" name="amount" value="<?= $new_inv_unpaid ?>" required style="margin-top:4px"/>
+              </label>
+              <label style="font-size:12.5px;font-weight:600;display:block">Notes / Remarks
+                <input class="field-input" type="text" name="notes" placeholder="Optional disbursement remarks" style="margin-top:4px"/>
+              </label>
+            </div>
 
-          <label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:12px">
-            Reference / Transaction No. <span id="ref-req-star" style="color:var(--red)">*</span>
-            <input class="field-input" type="text" name="reference_no" id="pay-ref" placeholder="e.g. Bank Ref, Check #, GCash Ref" style="margin-top:4px"/>
-            <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px">Must be unique across all payment records.</small>
-          </label>
-
-          <label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:14px;background:#FEFAF4;padding:12px;border:1.5px dashed var(--caramel,#8B4513);border-radius:8px">
-            <span style="display:flex;align-items:center;gap:6px">
-              <?= icon('file-text', 15) ?>
-              <span>Mandatory Proof of Payment (PDF / Image) <span style="color:var(--red)">*</span></span>
-            </span>
-            <input class="field-input" type="file" name="receipt_file" id="pay-receipt" accept=".pdf,.jpg,.jpeg,.png" style="margin-top:6px;background:#fff"/>
-            <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:4px">Upload deposit slip, bank transfer advice, or signed official receipt (PDF, JPG, PNG &le; 10MB). Required to complete payment.</small>
-          </label>
-
-          <label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:18px">Notes / Remarks
-            <textarea class="field-input" name="notes" placeholder="Optional notes for audit or supplier context" style="margin-top:4px;width:100%;min-height:55px"></textarea>
-          </label>
-
-          <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap">
-            <a href="payments.php" class="btn-cancel">Cancel</a>
-            <div style="display:flex;gap:8px">
-              <button type="submit" name="action" value="schedule" class="btn-ghost">
-                <?= icon('calendar', 14) ?> Schedule Later
-              </button>
-              <button type="submit" name="action" value="record_complete" class="btn-save" style="background:var(--caramel,#8B4513);border-color:var(--caramel,#8B4513)">
-                <?= icon('check-circle', 14) ?> Record &amp; Complete Payment
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap">
+              <a href="payments.php" class="btn-cancel">Cancel</a>
+              <button type="submit" class="btn-save" style="background:#16a34a;border-color:#16a34a;padding:9px 18px">
+                ⚡ Disburse via PayMongo (<?= php_currency($new_inv_unpaid) ?>)
               </button>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
+
+        <!-- TAB 2: PayMongo Online Checkout Session -->
+        <div id="pane-pay-checkout" style="display:none">
+          <form method="POST" id="form-paymongo-checkout">
+            <input type="hidden" name="action" value="paymongo_checkout"/>
+            <input type="hidden" name="invoice_id" value="<?= $new_invoice['id'] ?>"/>
+
+            <div style="background:#EFF6FF;border:1.5px solid #93C5FD;border-radius:10px;padding:14px;margin-bottom:16px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <div style="width:22px;height:22px;border-radius:50%;background:#2563EB;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800">💳</div>
+                <strong style="color:#1E40AF;font-size:13.5px">PayMongo Online Hosted Checkout</strong>
+              </div>
+              <p style="margin:0;font-size:12px;color:#1D4ED8;line-height:1.4">
+                Generates a secure PayMongo checkout session supporting instant <strong>GCash QR (QR Ph)</strong>, <strong>Maya</strong>, <strong>Credit/Debit Card</strong>, and direct online banking. Ideal for authorized card or QR wallet payments.
+              </p>
+            </div>
+
+            <div style="margin-bottom:16px">
+              <label style="font-size:12.5px;font-weight:600;display:block">Payment Amount (₱) <span style="color:var(--red)">*</span>
+                <input class="field-input" type="number" step="0.01" min="0.01" max="<?= $new_inv_unpaid ?>" name="amount" value="<?= $new_inv_unpaid ?>" required style="margin-top:4px"/>
+                <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px">Unpaid balance: <?= php_currency($new_inv_unpaid) ?></small>
+              </label>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap">
+              <a href="payments.php" class="btn-cancel">Cancel</a>
+              <button type="submit" class="btn-save" style="background:#2563eb;border-color:#2563eb;padding:9px 18px">
+                🚀 Launch PayMongo Checkout Session
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- TAB 3: Manual Payment Entry (Existing) -->
+        <div id="pane-pay-manual" style="display:none">
+          <form method="POST" id="payment-entry-form" enctype="multipart/form-data">
+            <input type="hidden" name="invoice_id" value="<?= $new_invoice['id'] ?>"/>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px">
+              <label style="font-size:12.5px;font-weight:600;display:block">Amount to Pay (₱) <span style="color:var(--red)">*</span>
+                <input class="field-input" type="number" step="0.01" min="0.01" max="<?= $new_inv_unpaid ?>" name="amount" id="pay-amount" value="<?= $new_inv_unpaid ?>" required style="margin-top:4px"/>
+                <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px">Max payable: <?= php_currency($new_inv_unpaid) ?></small>
+              </label>
+              <label style="font-size:12.5px;font-weight:600;display:block">Payment Date <span style="color:var(--red)">*</span>
+                <input class="field-input" type="date" name="payment_date" id="pay-date" max="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>" required style="margin-top:4px"/>
+                <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px">Cannot be future-dated for completion</small>
+              </label>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px">
+              <label style="font-size:12.5px;font-weight:600;display:block">Payment Method <span style="color:var(--red)">*</span>
+                <select class="field-input" name="payment_method" id="pay-method" style="margin-top:4px" onchange="toggleRefReq(this.value)">
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="check">Check</option>
+                  <option value="ewallet">E-Wallet (GCash / Maya)</option>
+                  <option value="online">Online / Card</option>
+                  <option value="cash">Cash (Over the counter)</option>
+                </select>
+              </label>
+              <label style="font-size:12.5px;font-weight:600;display:block">Paying Account <span style="color:var(--red)">*</span>
+                <select class="field-input" name="paying_account" style="margin-top:4px" required>
+                  <?php foreach ($store_paying_accounts as $acct): ?>
+                    <option value="<?= htmlspecialchars($acct) ?>"><?= htmlspecialchars($acct) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+            </div>
+
+            <label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:12px">
+              Reference / Transaction No. <span id="ref-req-star" style="color:var(--red)">*</span>
+              <input class="field-input" type="text" name="reference_no" id="pay-ref" placeholder="e.g. Bank Ref, Check #, GCash Ref" style="margin-top:4px"/>
+              <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px">Must be unique across all payment records.</small>
+            </label>
+
+            <label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:14px;background:#FEFAF4;padding:12px;border:1.5px dashed var(--caramel,#8B4513);border-radius:8px">
+              <span style="display:flex;align-items:center;gap:6px">
+                <?= icon('file-text', 15) ?>
+                <span>Mandatory Proof of Payment (PDF / Image) <span style="color:var(--red)">*</span></span>
+              </span>
+              <input class="field-input" type="file" name="receipt_file" id="pay-receipt" accept=".pdf,.jpg,.jpeg,.png" style="margin-top:6px;background:#fff"/>
+              <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:4px">Upload deposit slip, bank transfer advice, or signed official receipt (PDF, JPG, PNG &le; 10MB). Required to complete payment.</small>
+            </label>
+
+            <label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:18px">Notes / Remarks
+              <textarea class="field-input" name="notes" placeholder="Optional notes for audit or supplier context" style="margin-top:4px;width:100%;min-height:55px"></textarea>
+            </label>
+
+            <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+              <a href="payments.php" class="btn-cancel">Cancel</a>
+              <div style="display:flex;gap:8px">
+                <button type="submit" name="action" value="schedule" class="btn-ghost">
+                  <?= icon('calendar', 14) ?> Schedule Later
+                </button>
+                <button type="submit" name="action" value="record_complete" class="btn-save" style="background:var(--caramel,#8B4513);border-color:var(--caramel,#8B4513)">
+                  <?= icon('check-circle', 14) ?> Record &amp; Complete Payment
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
 
     <?php elseif ($payment): ?>
@@ -642,18 +909,40 @@ $store_paying_accounts = [
           <div><strong>Reference No:</strong> <?= htmlspecialchars($payment['reference_no'] ?: '— (Cash)') ?></div>
         </div>
 
+        <?php if (!empty($payment['paymongo_payout_id']) || !empty($payment['paymongo_checkout_id'])): ?>
+          <div style="margin-top:14px;padding:12px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="background:#16a34a;color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:900;font-size:14px">
+                ✓
+              </div>
+              <div>
+                <div style="font-size:11px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:0.04em">PayMongo Certified Gateway</div>
+                <div style="font-size:13px;font-weight:600;color:#14532d">
+                  <?= !empty($payment['paymongo_payout_id']) ? 'Automated Disbursement Payout' : 'Verified Online Checkout Session' ?>
+                  &bull; <span style="font-family:monospace;font-size:12px"><?= htmlspecialchars($payment['paymongo_payout_id'] ?: $payment['paymongo_checkout_id']) ?></span>
+                </div>
+              </div>
+            </div>
+            <span style="background:#dcfce7;color:#166534;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700">
+              Disbursed &bull; Verified
+            </span>
+          </div>
+        <?php endif; ?>
+
         <!-- Proof of payment attachment -->
         <div style="margin-top:16px;padding:12px 14px;background:var(--cream,#FAF7F2);border:1px solid var(--border,#e8ded2);border-radius:10px">
           <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Proof of Payment Document</div>
-          <?php if (!empty($payment['receipt_attachment_path'])): ?>
+          <?php if (!empty($payment['receipt_attachment_path'])): 
+            $is_voucher = str_contains($payment['receipt_attachment_path'], 'paymongo_voucher') || str_ends_with($payment['receipt_attachment_path'], '.html');
+          ?>
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
               <span style="font-size:13px;display:inline-flex;align-items:center;gap:6px">
                 <?= icon('file-text', 16, '', 'color:var(--caramel)') ?>
                 <strong><?= htmlspecialchars($payment['receipt_file_name'] ?: basename($payment['receipt_attachment_path'])) ?></strong>
                 <span style="font-size:11px;color:var(--text-muted)">(<?= round(($payment['receipt_file_size'] ?: 0)/1024, 1) ?> KB)</span>
               </span>
-              <a href="../<?= htmlspecialchars($payment['receipt_attachment_path']) ?>" target="_blank" class="btn-ghost" style="font-size:12px;padding:4px 10px">
-                <?= icon('eye', 13) ?> View Document
+              <a href="../<?= htmlspecialchars($payment['receipt_attachment_path']) ?>" target="_blank" class="btn-ghost" style="font-size:12px;padding:4px 10px;background:<?= $is_voucher ? '#16a34a' : 'transparent' ?>;color:<?= $is_voucher ? '#fff' : 'inherit' ?>">
+                <?= icon('eye', 13) ?> <?= $is_voucher ? '⚡ View / Print Official Voucher' : 'View Document' ?>
               </a>
             </div>
           <?php else: ?>
@@ -939,6 +1228,37 @@ $store_paying_accounts = [
 </div>
 
 <script>
+function switchPayTab(tab) {
+  const pDisb = document.getElementById('pane-pay-disburse');
+  const pCheck = document.getElementById('pane-pay-checkout');
+  const pMan = document.getElementById('pane-pay-manual');
+  if (pDisb) pDisb.style.display = (tab === 'disburse') ? 'block' : 'none';
+  if (pCheck) pCheck.style.display = (tab === 'checkout') ? 'block' : 'none';
+  if (pMan) pMan.style.display = (tab === 'manual') ? 'block' : 'none';
+
+  const bDisb = document.getElementById('tab-btn-disburse');
+  const bCheck = document.getElementById('tab-btn-checkout');
+  const bMan = document.getElementById('tab-btn-manual');
+  if (bDisb) bDisb.classList.toggle('active', tab === 'disburse');
+  if (bCheck) bCheck.classList.toggle('active', tab === 'checkout');
+  if (bMan) bMan.classList.toggle('active', tab === 'manual');
+}
+
+function toggleDisburseType(type) {
+  const fBank = document.getElementById('fields-bank');
+  const fEwallet = document.getElementById('fields-ewallet');
+  if (fBank) fBank.style.display = (type === 'bank') ? 'block' : 'none';
+  if (fEwallet) fEwallet.style.display = (type === 'ewallet') ? 'block' : 'none';
+}
+
+function syncBankCode(select) {
+  const opt = select.options[select.selectedIndex];
+  if (opt && opt.dataset.code) {
+    const codeInp = document.getElementById('disb-bank-code');
+    if (codeInp) codeInp.value = opt.dataset.code;
+  }
+}
+
 function toggleRefReq(method) {
   const star = document.getElementById('ref-req-star');
   const refInput = document.getElementById('pay-ref');

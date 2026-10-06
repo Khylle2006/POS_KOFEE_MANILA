@@ -71,9 +71,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!is_dir($upload_dir)) {
                         @mkdir($upload_dir, 0755, true);
                     }
-                    $ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
-                    if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
-                        $fname = 'inv_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+                    require_once __DIR__ . '/../includes/security.php';
+                    $mime = detect_upload_mime($_FILES['attachment']['tmp_name']);
+                    $mime_map = [
+                        'application/pdf' => 'pdf',
+                        'image/jpeg'      => 'jpg',
+                        'image/png'       => 'png',
+                    ];
+                    if (isset($mime_map[$mime])) {
+                        $ext = $mime_map[$mime];
+                        $fname = 'inv_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
                         if (move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
                             $attachment_path = 'uploads/invoices/' . $fname;
                         }
