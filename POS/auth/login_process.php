@@ -7,6 +7,7 @@
 
 require_once '../includes/db.php';
 require_once '../includes/security.php';
+require_once '../includes/login_approval_helpers.php';
 
 secure_session_start();
 send_security_headers();
@@ -86,40 +87,50 @@ if ($status === 'on_hold') {
 // ── Success ───────────────────────────────────
 record_login_attempt($username, true);
 
-session_regenerate_id(true);       // defeats session fixation
-$_SESSION = [];                    // start from a clean slate
-$_SESSION['_created'] = time();
-
-$_SESSION['user_id']   = (int)$user['id'];
-$_SESSION['username']  = $user['username'];
-$_SESSION['firstname'] = $user['firstname'];
-$_SESSION['lastname']  = $user['lastname'];
-$_SESSION['email']     = $user['email'];
-$_SESSION['role']      = $user['role'];
-$_SESSION['logged_in'] = true;
-
-// Multi-role support; fall back to the legacy single role.
+// ── Multi-role resolution for authorization check ──
+$user_roles = [];
 try {
     $role_stmt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :id ORDER BY role');
     $role_stmt->execute([':id' => $user['id']]);
-    $all_roles = $role_stmt->fetchAll(PDO::FETCH_COLUMN);
-    $_SESSION['roles'] = $all_roles ?: [$user['role']];
+    $user_roles = $role_stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (PDOException $e) {
     error_log('role load failed: ' . $e->getMessage());
-    $_SESSION['roles'] = [$user['role']];
+}
+$user['roles'] = $user_roles ?: [$user['role']];
+
+// ── Check Device Trust & Geolocation HR Authorization ──
+$ip = client_ip();
+$userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+$deviceHash = hash('sha256', $user['id'] . '|' . $userAgent . '|' . substr($ip, 0, strrpos($ip, '.')));
+
+$requiresApproval = does_user_require_login_approval($pdo, $user);
+$deviceTrusted = is_device_trusted($pdo, (int)$user['id'], $deviceHash);
+
+if ($requiresApproval && !$deviceTrusted) {
+    // Collect client-provided geolocation & device info
+    $lat = (isset($_POST['latitude']) && is_numeric($_POST['latitude'])) ? (float)$_POST['latitude'] : null;
+    $lon = (isset($_POST['longitude']) && is_numeric($_POST['longitude'])) ? (float)$_POST['longitude'] : null;
+    $acc = (isset($_POST['accuracy']) && is_numeric($_POST['accuracy'])) ? (float)$_POST['accuracy'] : null;
+    $locStatus = trim($_POST['location_status'] ?? 'unknown');
+    $deviceInfo = trim($_POST['device_info'] ?? '');
+
+    $authRes = create_login_authorization($pdo, $user, $lat, $lon, $acc, $locStatus, $deviceInfo);
+
+    if ($authRes['status'] === 'approved') {
+        // Auto-approved inside workplace geofence
+        establish_user_session($pdo, $user);
+        header('Location: index.php');
+        exit;
+    }
+
+    // Pending HR approval: store pending token and redirect to waiting screen
+    $_SESSION['pending_auth_token'] = $authRes['auth_token'];
+    $_SESSION['pending_auth_user_id'] = (int)$user['id'];
+    header('Location: waiting_approval.php?token=' . urlencode($authRes['auth_token']));
+    exit;
 }
 
-// Permissions are cached with a timestamp so a revoke takes
-// effect within a minute instead of at next login.
-$_SESSION['permissions']        = null;
-$_SESSION['permissions_loaded'] = 0;
-
-try {
-    $pdo->prepare('UPDATE users SET last_login = NOW() WHERE id = :id')
-        ->execute([':id' => $user['id']]);
-} catch (PDOException $e) {
-    error_log('last_login update failed: ' . $e->getMessage());
-}
-
+// ── Standard Immediate Authentication (Admin, HR, or Trusted Device) ──
+establish_user_session($pdo, $user);
 header('Location: index.php');
 exit;

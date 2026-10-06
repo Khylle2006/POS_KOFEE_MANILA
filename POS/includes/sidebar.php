@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/permissions.php';
 require_once __DIR__ . '/procurement_helpers.php';
 require_once __DIR__ . '/notify.php';
+require_once __DIR__ . '/login_approval_helpers.php';
 ob_start();
 require_once __DIR__ . '/icons.php';
 ob_end_clean(); // discard any stray/leaked text icons.php might accidentally output
@@ -87,6 +88,7 @@ $access = [
     'procurement_reports'      => has_permission('procurement.reports.view'),
     'supplier_portal'          => has_permission('procurement.supplier.portal') || in_array('procurement', $roles, true) || in_array('manager', $roles, true) || in_array('admin', $roles, true),
     'store_management'         => has_permission('store.view') || has_permission('store.manage') || in_array('admin', $roles, true) || in_array('manager', $roles, true),
+    'login_approvals'          => has_permission('users.manage') || in_array('admin', $roles, true) || in_array('hr', $roles, true),
     'profile'                  => true,
 ];
 
@@ -94,6 +96,7 @@ $access = [
 //    table isn't set up yet in this install) ──────────────────────
 $pending_count = 0;
 $requests_count = 0;
+$pending_logins_count = 0;
 try {
     $pdo = get_db();
     if ($access['pending']) {
@@ -112,6 +115,9 @@ try {
     $pending_finance_approvals_count = 0;
     if ($access['procurement_finance_review']) {
         try { $pending_finance_approvals_count = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
+    }
+    if ($access['login_approvals']) {
+        try { $pending_logins_count = count_pending_login_authorizations($pdo); } catch (Throwable $e) {}
     }
 } catch (Throwable $e) {
     // DB not reachable — sidebar still renders, just without counts.
@@ -749,8 +755,16 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         'hr' => [
             'title' => 'HR',
             'icon'  => 'users',
-            'badge' => $requests_count,
+            'badge' => $requests_count + $pending_logins_count,
             'items' => [
+                [
+                    'label'  => 'Login Approvals',
+                    'url'    => 'login_approvals.php',
+                    'icon'   => 'shield-check',
+                    'badge'  => $pending_logins_count,
+                    'access' => $access['login_approvals'],
+                    'active' => ($current === 'login_approvals.php'),
+                ],
                 [
                     'label'  => 'Staff Requests',
                     'url'    => 'hr_requests.php',

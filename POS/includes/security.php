@@ -55,7 +55,7 @@ function send_security_headers(): void {
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('X-XSS-Protection: 1; mode=block');
-    header('Permissions-Policy: geolocation=(), microphone=(), camera=(self)');
+    header('Permissions-Policy: geolocation=(self), microphone=(), camera=(self)');
 
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
           || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');

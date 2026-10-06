@@ -168,8 +168,14 @@ unset($_SESSION['login_username']);
       </div>
       <?php endif; ?>
 
-      <form class="space-y-4" method="POST" action="login_process.php">
+      <form id="loginForm" class="space-y-4" method="POST" action="login_process.php">
         <?= csrf_field() ?>
+        <input type="hidden" name="latitude" id="geo_latitude" value="">
+        <input type="hidden" name="longitude" id="geo_longitude" value="">
+        <input type="hidden" name="accuracy" id="geo_accuracy" value="">
+        <input type="hidden" name="location_status" id="geo_status" value="unrequested">
+        <input type="hidden" name="device_info" id="geo_device_info" value="">
+
         <div class="field">
           <label class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Username</label>
           <input type="text" name="username" placeholder="Username" value="<?= $saved_username ?>" required
@@ -185,15 +191,31 @@ unset($_SESSION['login_username']);
             class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
             style="color:var(--espresso)">
         </div>
-        
 
-        <button type="submit" class="btn-brew w-full text-white text-sm font-semibold rounded-lg py-2.5 mt-1 shadow-lg">
-          Sign In
+        <!-- Workplace GPS Status Indicator -->
+        <div id="geo_badge" class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[11px] bg-stone-100 text-stone-600 border border-stone-200/80 transition-all">
+          <div class="flex items-center gap-2 truncate">
+            <span id="geo_icon" class="animate-pulse">📍</span>
+            <span id="geo_label" class="truncate font-medium">Checking workplace location…</span>
+          </div>
+          <button type="button" onclick="window.retryLocation && window.retryLocation()" class="text-[10px] text-stone-500 hover:text-stone-900 font-semibold underline shrink-0 cursor-pointer">
+            Retry
+          </button>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn-brew w-full text-white text-sm font-semibold rounded-lg py-2.5 mt-1 shadow-lg flex items-center justify-center gap-2">
+          <span id="btnText">Sign In</span>
         </button>
 
         <p class="text-center text-[11px] text-stone-500 pt-1">
           Trouble signing in? <a href="forgot_password.php" class="font-semibold hover:underline" style="color:var(--caramel)">Forgot password</a>
         </p>
+
+        <div class="pt-1 text-center border-t border-[var(--latte)]/40 mt-3">
+          <p class="text-[10px] text-stone-400">
+            Testing multiple roles? Use <a href="http://127.0.0.1/POS_KOFEE_MANILA/POS/auth/login.php" class="font-semibold text-stone-600 underline hover:text-[var(--caramel)]">127.0.0.1</a> or <span class="font-medium text-stone-600">Incognito (Ctrl+Shift+N)</span>
+          </p>
+        </div>
       </form>
     </div>
     <div class="brand-in relative flex-1 flex flex-col items-center text-center py-2">
