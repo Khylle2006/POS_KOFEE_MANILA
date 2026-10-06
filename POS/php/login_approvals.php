@@ -39,6 +39,30 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_pending_json') {
     exit;
 }
 
+// ── AJAX Endpoint: Check if there's a new login attempt (Silent detector) ──
+if (isset($_GET['action']) && $_GET['action'] === 'check_new') {
+    header('Content-Type: application/json; charset=utf-8');
+    $clientLastId = (int)($_GET['last_id'] ?? 0);
+    $clientCount  = (int)($_GET['count'] ?? 0);
+
+    $st = $pdo->query("SELECT COALESCE(MAX(id), 0) AS max_id, COUNT(*) AS pending_count FROM login_authorizations WHERE status = 'pending' AND expires_at > NOW()");
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+
+    $currentMaxId = (int)($row['max_id'] ?? 0);
+    $currentCount = (int)($row['pending_count'] ?? 0);
+
+    // Only triggers if a new ID arrived or count increased
+    $hasNew = ($currentMaxId > $clientLastId) || ($currentCount > $clientCount);
+
+    echo json_encode([
+        'ok'      => true,
+        'has_new' => $hasNew,
+        'max_id'  => $currentMaxId,
+        'count'   => $currentCount,
+    ]);
+    exit;
+}
+
 // ── Handle POST Actions ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -137,6 +161,12 @@ $trustedDevices = $pdo->query("
 
 // Statistics
 $totalPending = count($pendingRequests);
+$initialMaxPendingId = 0;
+foreach ($pendingRequests as $pr) {
+    if ((int)$pr['id'] > $initialMaxPendingId) {
+        $initialMaxPendingId = (int)$pr['id'];
+    }
+}
 $todayApproved = (int)$pdo->query("SELECT COUNT(*) FROM login_authorizations WHERE status = 'approved' AND DATE(approved_at) = CURDATE()")->fetchColumn();
 $todayRejected = (int)$pdo->query("SELECT COUNT(*) FROM login_authorizations WHERE status = 'rejected' AND DATE(rejected_at) = CURDATE()")->fetchColumn();
 $totalTrusted = count($trustedDevices);
@@ -720,6 +750,28 @@ let employeeMarkers = [];
 let connectionLine = null;
 let geofenceCircle = null;
 
+let lastSeenPendingId = <?= (int)$initialMaxPendingId ?>;
+let lastSeenCount = <?= (int)$totalPending ?>;
+
+// Silent background detector: auto-reloads ONLY when a NEW login attempt arrives
+async function checkNewLoginAttempts() {
+  try {
+    const res = await fetch(`login_approvals.php?action=check_new&last_id=${lastSeenPendingId}&count=${lastSeenCount}`, {
+      cache: 'no-store'
+    });
+    const data = await res.json();
+    if (data.ok && data.has_new) {
+      console.log('New staff login attempt detected! Auto-reloading page...');
+      window.location.reload();
+    }
+  } catch (err) {
+    // Silent fail without interrupting user
+  }
+}
+
+// Check every 3.5 seconds completely silently in background
+setInterval(checkNewLoginAttempts, 3500);
+
 // Clock Updater
 function updateClock() {
   const now = new Date();
@@ -844,8 +896,24 @@ function navigateQueue(step) {
 
 // Update the Employee Details Panel UI to reflect the selected request
 function updateEmployeeCardUI() {
+  const cardContainer = document.getElementById('employee_card_container');
   if (!pendingList || pendingList.length === 0) {
-    location.reload();
+    if (cardContainer) {
+      cardContainer.innerHTML = `
+        <div style="text-align:center; padding: 40px 10px; margin:auto;">
+          <div style="width:64px; height:64px; border-radius:50%; background:#E8F8F0; color:#10B981; margin:0 auto 16px auto; display:flex; align-items:center; justify-content:center; font-size:28px;">
+            ✓
+          </div>
+          <h3 style="font-size:19px; font-weight:700; color:#1F1626; margin:0 0 6px 0;">No Pending Requests</h3>
+          <p style="font-size:12px; color:#6B7280; line-height:1.5; max-width:280px; margin:0 auto 20px auto;">
+            All staff logins have been verified. When an employee signs in, their GPS proximity and selfie proof will appear here.
+          </p>
+          <button type="button" onclick="refreshQueue()" style="padding:9px 18px; border-radius:10px; background:#F3EFEA; border:1px solid #E2D4C3; font-size:12px; font-weight:600; cursor:pointer;">
+            Check for Requests
+          </button>
+        </div>
+      `;
+    }
     return;
   }
 
@@ -1040,13 +1108,12 @@ function detectStorePin() {
   );
 }
 
-// Auto-run on load
+// Auto-run on load (NO automatic page refresh)
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     initRadarMap();
     if (radarMapInstance) radarMapInstance.invalidateSize();
   }, 250);
-  setInterval(refreshQueue, 5000);
 });
 </script>
 </body>
