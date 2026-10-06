@@ -143,7 +143,7 @@ try {
         ':order_id_param' => $orderId,
     ]);
 
-    $baseUrl = rtrim(((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/POS_KOFEE_MANILA/POS', '/');
+    $baseUrl = paymongo_get_base_url();
 
     $result = paymongo_request('checkout_sessions', [
         'billing' => [

@@ -22,11 +22,35 @@ function paymongo_is_configured(): bool
 
 function paymongo_is_demo(): bool
 {
-    return str_starts_with(PAYMONGO_SECRET_KEY, 'demo') || PAYMONGO_SECRET_KEY === 'sandbox';
-    return PAYMONGO_SECRET_KEY === ''
-        || str_starts_with(PAYMONGO_SECRET_KEY, 'demo')
-        || PAYMONGO_SECRET_KEY === 'sandbox'
-        || (defined('APP_ENV') && APP_ENV === 'development' && !str_starts_with(PAYMONGO_SECRET_KEY, 'sk_'));
+    $key = trim(PAYMONGO_SECRET_KEY);
+    if ($key === '' || $key === 'demo' || $key === 'sandbox') {
+        return true;
+    }
+    if (str_starts_with($key, 'demo') || str_contains($key, 'demo') || str_contains($key, 'sandbox')) {
+        return true;
+    }
+    if (!str_starts_with($key, 'sk_')) {
+        return true;
+    }
+    return false;
+}
+
+function paymongo_get_base_url(): string
+{
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $script = $_SERVER['SCRIPT_NAME'] ?? '';
+
+    $posIndex = strpos($script, '/POS/');
+    if ($posIndex !== false) {
+        $prefix = substr($script, 0, $posIndex + 4);
+    } elseif (str_ends_with($script, '/POS')) {
+        $prefix = $script;
+    } else {
+        $prefix = '/POS_KOFEE_MANILA/POS';
+    }
+
+    return rtrim($scheme . $host . $prefix, '/');
 }
 
 function paymongo_order_has_column(PDO $pdo, string $column): bool
@@ -67,7 +91,48 @@ function paymongo_request(string $endpoint, ?array $attributes = null, string $m
     if (paymongo_is_demo()) {
         // Safe local sandbox simulation for development & demonstration
         if (str_starts_with($endpoint, 'checkout_sessions')) {
+            // Check status of an existing session
+            if (preg_match('#^checkout_sessions/(cs_demo_[a-zA-Z0-9_]+)#', $endpoint, $m)) {
+                $sessId = $m[1];
+                $isPaid = false;
+                try {
+                    $db = get_db();
+                    $st = $db->prepare("SELECT payment_status, status FROM orders WHERE paymongo_session_id = :sid LIMIT 1");
+                    $st->execute([':sid' => $sessId]);
+                    $row = $st->fetch(PDO::FETCH_ASSOC);
+                    if ($row && ($row['payment_status'] === 'paid' || $row['status'] === 'completed')) {
+                        $isPaid = true;
+                    }
+                } catch (Throwable) {}
+
+                return [
+                    'success' => true,
+                    'code'    => 200,
+                    'data'    => [
+                        'id'         => $sessId,
+                        'type'       => 'checkout_session',
+                        'attributes' => [
+                            'status'              => $isPaid ? 'paid' : 'active',
+                            'payment_method_used' => 'gcash',
+                            'payments'            => $isPaid ? [
+                                [
+                                    'id'         => 'pay_sim_' . substr(hash('sha256', $sessId), 0, 16),
+                                    'type'       => 'payment',
+                                    'attributes' => ['status' => 'paid', 'amount' => 10000]
+                                ]
+                            ] : []
+                        ]
+                    ],
+                    'error'   => null
+                ];
+            }
+
+            // Create new demo checkout session pointing to local interactive screen
             $demoId = 'cs_demo_' . bin2hex(random_bytes(8));
+            $orderRef = $attributes['reference_number'] ?? '';
+            $baseUrl = paymongo_get_base_url();
+            $checkoutUrl = $baseUrl . '/php/demo_checkout.php?session=' . urlencode($demoId) . ($orderRef ? '&order_id=' . urlencode($orderRef) : '');
+
             return [
                 'success' => true,
                 'code'    => 200,
@@ -76,7 +141,7 @@ function paymongo_request(string $endpoint, ?array $attributes = null, string $m
                     'type'       => 'checkout_session',
                     'attributes' => [
                         'status'              => 'active',
-                        'checkout_url'        => 'https://test.paymongo.com/demo_checkout?session=' . $demoId,
+                        'checkout_url'        => $checkoutUrl,
                         'payment_method_used' => 'gcash',
                         'payments'            => []
                     ]
