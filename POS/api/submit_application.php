@@ -113,6 +113,13 @@ try {
         exit;
     }
 
+    $cleanOrigName = basename(str_replace('\\', '/', (string)($file['name'] ?? '')));
+    $cleanOrigName = trim(preg_replace('/[\x00-\x1F\x7F]/', '', $cleanOrigName) ?? '');
+    $cleanOrigName = substr($cleanOrigName, 0, 255);
+    if ($cleanOrigName === '') {
+        $cleanOrigName = 'resume.' . $ext;
+    }
+
     // ── Generate Unique Application Code ──
     // e.g., KM-2026-BAR-8291
     $slugInitials = strtoupper(substr(str_replace('-', '', $jobRow['slug']), 0, 3));
@@ -181,6 +188,44 @@ try {
 
     $appId = (int)$pdo->lastInsertId();
 
+    // Use a server-configured public URL when available; otherwise derive the local app URL safely.
+    $baseUrl = trim((string)(defined('APP_BASE_URL') ? APP_BASE_URL : (getenv('APP_BASE_URL') ?: '')));
+    $baseParts = $baseUrl !== '' ? parse_url($baseUrl) : false;
+    if (!$baseParts || empty($baseParts['scheme']) || empty($baseParts['host'])
+        || !in_array(strtolower($baseParts['scheme']), ['http', 'https'], true)
+        || isset($baseParts['user']) || isset($baseParts['pass'])) {
+        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+        if (!preg_match('/^(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::\d{1,5})?$/i', $host)) {
+            $host = 'localhost';
+        }
+        $isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+        $appPath = str_replace('\\', '/', dirname(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/api/submit_application.php'))));
+        $appPath = ($appPath === '/' || $appPath === '.') ? '' : '/' . trim($appPath, '/');
+        $baseUrl = ($isHttps ? 'https' : 'http') . '://' . $host . $appPath;
+    } else {
+        $baseUrl = rtrim($baseUrl, '/');
+    }
+    $trackingUrl = $baseUrl . '/careers.php?track=' . rawurlencode($trackingCode);
+
+    // Application persistence succeeds independently of email delivery.
+    $emailSent = false;
+    try {
+        require_once __DIR__ . '/../includes/mailer.php';
+        $mailResult = send_application_confirmation_email(
+            $email,
+            trim($first_name . ' ' . $last_name),
+            (string)$jobRow['title'],
+            $trackingCode,
+            $trackingUrl
+        );
+        $emailSent = !empty($mailResult['sent']);
+        if (!$emailSent) {
+            error_log('Recruitment confirmation email was not delivered for application #' . $appId . '.');
+        }
+    } catch (Throwable $mailError) {
+        error_log('Recruitment confirmation email error for application #' . $appId . ': ' . $mailError->getMessage());
+    }
+
     echo json_encode([
         'success'         => true,
         'message'         => 'Your application has been received successfully!',
@@ -189,6 +234,7 @@ try {
         'job_title'       => $jobRow['title'],
         'candidate_name'  => $first_name . ' ' . $last_name,
         'email'           => $email,
+        'email_sent'      => $emailSent,
     ]);
 
 } catch (Throwable $e) {

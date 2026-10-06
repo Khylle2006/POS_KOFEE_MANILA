@@ -154,3 +154,45 @@ function send_password_reset_email(string $toEmail, string $userName, string $re
     return send_kofee_email($toEmail, $userName, $subject, $html);
 }
 
+/** Send an application receipt with the candidate's tracking code and status link. */
+function send_application_confirmation_email(
+    string $toEmail,
+    string $candidateName,
+    string $jobTitle,
+    string $trackingCode,
+    string $trackingUrl
+): array {
+    $safeName = htmlspecialchars($candidateName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeJob = htmlspecialchars($jobTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeCode = htmlspecialchars($trackingCode, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeUrl = htmlspecialchars($trackingUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $subject = 'Application Received — Kofee Manila';
+
+    $html = '
+    <!DOCTYPE html>
+    <html><head><meta charset="utf-8"></head>
+    <body style="margin:0;padding:24px;background:#F5EDE0;font-family:Arial,sans-serif;color:#2B2130">
+      <div style="max-width:560px;margin:auto;background:#fff;border:1px solid #EFE0CC;border-radius:14px;overflow:hidden">
+        <div style="padding:24px;background:#241A2E;color:#FBF3E9;text-align:center">
+          <h1 style="margin:0;font-family:Georgia,serif">Kofee Manila</h1>
+          <p style="margin:8px 0 0;color:#E6A25C">CAREERS</p>
+        </div>
+        <div style="padding:28px">
+          <h2 style="margin-top:0;color:#241A2E">Application received</h2>
+          <p>Hello ' . $safeName . ',</p>
+          <p>We received your application for <strong>' . $safeJob . '</strong>. Our recruitment team will review it and contact you if you are shortlisted.</p>
+          <p>Your application tracking code:</p>
+          <p style="padding:14px;background:#FAF7F2;border:1px dashed #C97B3D;border-radius:8px;text-align:center;font-family:monospace;font-size:20px;font-weight:bold">' . $safeCode . '</p>
+          <p style="text-align:center;margin:26px 0">
+            <a href="' . $safeUrl . '" style="display:inline-block;padding:12px 22px;background:#241A2E;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold">Track my application</a>
+          </p>
+          <p style="font-size:13px;color:#6B5D6B">You can also track your application from the Careers page using the code above or this email address.</p>
+        </div>
+        <div style="padding:16px;background:#FAF5EE;border-top:1px solid #EFE0CC;text-align:center;color:#8B7C88;font-size:12px">&copy; ' . date('Y') . ' Kofee Manila</div>
+      </div>
+    </body></html>';
+
+    $alt = "Hello {$candidateName},\n\nWe received your application for {$jobTitle}.\nTracking code: {$trackingCode}\nTrack its status: {$trackingUrl}\n\nKofee Manila Careers";
+    return send_kofee_email($toEmail, $candidateName, $subject, $html, $alt);
+}
+

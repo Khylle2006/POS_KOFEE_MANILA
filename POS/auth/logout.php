@@ -13,5 +13,5 @@ if (ini_get("session.use_cookies")) {
 }
 session_destroy();
 
-header('Location: login.php?reason=logout');
+header('Location: ../index.html?reason=logout', true, 303);
 exit;

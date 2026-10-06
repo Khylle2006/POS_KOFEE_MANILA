@@ -452,7 +452,7 @@ if (!$job) {
             Copy
           </button>
         </div>
-        <p style="font-size: 11.5px; color: var(--km-text-faint); margin-top: 8px;">Save this code or check your email to track your application stage at any time.</p>
+        <p id="submittedEmailNote" style="font-size: 11.5px; color: var(--km-text-faint); margin-top: 8px;">Save this code to track your application stage at any time.</p>
       </div>
 
       <div style="display: flex; gap: 12px; justify-content: center;">
@@ -617,7 +617,13 @@ if (!$job) {
           method: 'POST',
           body: formData
         });
-        const result = await resp.json();
+        const responseText = await resp.text();
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch {
+          throw new Error(`Server returned an invalid response (HTTP ${resp.status}). Please try again or contact the recruitment team.`);
+        }
 
         if (!result.success) {
           errorBanner.innerText = result.error || 'Failed to submit application. Please check your fields.';
@@ -630,12 +636,16 @@ if (!$job) {
         // Show Success Modal
         lastTrackingCode = result.tracking_code;
         document.getElementById('submittedCodeText').innerText = result.tracking_code;
+        const emailNote = document.getElementById('submittedEmailNote');
+        emailNote.innerText = result.email_sent
+          ? 'A confirmation and tracking link were sent to your email address.'
+          : 'Your application was saved, but the confirmation email could not be sent. Please save the tracking code above.';
         document.getElementById('successModalBackdrop').classList.add('open');
         appForm.reset();
         removeSelectedFile();
 
       } catch (err) {
-        errorBanner.innerText = 'Network error while submitting application. Please try again.';
+        errorBanner.innerText = err.message || 'Network error while submitting application. Please try again.';
         errorBanner.style.display = 'block';
       } finally {
         submitBtn.disabled = false;

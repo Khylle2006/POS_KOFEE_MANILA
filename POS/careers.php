@@ -71,7 +71,7 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
         <!-- Center Links -->
         <nav class="km-nav-links">
           <a href="index.html" class="km-nav-link">Home</a>
-          <a href="careers.php" class="km-nav-link active">Careers</a>
+          <a href="careers.php" class="km-nav-link active">Hiring</a>
           <a href="index.html#about" class="km-nav-link">About Us</a>
         </nav>
 
@@ -623,6 +623,13 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
         submitBtn.disabled = false;
         submitBtn.innerText = 'Check';
       }
+    }
+
+    const emailedTrackingCode = new URLSearchParams(window.location.search).get('track');
+    if (emailedTrackingCode) {
+      document.getElementById('trackQueryInput').value = emailedTrackingCode;
+      openTrackModal();
+      queryTrackStatus();
     }
   </script>
 
