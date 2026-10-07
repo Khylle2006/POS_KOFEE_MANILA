@@ -595,7 +595,7 @@ function ensure_procurement_tables(?PDO $pdo = null): void {
                 ON DUPLICATE KEY UPDATE label=VALUES(label), category=VALUES(category), description=VALUES(description)
             ")->execute();
             $grant_stmt = $pdo->prepare("INSERT IGNORE INTO role_permissions (role, perm_key) VALUES (?, 'procurement.finance.review')");
-            foreach (['admin', 'finance', 'manager'] as $r) {
+            foreach (['admin'] as $r) {
                 $grant_stmt->execute([$r]);
             }
         } catch (Throwable $pe) {

@@ -12,17 +12,26 @@ require_once '../includes/login_approval_helpers.php';
 
 require_login();
 
-$user = current_user();
-$roles = $user['roles'] ?? [$user['role'] ?? 'crew'];
-$canManage = has_permission('users.manage') || in_array('hr', $roles, true) || in_array('admin', $roles, true);
-
-if (!$canManage) {
-    header('Location: no_access.php');
-    exit;
-}
-
 $pdo = get_db();
 ensure_login_approval_tables($pdo);
+
+$user = current_user();
+$roles = $user['roles'] ?? [$user['role'] ?? 'crew'];
+$canManage = has_permission('login_approval.manage');
+
+if (!$canManage) {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+           || !empty($_POST['is_ajax'])
+           || (isset($_GET['action']) && in_array($_GET['action'], ['get_pending_json', 'check_new'], true));
+    if ($isAjax) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => 'You do not have permission to manage login approvals.']);
+        exit;
+    }
+    header('Location: no_access.php?perm=login_approval.manage');
+    exit;
+}
 
 $toast = '';
 $toast_type = 'success';
@@ -396,10 +405,22 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
           <div style="display:flex; gap:8px; margin-bottom:14px; overflow-x:auto; padding-bottom:4px;">
             <?php foreach ($pendingRequests as $idx => $pr):
               $pInside = $pr['distance_meters'] !== null && (float)$pr['distance_meters'] <= (float)$settings['geofence_radius'];
+              $prThumb = null;
+              if (!empty($pr['avatar_path']) && file_exists(__DIR__ . '/../' . ltrim($pr['avatar_path'], '/'))) {
+                  $prThumb = '../' . ltrim($pr['avatar_path'], '/');
+              } elseif (!empty($pr['selfie_photo']) && file_exists(__DIR__ . '/../' . ltrim($pr['selfie_photo'], '/'))) {
+                  $prThumb = '../' . ltrim($pr['selfie_photo'], '/');
+              }
+              $prInitials = strtoupper(substr($pr['firstname'] ?: $pr['username'], 0, 1) . substr($pr['lastname'] ?? '', 0, 1));
             ?>
             <button type="button" onclick="selectQueueIndex(<?= $idx ?>)" id="queue_thumb_<?= $idx ?>"
-                    style="padding:5px 12px; border-radius:10px; font-size:11.5px; cursor:pointer; display:flex; align-items:center; gap:6px; border:1px solid <?= $idx === 0 ? '#C97B3D' : '#E5E7EB' ?>; background:<?= $idx === 0 ? '#FFF6EB' : '#ffffff' ?>; color:<?= $idx === 0 ? '#C97B3D' : '#374151' ?>; font-weight:<?= $idx === 0 ? '700' : '500' ?>;">
-              <span style="width:7px; height:7px; border-radius:50%; background:<?= $pInside ? '#10B981' : '#EF4444' ?>;"></span>
+                    style="padding:4px 10px; border-radius:10px; font-size:11.5px; cursor:pointer; display:flex; align-items:center; gap:7px; border:1px solid <?= $idx === 0 ? '#C97B3D' : '#E5E7EB' ?>; background:<?= $idx === 0 ? '#FFF6EB' : '#ffffff' ?>; color:<?= $idx === 0 ? '#C97B3D' : '#374151' ?>; font-weight:<?= $idx === 0 ? '700' : '500' ?>;">
+              <span style="width:7px; height:7px; border-radius:50%; background:<?= $pInside ? '#10B981' : '#EF4444' ?>; flex-shrink:0;"></span>
+              <?php if ($prThumb): ?>
+                <img src="<?= htmlspecialchars($prThumb) ?>" alt="avatar" style="width:20px; height:20px; border-radius:50%; object-fit:cover; border:1px solid #E5E7EB; flex-shrink:0;">
+              <?php else: ?>
+                <span style="width:20px; height:20px; border-radius:50%; background:#7A1C1C; color:#fff; font-size:9.5px; display:inline-flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;"><?= htmlspecialchars($prInitials) ?></span>
+              <?php endif; ?>
               <span><?= htmlspecialchars($pr['firstname'] ?: $pr['username']) ?></span>
             </button>
             <?php endforeach; ?>
@@ -428,7 +449,7 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
                   <?php endif; ?>
                 </div>
               </div>
-              <span class="kfs-photo-caption">Employee Selfie Proof</span>
+              <span class="kfs-photo-caption" id="kfs_photo_label"><?= !empty($activeReq['avatar_path']) ? 'Profile Picture' : (!empty($activeReq['selfie_photo']) ? 'Selfie Proof' : 'Staff Proof') ?></span>
             </div>
 
             <!-- Details List -->
@@ -548,11 +569,27 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
               <?php else: foreach ($historyRecords as $h):
                 $hName = trim(($h['firstname'] ?? '') . ' ' . ($h['lastname'] ?? '')) ?: $h['username'];
                 $st = $h['status'];
+                $hThumb = null;
+                if (!empty($h['avatar_path']) && file_exists(__DIR__ . '/../' . ltrim($h['avatar_path'], '/'))) {
+                    $hThumb = '../' . ltrim($h['avatar_path'], '/');
+                }
+                $hInitials = strtoupper(substr($h['firstname'] ?: $h['username'], 0, 1) . substr($h['lastname'] ?? '', 0, 1));
               ?>
               <tr>
                 <td>
-                  <strong style="color:#1F1626;"><?= htmlspecialchars($hName) ?></strong>
-                  <div style="font-size:10.5px; color:#78716C;">@<?= htmlspecialchars($h['username']) ?> &bull; <?= htmlspecialchars($h['role']) ?></div>
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <?php if ($hThumb): ?>
+                      <img src="<?= htmlspecialchars($hThumb) ?>" alt="avatar" style="width:34px; height:34px; border-radius:50%; object-fit:cover; border:1px solid #E5E7EB; flex-shrink:0;">
+                    <?php else: ?>
+                      <div style="width:34px; height:34px; border-radius:50%; background:#7A1C1C; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700; flex-shrink:0;">
+                        <?= htmlspecialchars($hInitials) ?>
+                      </div>
+                    <?php endif; ?>
+                    <div>
+                      <strong style="color:#1F1626;"><?= htmlspecialchars($hName) ?></strong>
+                      <div style="font-size:10.5px; color:#78716C;">@<?= htmlspecialchars($h['username']) ?> &bull; <?= htmlspecialchars($h['role']) ?></div>
+                    </div>
+                  </div>
                 </td>
                 <td>
                   <span class="badge-app <?= $st ?>"><?= htmlspecialchars($st) ?></span>
@@ -841,17 +878,23 @@ function initRadarMap() {
 
       const initials = (cur.firstname ? cur.firstname.charAt(0) : (cur.username ? cur.username.charAt(0) : 'E')).toUpperCase() +
                        (cur.lastname ? cur.lastname.charAt(0) : '').toUpperCase();
+      const empPhoto = cur.avatar_path ? ('../' + cur.avatar_path.replace(/^\//,'')) :
+                       (cur.selfie_photo ? ('../' + cur.selfie_photo.replace(/^\//,'')) : null);
 
-      // Employee Marker (Green round badge with initials "JM" as in mockup)
+      // Employee Marker (Photo or round badge with initials)
       const empIcon = L.divIcon({
         className: 'custom-emp-pin',
-        html: `
+        html: empPhoto ? `
+          <div style="width:36px; height:36px; border-radius:50%; overflow:hidden; border:2.5px solid ${isInside ? '#10B981' : '#EF4444'}; box-shadow:0 6px 14px rgba(0,0,0,0.3); background:#ffffff;">
+            <img src="${empPhoto}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${isInside ? '#10B981' : '#EF4444'};color:#ffffff;font-size:12px;font-weight:700;\\'>${initials}</div>'">
+          </div>
+        ` : `
           <div style="width:34px; height:34px; border-radius:50%; background:${isInside ? '#10B981' : '#EF4444'}; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; border:2.5px solid #ffffff; box-shadow:0 6px 14px rgba(0,0,0,0.3);">
             ${initials}
           </div>
         `,
-        iconSize: [34, 34],
-        iconAnchor: [17, 17]
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
       });
 
       const empMarker = L.marker([lat, lon], { icon: empIcon }).addTo(radarMapInstance)
@@ -970,8 +1013,13 @@ function updateEmployeeCardUI() {
   // Photo
   const imgEl = document.getElementById('emp_photo_img');
   const fallbackEl = document.getElementById('emp_avatar_fallback');
-  const photoUrl = cur.selfie_photo ? ('../' + cur.selfie_photo.replace(/^\//,'')) :
-                   (cur.avatar_path ? ('../' + cur.avatar_path.replace(/^\//,'')) : null);
+  const labelEl = document.getElementById('kfs_photo_label');
+  const photoUrl = cur.avatar_path ? ('../' + cur.avatar_path.replace(/^\//,'')) :
+                   (cur.selfie_photo ? ('../' + cur.selfie_photo.replace(/^\//,'')) : null);
+
+  if (labelEl) {
+    labelEl.textContent = cur.avatar_path ? 'Profile Picture' : (cur.selfie_photo ? 'Selfie Proof' : 'Staff Proof');
+  }
 
   if (photoUrl && imgEl) {
     imgEl.src = photoUrl;

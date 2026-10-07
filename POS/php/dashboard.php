@@ -55,6 +55,7 @@ $shortcut_defs = [
     ['perm' => 'menu.manage',    'href' => 'add_item.php',      'icon' => 'menu',      'title' => 'Menu Manager',  'desc' => 'Edit drinks and prices'],
     ['perm' => 'analytics.view', 'href' => 'analytics.php',     'icon' => 'analytics', 'title' => 'Analytics',     'desc' => 'Sales performance overview'],
     ['perm' => 'users.manage',   'href' => 'manage_users.php',  'icon' => 'employees', 'title' => 'Manage Staff',  'desc' => 'Add and manage user accounts'],
+    ['perm' => 'login_approval.manage', 'href' => 'login_approvals.php', 'icon' => 'shield-check', 'title' => 'Login Approvals', 'desc' => 'Review staff geolocation & logins'],
 ];
 $shortcuts = array_values(array_filter($shortcut_defs, fn($s) => has_permission($s['perm'])));
 $shortcuts = array_slice($shortcuts, 0, 8);

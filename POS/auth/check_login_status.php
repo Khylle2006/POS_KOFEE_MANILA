@@ -47,7 +47,7 @@ try {
     if ($auth['status'] === 'approved') {
         // If session not yet created on this browser, establish it now
         if ((int)$auth['session_created'] === 0) {
-            $userStmt = $pdo->prepare('SELECT id, username, firstname, lastname, email, role, status FROM users WHERE id = :id LIMIT 1');
+            $userStmt = $pdo->prepare('SELECT id, username, firstname, lastname, email, role, status, avatar_path FROM users WHERE id = :id LIMIT 1');
             $userStmt->execute([':id' => $auth['user_id']]);
             $user = $userStmt->fetch(PDO::FETCH_ASSOC);
 

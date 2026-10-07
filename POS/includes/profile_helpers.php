@@ -72,17 +72,20 @@ function update_user_profile(PDO $pdo, int $user_id, array $data, ?array $avatar
 
     // Avatar upload handling
     $avatar_path = $user['avatar_path'];
+    if (!empty($data['remove_avatar'])) {
+        $avatar_path = null;
+    }
     if ($avatar_file && !empty($avatar_file['tmp_name']) && $avatar_file['error'] === UPLOAD_ERR_OK) {
         $upload_dir = __DIR__ . '/../uploads/avatars';
         if (!is_dir($upload_dir)) {
             @mkdir($upload_dir, 0755, true);
         }
 
-        $allowed_exts = ['jpg', 'jpeg', 'png', 'webp'];
+        $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
         $ext = strtolower(pathinfo($avatar_file['name'], PATHINFO_EXTENSION));
 
         if (!in_array($ext, $allowed_exts, true)) {
-            return ['ok' => false, 'error' => 'Invalid image format. Allowed: JPG, PNG, WEBP.'];
+            return ['ok' => false, 'error' => 'Invalid image format. Allowed: JPG, PNG, WEBP, GIF.'];
         }
         if ($avatar_file['size'] > 5 * 1024 * 1024) {
             return ['ok' => false, 'error' => 'Profile picture must not exceed 5MB.'];
@@ -138,6 +141,13 @@ function update_user_profile(PDO $pdo, int $user_id, array $data, ?array $avatar
         );
 
         $pdo->commit();
+
+        if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['user_id']) && (int)$_SESSION['user_id'] === $user_id) {
+            $_SESSION['avatar_path'] = $avatar_path ?: '';
+            $_SESSION['firstname']   = $firstname;
+            $_SESSION['lastname']    = $lastname;
+        }
+
         return ['ok' => true, 'avatar_path' => $avatar_path];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();

@@ -13,6 +13,7 @@ $landing_pages = [
     'menu.manage'                 => '../php/add_item.php',
     'inventory.view'              => '../php/inventory.php',
     'users.manage'                => '../php/manage_users.php',
+    'login_approval.manage'       => '../php/login_approvals.php',
     'procurement.view'            => '../php/procurement_dashboard.php',
     'procurement.supplier.portal' => '../php/supplier_portal.php',
     'payroll.view'                => '../php/payroll.php',

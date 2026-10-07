@@ -814,8 +814,13 @@ $jobs_list = $pdo->query("SELECT id, title, location FROM job_postings ORDER BY 
                       <div style="font-size:11px; color:#9E909D;">Start: <?= date('M d, Y', strtotime($app['start_date'])) ?></div>
                     </td>
                     <td style="padding:14px 16px;">
-                      <?php if (!empty($app['resume_path'])): ?>
-                        <a href="../<?= htmlspecialchars($app['resume_path']) ?>" target="_blank" class="resume-link" download>
+                      <?php if (!empty($app['resume_path'])): 
+                        $dlName = !empty($app['resume_filename']) 
+                            ? $app['resume_filename'] 
+                            : (trim(($app['first_name'] ?? '') . '_' . ($app['last_name'] ?? '')) . '_Resume.pdf');
+                        $dlUrl = 'download_file.php?f=' . urlencode(ltrim($app['resume_path'], '/')) . '&name=' . urlencode($dlName);
+                      ?>
+                        <a href="<?= htmlspecialchars($dlUrl) ?>" target="_blank" class="resume-link" download="<?= htmlspecialchars($dlName) ?>" title="Download Candidate Resume">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                           <span>Download</span>
                         </a>

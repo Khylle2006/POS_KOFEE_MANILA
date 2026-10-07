@@ -216,16 +216,30 @@ function current_user(): array {
         ? $_SESSION['roles']
         : (!empty($_SESSION['role']) ? [$_SESSION['role']] : []);
 
+    // Ensure avatar_path is synchronized in session if missing or empty
+    if (empty($_SESSION['avatar_path']) && !empty($_SESSION['user_id'])) {
+        try {
+            $pdo = get_db();
+            $stmt = $pdo->prepare("SELECT avatar_path FROM users WHERE id = ? LIMIT 1");
+            $stmt->execute([$_SESSION['user_id']]);
+            $dbAvatar = $stmt->fetchColumn();
+            if ($dbAvatar) {
+                $_SESSION['avatar_path'] = $dbAvatar;
+            }
+        } catch (Throwable $e) {}
+    }
+
     return [
-        'id'        => $_SESSION['user_id']   ?? null,
-        'username'  => $_SESSION['username']  ?? '',
-        'firstname' => $_SESSION['firstname'] ?? '',
-        'lastname'  => $_SESSION['lastname']  ?? '',
-        'email'     => $_SESSION['email']     ?? '',
-        'role'      => $_SESSION['role']      ?? 'staff', // primary role — legacy code
-        'roles'     => $roles,                            // ALL roles this account holds
-        'status'    => $_SESSION['status']    ?? 'active',
-        'name'      => trim(($_SESSION['firstname'] ?? '') . ' ' . ($_SESSION['lastname'] ?? '')),
+        'id'          => $_SESSION['user_id']   ?? null,
+        'username'    => $_SESSION['username']  ?? '',
+        'firstname'   => $_SESSION['firstname'] ?? '',
+        'lastname'    => $_SESSION['lastname']  ?? '',
+        'email'       => $_SESSION['email']     ?? '',
+        'role'        => $_SESSION['role']      ?? 'staff', // primary role — legacy code
+        'roles'       => $roles,                            // ALL roles this account holds
+        'status'      => $_SESSION['status']    ?? 'active',
+        'avatar_path' => $_SESSION['avatar_path'] ?? '',
+        'name'        => trim(($_SESSION['firstname'] ?? '') . ' ' . ($_SESSION['lastname'] ?? '')),
     ];
 }
 
@@ -300,6 +314,7 @@ function refresh_session(): void {
             $_SESSION['lastname'] = $user['lastname'] ?? '';
             $_SESSION['email'] = $user['email'] ?? '';
             $_SESSION['status'] = $user['status'] ?? 'active';
+            $_SESSION['avatar_path'] = $user['avatar_path'] ?? '';
 
             // Also reload roles from user_roles
             $rStmt = $pdo->prepare("SELECT role FROM user_roles WHERE user_id = ? ORDER BY role");

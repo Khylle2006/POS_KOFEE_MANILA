@@ -50,7 +50,7 @@ if ($wait > 0) {
 try {
     $pdo  = get_db();
     $stmt = $pdo->prepare(
-        'SELECT id, username, firstname, lastname, email, password, role, status
+        'SELECT id, username, firstname, lastname, email, password, role, status, avatar_path
            FROM users
           WHERE username = :u
           LIMIT 1'

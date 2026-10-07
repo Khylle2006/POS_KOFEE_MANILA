@@ -70,7 +70,7 @@ $access = [
     
         'payroll'            => has_permission('payroll.view'),
     'payroll_own'        => has_permission('payroll.own'),
-    'hr_requests'        => has_permission('requests.manage') || has_permission('leave.view') || in_array('admin', $roles, true) || in_array('hr', $roles, true) || in_array('manager', $roles, true),
+    'hr_requests'        => has_permission('requests.manage') || has_permission('leave.view') || in_array('admin', $roles, true),
     'manage_permissions' => has_permission('permissions.manage') || in_array('admin', $roles, true),
 
     // Procurement Module Access
@@ -88,7 +88,7 @@ $access = [
     'procurement_reports'      => has_permission('procurement.reports.view'),
     'supplier_portal'          => has_permission('procurement.supplier.portal') || in_array('procurement', $roles, true) || in_array('manager', $roles, true) || in_array('admin', $roles, true),
     'store_management'         => has_permission('store.view') || has_permission('store.manage') || in_array('admin', $roles, true) || in_array('manager', $roles, true),
-    'login_approvals'          => has_permission('users.manage') || in_array('admin', $roles, true) || in_array('hr', $roles, true),
+    'login_approvals'          => has_permission('login_approval.manage'),
     'profile'                  => true,
 ];
 
@@ -124,6 +124,20 @@ try {
 }
 
 $initials = strtoupper(substr($user['firstname'] ?: $user['username'] ?: '?', 0, 1));
+
+// Synchronize avatar_path with users table so navbar and sidebar always display the latest photo
+if (!empty($user['id']) && empty($user['avatar_path'])) {
+    try {
+        if (!isset($pdo)) $pdo = get_db();
+        $avStmt = $pdo->prepare("SELECT avatar_path FROM users WHERE id = :uid LIMIT 1");
+        $avStmt->execute([':uid' => (int)$user['id']]);
+        $dbAv = $avStmt->fetchColumn();
+        if (!empty($dbAv)) {
+            $user['avatar_path'] = $dbAv;
+            $_SESSION['avatar_path'] = $dbAv;
+        }
+    } catch (Throwable $e) {}
+}
 $notification_count = 0;
 $notifications = [];
 try {
@@ -166,9 +180,9 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     }
   } catch(e) {}
 </script>
-<!-- ── Required Stylesheets for Topbar & Navigation ── -->
 <link rel="stylesheet" href="../css/index.css?v=<?= filemtime(__DIR__ . '/../css/index.css') ?>">
 <link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__ . '/../css/sidebar.css') ?>">
+<link rel="stylesheet" href="../css/notifications.css?v=<?= file_exists(__DIR__ . '/../css/notifications.css') ? filemtime(__DIR__ . '/../css/notifications.css') : time() ?>">
 
 <!-- ── Kofee Manila Smooth Page Transition & Loader ── -->
 <style>
@@ -351,65 +365,74 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 
     <div class="flex-1"></div>
 
+    <!-- Mobile Backdrop Overlay -->
+    <div id="notification-backdrop" class="kfs-notif-backdrop hidden" onclick="toggleNotifications(false)"></div>
+
     <div class="relative" id="notification-wrap">
         <button id="notification-btn" type="button" onclick="toggleNotifications()"
-            class="relative w-9 h-9 flex items-center justify-center rounded-lg
-                   text-[rgba(251,243,233,0.78)] hover:bg-[rgba(251,243,233,0.12)] transition-colors cursor-pointer"
             aria-label="Notifications" aria-expanded="false" aria-controls="notification-panel">
-            <?= icon('bell', 18) ?>
-            <span id="notification-count" class="<?= $notification_count > 0 ? '' : 'hidden' ?> absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full
-                         bg-[var(--caramel-light,#d9a06b)] text-[var(--espresso-deep,#1c1108)] text-[10px] font-extrabold flex items-center justify-center shadow-xs">
+            <?= icon('bell', 19) ?>
+            <span id="notification-count" class="<?= $notification_count > 0 ? '' : 'hidden' ?>">
                 <?= $notification_count > 99 ? '99+' : $notification_count ?>
             </span>
         </button>
 
-        <!-- Dropdown Notification Panel -->
-        <div id="notification-panel" class="hidden absolute right-0 top-12 w-[370px] max-w-[calc(100vw-24px)]
-                    rounded-2xl bg-white text-[var(--text-main,#2b2130)] shadow-2xl border border-[var(--latte,#efe0cc)] overflow-hidden z-[260]">
-            <!-- Header with actions and tabs -->
-            <div class="p-3.5 border-b border-[var(--latte,#efe0cc)] bg-[#fcf9f5]">
-                <div class="flex items-center justify-between mb-2.5">
-                    <div class="flex items-center gap-2">
-                        <strong class="text-[13.5px] font-bold text-[var(--espresso,#2c1a0e)]">Notifications</strong>
-                        <span id="notif-header-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)]">
+        <!-- Dropdown / Mobile Sheet Notification Panel -->
+        <div id="notification-panel" class="kfs-notif-panel hidden" role="region" aria-label="Notifications Panel">
+            <!-- Mobile Pull / Drag Handle -->
+            <div class="kfs-notif-handle-bar" onclick="toggleNotifications(false)">
+                <span class="kfs-notif-handle"></span>
+            </div>
+
+            <!-- Header Section -->
+            <div class="kfs-notif-header">
+                <div class="kfs-notif-header-top">
+                    <div class="kfs-notif-title-group">
+                        <h3 class="kfs-notif-heading">Notifications</h3>
+                        <span id="notif-header-badge" class="kfs-notif-badge <?= $notification_count > 0 ? 'has-unread' : '' ?>">
                             <?= $notification_count ?> unread
                         </span>
                     </div>
-                    <div class="flex items-center gap-2 text-[11px]">
-                        <button type="button" onclick="markAllNotificationsRead()" title="Mark all as read"
-                                class="font-semibold text-[var(--caramel,#c47d3e)] hover:underline flex items-center gap-1 cursor-pointer">
-                            <?= icon('check', 11) ?> Mark all read
-                        </button>
-                        <span class="text-stone-300">&middot;</span>
-                        <button type="button" onclick="clearReadNotifications()" title="Delete all read notifications"
-                                class="font-medium text-[var(--text-muted,#8b7c88)] hover:text-red-600 transition-colors cursor-pointer">
-                            Clear read
-                        </button>
-                    </div>
+                    <button type="button" class="kfs-notif-close-btn" onclick="toggleNotifications(false)" aria-label="Close notifications">
+                        <?= icon('x', 16) ?>
+                    </button>
                 </div>
 
-                <!-- Tabs: All vs Unread -->
-                <div class="flex items-center gap-1 bg-[#f0e7dc] p-1 rounded-lg text-[11.5px] font-semibold">
-                    <button type="button" id="notif-tab-all" onclick="filterNotifications('all')"
-                            class="flex-1 py-1 rounded-md bg-white text-[var(--espresso,#2c1a0e)] shadow-xs transition-all cursor-pointer">
-                        All (<span id="notif-count-all"><?= count($notifications) ?></span>)
-                    </button>
-                    <button type="button" id="notif-tab-unread" onclick="filterNotifications('unread')"
-                            class="flex-1 py-1 rounded-md text-[var(--text-muted,#8b7c88)] hover:text-[var(--espresso,#2c1a0e)] transition-all cursor-pointer">
-                        Unread (<span id="notif-count-unread"><?= $notification_count ?></span>)
-                    </button>
+                <!-- Sub-bar: Filter Tabs & Bulk Actions -->
+                <div class="kfs-notif-subbar">
+                    <!-- Segmented Tabs -->
+                    <div class="kfs-notif-tabs">
+                        <button type="button" id="notif-tab-all" class="kfs-tab-btn active" onclick="filterNotifications('all')">
+                            All <span id="notif-count-all" class="kfs-badge-count"><?= count($notifications) ?></span>
+                        </button>
+                        <button type="button" id="notif-tab-unread" class="kfs-tab-btn" onclick="filterNotifications('unread')">
+                            Unread <span id="notif-count-unread" class="kfs-badge-count"><?= $notification_count ?></span>
+                        </button>
+                    </div>
+
+                    <!-- Bulk Actions -->
+                    <div class="kfs-notif-bulk-actions">
+                        <button type="button" class="kfs-bulk-btn" onclick="markAllNotificationsRead()" title="Mark all notifications as read">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Read all</span>
+                        </button>
+                        <button type="button" class="kfs-bulk-btn kfs-bulk-btn-muted" onclick="clearReadNotifications()" title="Delete read notifications">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                            <span>Clear</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <!-- List of items -->
-            <div id="notification-list" class="max-h-[380px] overflow-y-auto divide-y divide-[var(--latte,#efe0cc)]">
+            <!-- List of Notification Items -->
+            <div id="notification-list" class="kfs-notif-list">
                 <?php if (!$notifications): ?>
-                <div id="notif-empty-state" class="px-4 py-10 text-center text-[var(--text-muted,#8b7c88)]">
-                    <div class="w-10 h-10 mx-auto mb-2.5 rounded-full bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center">
-                        <?= icon('bell', 20) ?>
+                <div id="notif-empty-state" class="kfs-notif-empty">
+                    <div class="kfs-notif-empty-icon-box">
+                        <?= icon('bell', 24) ?>
                     </div>
-                    <p class="text-[12.5px] font-semibold text-[var(--espresso,#2c1a0e)]">You're all caught up!</p>
-                    <p class="text-[11px] text-[var(--text-muted,#8b7c88)] mt-0.5">No notifications right now.</p>
+                    <h4 class="kfs-notif-empty-title">You're all caught up!</h4>
+                    <p class="kfs-notif-empty-sub">No notifications right now.</p>
                 </div>
                 <?php else: foreach ($notifications as $n):
                     $actor = $n['actor_id']
@@ -423,73 +446,92 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                         str_contains($n_type, 'req')                                                                        => 'requests',
                         str_contains($n_type, 'pay') || str_contains($n_type, 'invoice') || str_contains($n_type, 'coin')  => 'coin',
                         str_contains($n_type, 'batch') || str_contains($n_type, 'stock') || str_contains($n_type, 'item')   => 'package',
-                        str_contains($n_type, 'user') || str_contains($n_type, 'employee')                                  => 'users',
+                        str_contains($n_type, 'user') || str_contains($n_type, 'employee') || str_contains($n_type, 'login') => 'users',
                         default => 'bell',
                     };
                     $clean_title = trim(preg_replace('/^[\x{1F000}-\x{1FFFF}\x{2600}-\x{27BF}\x{2300}-\x{23FF}\x{2B50}\s]+/u', '', $n['title']));
                 ?>
-                <div class="notification-item group relative flex items-start gap-3 p-3.5 transition-colors cursor-pointer hover:bg-[var(--accent-lt,#fcefe1)] <?= !$n['is_read'] ? 'bg-[rgba(252,239,225,0.45)]' : '' ?>"
+                <div class="kfs-notif-item <?= !$n['is_read'] ? 'is-unread' : 'is-read' ?>"
                      data-notification-id="<?= (int)$n['id'] ?>"
                      data-is-read="<?= $n['is_read'] ? '1' : '0' ?>"
                      onclick="handleNotificationClick(<?= (int)$n['id'] ?>, '<?= addslashes($n['link_url'] ?? '') ?>')">
                     
-                    <span class="w-8 h-8 rounded-xl bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
-                        <?= icon($n_icon, 15) ?>
-                    </span>
+                    <div class="kfs-notif-icon-badge kfs-badge-<?= htmlspecialchars($n_icon) ?>">
+                        <?= icon($n_icon, 16) ?>
+                    </div>
 
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center justify-between gap-1.5">
-                            <strong class="text-[12.5px] leading-4 text-[var(--espresso,#2c1a0e)] truncate font-semibold"><?= htmlspecialchars($clean_title) ?></strong>
-                            <div class="flex items-center gap-1 flex-shrink-0">
-                                <?php if (!empty($n['link_url'])): ?>
-                                <span class="text-[10px] font-bold text-[var(--caramel,#c47d3e)] group-hover:underline">Open &rarr;</span>
-                                <?php endif; ?>
-                                <span class="notification-dot w-2 h-2 rounded-full <?= $n['is_read'] ? 'hidden' : 'bg-[var(--caramel,#c97b3d)]' ?>"></span>
-                            </div>
+                    <div class="kfs-notif-content">
+                        <div class="kfs-notif-item-header">
+                            <h4 class="kfs-notif-item-title"><?= htmlspecialchars($clean_title) ?></h4>
+                            <span class="kfs-notif-time"><?= htmlspecialchars(relative_time($n['created_at'])) ?></span>
                         </div>
                         <?php if ($n['message']): ?>
-                        <p class="mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)] line-clamp-2">
+                        <p class="kfs-notif-item-msg">
                             <?= htmlspecialchars($n['message']) ?>
                         </p>
                         <?php endif; ?>
-                        <div class="flex items-center justify-between mt-1.5 text-[10px] text-[var(--text-muted,#8b7c88)]">
-                            <div class="flex items-center gap-1.5 truncate">
-                                <span class="font-semibold text-stone-700"><?= htmlspecialchars($actor) ?></span>
-                                <span>&middot;</span>
-                                <time><?= htmlspecialchars(relative_time($n['created_at'])) ?></time>
-                            </div>
-                            <!-- Quick action buttons on hover -->
-                            <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onclick="event.stopPropagation()">
+                        <div class="kfs-notif-item-footer">
+                            <span class="kfs-notif-actor-pill">
+                                <span><?= htmlspecialchars($actor) ?></span>
+                            </span>
+                            <?php if (!empty($n['link_url'])): ?>
+                            <span class="kfs-notif-link-hint">Open &rarr;</span>
+                            <?php endif; ?>
+                            <!-- Quick action buttons -->
+                            <div class="kfs-notif-actions" onclick="event.stopPropagation()">
                                 <button type="button" onclick="openNotificationDetail(<?= (int)$n['id'] ?>, event)"
                                         title="View activity details"
-                                        class="hover:text-[var(--caramel,#c47d3e)] text-stone-400 p-0.5 cursor-pointer">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                        class="kfs-card-action-btn">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                                 </button>
                                 <button type="button" onclick="toggleReadState(<?= (int)$n['id'] ?>, <?= $n['is_read'] ? '0' : '1' ?>, event)"
                                         title="<?= $n['is_read'] ? 'Mark as unread' : 'Mark as read' ?>"
-                                        class="hover:text-[var(--caramel,#c47d3e)] text-stone-400 p-0.5 cursor-pointer">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                        class="kfs-card-action-btn">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
                                 </button>
                                 <button type="button" onclick="deleteNotification(<?= (int)$n['id'] ?>, event)"
                                         title="Delete notification"
-                                        class="hover:text-red-600 text-stone-400 p-0.5 cursor-pointer">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                                        class="kfs-card-action-btn btn-delete">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                                 </button>
                             </div>
                         </div>
                     </div>
+
+                    <?php if (!$n['is_read']): ?>
+                    <span class="kfs-unread-indicator"></span>
+                    <?php endif; ?>
                 </div>
                 <?php endforeach; endif; ?>
+            </div>
+
+            <!-- Footer Bar -->
+            <div class="kfs-notif-footer">
+                <span><?= count($notifications) ?> update<?= count($notifications) === 1 ? '' : 's' ?></span>
+                <span class="kfs-notif-footer-tip">Click any item to view or open</span>
             </div>
         </div>
     </div>
 
-    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold cursor-pointer hover:opacity-90
+    <?php
+    $topbar_avatar_path = !empty($user['avatar_path']) ? trim($user['avatar_path']) : '';
+    $topbar_avatar_url = $topbar_avatar_path ? ('../' . ltrim($topbar_avatar_path, '/')) : '';
+    ?>
+    <div class="kfs-topbar-profile-btn relative w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold cursor-pointer transition-all duration-150 hover:scale-105 hover:ring-2 hover:ring-[var(--caramel,#c47d3e)] shadow-xs overflow-hidden
                 bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                 text-[var(--espresso-deep,#1c1108)]"
-         title="My Profile & Payment Details"
+         title="My Profile &amp; Account Details"
          onclick="window.location.href='profile.php'">
-        <?= htmlspecialchars($initials) ?>
+        <?php if ($topbar_avatar_url): ?>
+            <img src="<?= htmlspecialchars($topbar_avatar_url) ?>"
+                 alt="<?= htmlspecialchars($user['name'] ?: $user['username']) ?>"
+                 class="w-full h-full object-cover rounded-full"
+                 style="width:32px; height:32px; object-fit:cover; border-radius:50%;"
+                 onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+            <span style="display:none;" class="w-full h-full items-center justify-center"><?= htmlspecialchars($initials) ?></span>
+        <?php else: ?>
+            <span><?= htmlspecialchars($initials) ?></span>
+        <?php endif; ?>
     </div>
 </header>
 
@@ -907,8 +949,17 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
          onclick="window.location.href='profile.php'">
         <div class="kfs-user-avatar w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                     bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
-                    text-[var(--espresso-deep,#1c1108)]">
-            <?= htmlspecialchars($initials) ?>
+                    text-[var(--espresso-deep,#1c1108)] overflow-hidden">
+            <?php if (!empty($topbar_avatar_url)): ?>
+                <img src="<?= htmlspecialchars($topbar_avatar_url) ?>"
+                     alt="<?= htmlspecialchars($user['name'] ?: $user['username']) ?>"
+                     class="w-full h-full object-cover rounded-full"
+                     style="width:32px; height:32px; object-fit:cover; border-radius:50%;"
+                     onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                <span style="display:none;" class="w-full h-full items-center justify-center"><?= htmlspecialchars($initials) ?></span>
+            <?php else: ?>
+                <?= htmlspecialchars($initials) ?>
+            <?php endif; ?>
         </div>
         <div class="leading-tight overflow-hidden kfs-user-info">
             <div class="text-[12.5px] font-semibold text-[var(--cream,#fbf3e9)] truncate">
@@ -956,13 +1007,25 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 let currentNotifFilter = 'all';
 let lastKnownNotifCount = <?= (int)$notification_count ?>;
 
-function toggleNotifications() {
-    const panel  = document.getElementById('notification-panel');
-    const button = document.getElementById('notification-btn');
+function toggleNotifications(forceState) {
+    const panel    = document.getElementById('notification-panel');
+    const button   = document.getElementById('notification-btn');
+    const backdrop = document.getElementById('notification-backdrop');
     if (!panel) return;
-    const opening = panel.classList.contains('hidden');
+
+    const opening = typeof forceState === 'boolean' ? forceState : panel.classList.contains('hidden');
+
     panel.classList.toggle('hidden', !opening);
+    if (backdrop) {
+        backdrop.classList.toggle('hidden', !opening);
+    }
     if (button) button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+
+    // On mobile, lock background scrolling while panel is open
+    if (window.innerWidth < 640) {
+        document.body.style.overflow = opening ? 'hidden' : '';
+    }
+
     if (opening) {
         updateListCounts();
     }
@@ -974,22 +1037,18 @@ function filterNotifications(mode) {
     const tabUnread = document.getElementById('notif-tab-unread');
 
     if (mode === 'unread') {
-        tabUnread?.classList.add('bg-white', 'text-[var(--espresso,#2c1a0e)]', 'shadow-xs');
-        tabUnread?.classList.remove('text-[var(--text-muted,#8b7c88)]');
-        tabAll?.classList.remove('bg-white', 'text-[var(--espresso,#2c1a0e)]', 'shadow-xs');
-        tabAll?.classList.add('text-[var(--text-muted,#8b7c88)]');
+        tabUnread?.classList.add('active');
+        tabAll?.classList.remove('active');
 
-        document.querySelectorAll('.notification-item').forEach(el => {
+        document.querySelectorAll('.kfs-notif-item').forEach(el => {
             const isRead = el.getAttribute('data-is-read') === '1';
             el.classList.toggle('hidden', isRead);
         });
     } else {
-        tabAll?.classList.add('bg-white', 'text-[var(--espresso,#2c1a0e)]', 'shadow-xs');
-        tabAll?.classList.remove('text-[var(--text-muted,#8b7c88)]');
-        tabUnread?.classList.remove('bg-white', 'text-[var(--espresso,#2c1a0e)]', 'shadow-xs');
-        tabUnread?.classList.add('text-[var(--text-muted,#8b7c88)]');
+        tabAll?.classList.add('active');
+        tabUnread?.classList.remove('active');
 
-        document.querySelectorAll('.notification-item').forEach(el => {
+        document.querySelectorAll('.kfs-notif-item').forEach(el => {
             el.classList.remove('hidden');
         });
     }
@@ -997,8 +1056,8 @@ function filterNotifications(mode) {
 }
 
 function updateListCounts() {
-    const allItems = document.querySelectorAll('.notification-item');
-    const unreadItems = document.querySelectorAll('.notification-item[data-is-read="0"]');
+    const allItems = document.querySelectorAll('.kfs-notif-item');
+    const unreadItems = document.querySelectorAll('.kfs-notif-item.is-unread, .kfs-notif-item[data-is-read="0"]');
     const countAllEl = document.getElementById('notif-count-all');
     const countUnreadEl = document.getElementById('notif-count-unread');
     if (countAllEl) countAllEl.textContent = allItems.length;
@@ -1012,13 +1071,13 @@ function updateListCounts() {
         if (!emptyEl && list) {
             emptyEl = document.createElement('div');
             emptyEl.id = 'notif-empty-state';
-            emptyEl.className = 'px-4 py-10 text-center text-[var(--text-muted,#8b7c88)]';
+            emptyEl.className = 'kfs-notif-empty';
             emptyEl.innerHTML = `
-                <div class="w-10 h-10 mx-auto mb-2.5 rounded-full bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+                <div class="kfs-notif-empty-icon-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
                 </div>
-                <p class="text-[12.5px] font-semibold text-[var(--espresso,#2c1a0e)]">You're all caught up!</p>
-                <p class="text-[11px] text-[var(--text-muted,#8b7c88)] mt-0.5">${currentNotifFilter === 'unread' ? 'No unread notifications.' : 'No notifications right now.'}</p>
+                <h4 class="kfs-notif-empty-title">All caught up!</h4>
+                <p class="kfs-notif-empty-sub">${currentNotifFilter === 'unread' ? 'No unread notifications right now.' : 'No notifications right now.'}</p>
             `;
             list.appendChild(emptyEl);
         }
@@ -1043,11 +1102,12 @@ function resolveNotificationUrl(url) {
 
 async function handleNotificationClick(id, targetUrl) {
     // 1. Visually mark as read immediately
-    const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+    const item = document.querySelector(`.kfs-notif-item[data-notification-id="${id}"]`);
     if (item) {
         item.setAttribute('data-is-read', '1');
-        item.querySelector('.notification-dot')?.classList.add('hidden');
-        item.classList.remove('bg-[rgba(252,239,225,0.45)]');
+        item.classList.remove('is-unread');
+        item.classList.add('is-read');
+        item.querySelector('.kfs-unread-indicator')?.remove();
     }
 
     // 2. Mark as read on server with keepalive
@@ -1065,6 +1125,7 @@ async function handleNotificationClick(id, targetUrl) {
     // 3. Direct navigation if link exists, otherwise open modal
     const resolved = resolveNotificationUrl(targetUrl);
     if (resolved) {
+        toggleNotifications(false);
         if (typeof showKofeeLoader === 'function') {
             showKofeeLoader('Navigating…');
         }
@@ -1089,7 +1150,7 @@ async function openNotificationDetail(id, event) {
     modal.classList.add('flex');
 
     // Close panel so modal is focused cleanly
-    document.getElementById('notification-panel')?.classList.add('hidden');
+    toggleNotifications(false);
 
     try {
         const res = await fetch('../api/notifications.php', {
@@ -1143,11 +1204,12 @@ async function openNotificationDetail(id, event) {
 
         // Reading it marks it read — update UI immediately
         applyUnreadCount(data.unread);
-        const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+        const item = document.querySelector(`.kfs-notif-item[data-notification-id="${id}"]`);
         if (item) {
             item.setAttribute('data-is-read', '1');
-            item.querySelector('.notification-dot')?.classList.add('hidden');
-            item.classList.remove('bg-[rgba(252,239,225,0.45)]');
+            item.classList.remove('is-unread');
+            item.classList.add('is-read');
+            item.querySelector('.kfs-unread-indicator')?.remove();
         }
         updateListCounts();
     } catch (e) {
@@ -1176,10 +1238,11 @@ async function markAllNotificationsRead() {
         });
         const data = await res.json();
         if (data.success) {
-            document.querySelectorAll('.notification-dot').forEach(dot => dot.classList.add('hidden'));
-            document.querySelectorAll('.notification-item').forEach(item => {
+            document.querySelectorAll('.kfs-unread-indicator').forEach(dot => dot.remove());
+            document.querySelectorAll('.kfs-notif-item').forEach(item => {
                 item.setAttribute('data-is-read', '1');
-                item.classList.remove('bg-[rgba(252,239,225,0.45)]');
+                item.classList.remove('is-unread');
+                item.classList.add('is-read');
             });
             applyUnreadCount(0);
             updateListCounts();
@@ -1193,12 +1256,13 @@ async function markAllNotificationsRead() {
 }
 
 async function clearReadNotifications() {
-    const readItems = document.querySelectorAll('.notification-item[data-is-read="1"]');
+    const readItems = document.querySelectorAll('.kfs-notif-item[data-is-read="1"]');
     if (!readItems.length) return;
 
     readItems.forEach(item => {
         item.style.transition = 'all 0.2s ease';
         item.style.opacity = '0';
+        item.style.transform = 'scale(0.95)';
         setTimeout(() => item.remove(), 200);
     });
     setTimeout(updateListCounts, 250);
@@ -1220,14 +1284,24 @@ async function clearReadNotifications() {
 
 async function toggleReadState(id, newState, event) {
     if (event) event.stopPropagation();
-    const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+    const item = document.querySelector(`.kfs-notif-item[data-notification-id="${id}"]`);
     if (!item) return;
 
     // Optimistic UI
     item.setAttribute('data-is-read', newState ? '1' : '0');
-    const dot = item.querySelector('.notification-dot');
-    if (dot) dot.classList.toggle('hidden', newState === 1);
-    item.classList.toggle('bg-[rgba(252,239,225,0.45)]', newState === 0);
+    if (newState === 1) {
+        item.classList.remove('is-unread');
+        item.classList.add('is-read');
+        item.querySelector('.kfs-unread-indicator')?.remove();
+    } else {
+        item.classList.add('is-unread');
+        item.classList.remove('is-read');
+        if (!item.querySelector('.kfs-unread-indicator')) {
+            const dot = document.createElement('span');
+            dot.className = 'kfs-unread-indicator';
+            item.appendChild(dot);
+        }
+    }
 
     try {
         const res = await fetch('../api/notifications.php', {
@@ -1247,11 +1321,11 @@ async function toggleReadState(id, newState, event) {
 
 async function deleteNotification(id, event) {
     if (event) event.stopPropagation();
-    const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+    const item = document.querySelector(`.kfs-notif-item[data-notification-id="${id}"]`);
     if (item) {
         item.style.transition = 'all 0.25s ease';
         item.style.opacity = '0';
-        item.style.transform = 'translateX(20px)';
+        item.style.transform = 'translateX(24px)';
         setTimeout(() => {
             item.remove();
             updateListCounts();
@@ -1279,7 +1353,10 @@ function applyUnreadCount(count) {
     const headerBadge = document.getElementById('notif-header-badge');
     const unreadTabCount = document.getElementById('notif-count-unread');
 
-    if (headerBadge) headerBadge.textContent = num + ' unread';
+    if (headerBadge) {
+        headerBadge.textContent = num + ' unread';
+        headerBadge.classList.toggle('has-unread', num > 0);
+    }
     if (unreadTabCount) unreadTabCount.textContent = num;
 
     if (badge) {
@@ -1305,49 +1382,51 @@ function renderNotificationItems(items) {
     const html = items.map(n => {
         const isRead = n.is_read ? 1 : 0;
         const iconSvg = getIconSvg(n.icon);
+        const iconClass = 'kfs-badge-' + (n.icon || 'bell');
         const safeUrl = (n.link_url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return `
-            <div class="notification-item group relative flex items-start gap-3 p-3.5 transition-colors cursor-pointer hover:bg-[var(--accent-lt,#fcefe1)] ${!isRead ? 'bg-[rgba(252,239,225,0.45)]' : ''} ${currentNotifFilter === 'unread' && isRead ? 'hidden' : ''}"
+            <div class="kfs-notif-item ${!isRead ? 'is-unread' : 'is-read'} ${currentNotifFilter === 'unread' && isRead ? 'hidden' : ''}"
                  data-notification-id="${n.id}"
                  data-is-read="${isRead}"
                  onclick="handleNotificationClick(${n.id}, '${safeUrl}')">
-                <span class="w-8 h-8 rounded-xl bg-[var(--accent-lt,#fcefe1)] text-[var(--caramel,#c47d3e)] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
+                
+                <div class="kfs-notif-icon-badge ${iconClass}">
                     ${iconSvg}
-                </span>
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-center justify-between gap-1.5">
-                        <strong class="text-[12.5px] leading-4 text-[var(--espresso,#2c1a0e)] truncate font-semibold">${esc(n.title)}</strong>
-                        <div class="flex items-center gap-1 flex-shrink-0">
-                            ${n.link_url ? '<span class="text-[10px] font-bold text-[var(--caramel,#c47d3e)] group-hover:underline">Open &rarr;</span>' : ''}
-                            <span class="notification-dot w-2 h-2 rounded-full ${isRead ? 'hidden' : 'bg-[var(--caramel,#c97b3d)]'}"></span>
-                        </div>
+                </div>
+
+                <div class="kfs-notif-content">
+                    <div class="kfs-notif-item-header">
+                        <h4 class="kfs-notif-item-title">${esc(n.title)}</h4>
+                        <span class="kfs-notif-time">${esc(n.relative)}</span>
                     </div>
-                    ${n.message ? `<p class="mt-1 text-[11px] leading-4 text-[var(--text-muted,#8b7c88)] line-clamp-2">${esc(n.message)}</p>` : ''}
-                    <div class="flex items-center justify-between mt-1.5 text-[10px] text-[var(--text-muted,#8b7c88)]">
-                        <div class="flex items-center gap-1.5 truncate">
-                            <span class="font-semibold text-stone-700">${esc(n.actor)}</span>
-                            <span>&middot;</span>
-                            <time>${esc(n.relative)}</time>
-                        </div>
-                        <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onclick="event.stopPropagation()">
+
+                    ${n.message ? `<p class="kfs-notif-item-msg">${esc(n.message)}</p>` : ''}
+
+                    <div class="kfs-notif-item-footer">
+                        <span class="kfs-notif-actor-pill">${esc(n.actor)}</span>
+                        ${n.link_url ? '<span class="kfs-notif-link-hint">Open &rarr;</span>' : ''}
+                        
+                        <div class="kfs-notif-actions" onclick="event.stopPropagation()">
                             <button type="button" onclick="openNotificationDetail(${n.id}, event)"
                                     title="View activity details"
-                                    class="hover:text-[var(--caramel,#c47d3e)] text-stone-400 p-0.5 cursor-pointer">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                    class="kfs-card-action-btn">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                             </button>
                             <button type="button" onclick="toggleReadState(${n.id}, ${isRead ? 0 : 1}, event)"
                                     title="${isRead ? 'Mark as unread' : 'Mark as read'}"
-                                    class="hover:text-[var(--caramel,#c47d3e)] text-stone-400 p-0.5 cursor-pointer">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                    class="kfs-card-action-btn">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
                             </button>
                             <button type="button" onclick="deleteNotification(${n.id}, event)"
                                     title="Delete notification"
-                                    class="hover:text-red-600 text-stone-400 p-0.5 cursor-pointer">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                                    class="kfs-card-action-btn btn-delete">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                             </button>
                         </div>
                     </div>
                 </div>
+
+                ${!isRead ? '<span class="kfs-unread-indicator"></span>' : ''}
             </div>`;
     }).join('');
 
@@ -1357,13 +1436,13 @@ function renderNotificationItems(items) {
 
 function getIconSvg(name) {
     const icons = {
-        'truck': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/></svg>',
-        'rfq': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
-        'requests': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
-        'coin': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 6.4v1.2M12 16.4v1.2M9.2 15.4c.5.9 1.5 1.5 2.8 1.5 1.8 0 3-1 3-2.3 0-3.2-5.6-1.7-5.6-4.9 0-1.3 1.2-2.3 3-2.3 1.2 0 2.2.5 2.7 1.4"/></svg>',
-        'package': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
-        'users': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6.4 6.5-6.4s6.5 2.8 6.5 6.4"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 13.6c2.6.4 4.6 2.6 4.8 5.4"/></svg>',
-        'bell': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>'
+        'truck': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/></svg>',
+        'rfq': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
+        'requests': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
+        'coin': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 6.4v1.2M12 16.4v1.2M9.2 15.4c.5.9 1.5 1.5 2.8 1.5 1.8 0 3-1 3-2.3 0-3.2-5.6-1.7-5.6-4.9 0-1.3 1.2-2.3 3-2.3 1.2 0 2.2.5 2.7 1.4"/></svg>',
+        'package': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
+        'users': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6.4 6.5-6.4s6.5 2.8 6.5 6.4"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 13.6c2.6.4 4.6 2.6 4.8 5.4"/></svg>',
+        'bell': '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>'
     };
     return icons[name] || icons['bell'];
 }
@@ -1405,13 +1484,20 @@ function esc(s) {
 
 document.addEventListener('click', event => {
     const wrap = document.getElementById('notification-wrap');
-    if (wrap && !wrap.contains(event.target)) {
-        document.getElementById('notification-panel')?.classList.add('hidden');
+    const panel = document.getElementById('notification-panel');
+    const backdrop = document.getElementById('notification-backdrop');
+    if (panel && !panel.classList.contains('hidden')) {
+        if (wrap && !wrap.contains(event.target) && (!backdrop || event.target === backdrop)) {
+            toggleNotifications(false);
+        }
     }
 });
 
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeNotificationDetail();
+    if (e.key === 'Escape') {
+        closeNotificationDetail();
+        toggleNotifications(false);
+    }
 });
 
 document.getElementById('notif-detail-modal')?.addEventListener('click', e => {

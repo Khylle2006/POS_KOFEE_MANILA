@@ -190,10 +190,21 @@
 }
 
 .save-row-sticky {
+  position: sticky;
+  bottom: 18px;
+  z-index: 95;
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 20px; padding: 14px 22px; background: var(--card-bg);
+  margin-top: 24px; padding: 14px 22px; background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1.5px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 10px 30px -6px rgba(44, 26, 14, 0.22);
+  transition: all 0.25s ease;
+}
+.save-row-sticky.has-changes {
+  border-color: var(--caramel);
+  background: #FFFDF9;
+  box-shadow: 0 14px 38px -4px rgba(196, 125, 62, 0.4), 0 0 0 2px rgba(196, 125, 62, 0.25);
 }
 .dirty-indicator {
   font-size: 13px; font-weight: 700; color: var(--text-muted);
@@ -205,6 +216,11 @@
 }
 .dirty-dot.active {
   background: var(--caramel); box-shadow: 0 0 8px var(--caramel);
+  animation: pulseDot 1.4s ease-in-out infinite;
+}
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.75; }
 }
 
 .role-info-badge {

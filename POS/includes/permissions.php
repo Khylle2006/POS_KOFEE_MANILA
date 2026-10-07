@@ -203,6 +203,11 @@ function get_permission_aliases(string $perm_key): array {
         'leave.view'               => ['can_manage_leave', 'leave.view', 'hr_leave'],
         'can_manage_requests'      => ['requests.manage', 'can_manage_requests', 'hr_requests'],
         'requests.manage'          => ['requests.manage', 'can_manage_requests', 'hr_requests'],
+        'can_manage_login_approvals' => ['login_approval.manage', 'login_approvals.manage', 'can_manage_login_approvals', 'login_approval.view', 'login_approvals.view'],
+        'login_approval.manage'    => ['login_approval.manage', 'login_approvals.manage', 'can_manage_login_approvals', 'login_approval.view', 'login_approvals.view'],
+        'login_approvals.manage'   => ['login_approval.manage', 'login_approvals.manage', 'can_manage_login_approvals', 'login_approval.view', 'login_approvals.view'],
+        'login_approval.view'      => ['login_approval.manage', 'login_approvals.manage', 'login_approval.view', 'login_approvals.view'],
+        'login_approvals.view'     => ['login_approval.manage', 'login_approvals.manage', 'login_approval.view', 'login_approvals.view'],
         'dashboard.view'           => ['dashboard.view', 'can_view_dashboard'],
 
         // Procurement
@@ -314,9 +319,9 @@ function has_permission(string $perm_key): bool {
         return false;
     }
 
-    // 2. Refresh the cache when missing, not array, or older than 60s
+    // 2. Refresh the cache when missing, not array, or older than 10s
     $age = time() - (int)($_SESSION['permissions_loaded'] ?? 0);
-    if (!isset($_SESSION['permissions']) || !is_array($_SESSION['permissions']) || !isset($_SESSION['roles']) || $age > 60) {
+    if (!isset($_SESSION['permissions']) || !is_array($_SESSION['permissions']) || !isset($_SESSION['roles']) || $age > 10) {
         sync_user_session_permissions();
     }
 
@@ -584,7 +589,7 @@ function get_default_role_permissions(string $role): array {
         ],
         'hr' => [
             'dashboard.view', 'employee_dashboard.view', 'profile.view', 'profile.edit',
-            'users.manage', 'recruitment.manage', 'attendance.view', 'leave.view', 'requests.manage', 'employee.payment.manage',
+            'users.manage', 'login_approval.manage', 'recruitment.manage', 'attendance.view', 'leave.view', 'requests.manage', 'employee.payment.manage',
             'payroll.view', 'payroll.manage', 'payroll.loans', 'payroll.settings', 'payroll.own', 'payroll.advance.request',
             'analytics.view', 'files.download', 'store.view'
         ],
@@ -670,6 +675,7 @@ function install_default_permissions(): void {
 
             // HR & Staff
             ['users.manage',                    'Staff & User Management',              'HR & Staff',          'Create, edit, and deactivate employee login accounts and roles'],
+            ['login_approval.manage',           'Login Approvals & Geolocation',        'HR & Staff',          'Review, approve, or reject staff login authorization requests and configure store geofence settings'],
             ['attendance.view',                 'Attendance & Time-Clock',              'HR & Staff',          'Track employee clock-in/out records, calculate work hours, and approve shifts'],
             ['leave.view',                      'Leave & PTO Management',               'HR & Staff',          'Review, approve, or reject employee leave and paid time-off applications'],
             ['recruitment.manage',              'Recruitment & Job Vacancies',          'HR & Staff',          'Manage career job postings, applicant tracking, and interview stages'],

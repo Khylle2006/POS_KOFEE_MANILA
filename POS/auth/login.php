@@ -213,7 +213,7 @@ unset($_SESSION['login_username']);
 
         <div class="pt-1 text-center border-t border-[var(--latte)]/40 mt-3">
           <p class="text-[10px] text-stone-400">
-            Testing multiple roles? Use <a href="http://127.0.0.1/POS_KOFEE_MANILA/POS/auth/login.php" class="font-semibold text-stone-600 underline hover:text-[var(--caramel)]">127.0.0.1</a> or <span class="font-medium text-stone-600">Incognito (Ctrl+Shift+N)</span>
+          
           </p>
         </div>
       </form>

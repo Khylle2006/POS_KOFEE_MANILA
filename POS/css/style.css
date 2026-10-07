@@ -682,8 +682,9 @@ tbody tr:hover td { background: #FEFAF4; }
   box-sizing: border-box;
 }
 .prog-modal-overlay.open {
-  opacity: 1;
-  pointer-events: auto;
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 .prog-modal-dialog {
   background: #ffffff;

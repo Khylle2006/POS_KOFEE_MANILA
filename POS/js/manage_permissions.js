@@ -175,17 +175,20 @@ function updateUIStats() {
   const dirtyDot = document.getElementById('dirty-dot');
   const dirtyText = document.getElementById('dirty-text');
   const saveBtn = document.getElementById('save-btn');
+  const stickyRow = document.querySelector('.save-row-sticky');
 
   if (changedCount > 0) {
     if (dirtyDot) dirtyDot.classList.add('active');
-    if (dirtyText) dirtyText.textContent = `${changedCount} pending change(s) unsaved`;
+    if (dirtyText) dirtyText.innerHTML = `<strong>${changedCount} unsaved change(s)</strong> &mdash; Click &quot;Save Changes&quot; to apply`;
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.style.opacity = '1';
     }
+    if (stickyRow) stickyRow.classList.add('has-changes');
   } else {
     if (dirtyDot) dirtyDot.classList.remove('active');
     if (dirtyText) dirtyText.textContent = 'All changes saved to database';
+    if (stickyRow) stickyRow.classList.remove('has-changes');
   }
 }
 

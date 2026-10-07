@@ -43,7 +43,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'cancel') {
 
 // If already approved, establish session & forward immediately
 if ($auth['status'] === 'approved') {
-    $userStmt = $pdo->prepare('SELECT id, username, firstname, lastname, email, role, status FROM users WHERE id = :id LIMIT 1');
+    $userStmt = $pdo->prepare('SELECT id, username, firstname, lastname, email, role, status, avatar_path FROM users WHERE id = :id LIMIT 1');
     $userStmt->execute([':id' => $auth['user_id']]);
     $user = $userStmt->fetch(PDO::FETCH_ASSOC);
     if ($user && $user['status'] === 'active') {
@@ -197,8 +197,8 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
 
       <!-- Employee Info -->
       <div class="flex items-center justify-between pb-3 border-b border-[var(--latte)]">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-full bg-[var(--caramel)] text-white font-bold flex items-center justify-center text-xs shadow-xs">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-[var(--caramel)] text-white font-bold flex items-center justify-center text-xs shadow-xs flex-shrink-0 border-2 border-[var(--caramel-light)]">
             <?= htmlspecialchars($initials) ?>
           </div>
           <div>

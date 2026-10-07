@@ -93,6 +93,40 @@ function ensure_login_approval_tables(PDO $pdo): void {
             $insertStmt->execute([':k' => $k, ':v' => $v]);
         }
     }
+
+    // 4. Ensure login_approval.manage permission exists in RBAC tables
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `permissions` (
+                `perm_key` varchar(64) NOT NULL,
+                `label` varchar(100) NOT NULL,
+                `category` varchar(50) NOT NULL,
+                `description` text DEFAULT NULL,
+                PRIMARY KEY (`perm_key`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `role_permissions` (
+                `role` varchar(30) NOT NULL,
+                `perm_key` varchar(64) NOT NULL,
+                PRIMARY KEY (`role`, `perm_key`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        $permCheck = $pdo->prepare("SELECT COUNT(*) FROM permissions WHERE perm_key = 'login_approval.manage'");
+        $permCheck->execute();
+        if ((int)$permCheck->fetchColumn() === 0) {
+            $pdo->prepare("
+                INSERT INTO permissions (perm_key, label, category, description)
+                VALUES ('login_approval.manage', 'Login Approvals & Geolocation', 'HR & Staff', 'Review, approve, or reject staff login authorization requests and configure store geofence settings')
+            ")->execute();
+        }
+
+        // Grant to Admin role by default if not yet granted
+        $pdo->prepare("INSERT IGNORE INTO role_permissions (role, perm_key) VALUES ('admin', 'login_approval.manage')")->execute();
+    } catch (Throwable $e) {
+        error_log('ensure_login_approval_tables permission check warning: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -285,12 +319,12 @@ function create_login_authorization(
     ]);
     $authId = (int)$pdo->lastInsertId();
 
-    // Send high-priority notification to HR
+    // Send high-priority notification to HR & users holding login approval permission
     if ($initialStatus === 'pending') {
         notify_role_by_permission(
-            'users.manage',
+            'login_approval.manage',
             'login_approval',
-            'Staff Login Request Awaiting HR Review',
+            'Staff Login Request Awaiting Review',
             "{$user['username']} ({$user['role']}) is attempting to log in from {$locationName}. Click to review & approve.",
             'login_approvals.php?highlight=' . $authId
         );
@@ -312,7 +346,7 @@ function create_login_authorization(
 function get_login_authorization_by_token(PDO $pdo, string $token): ?array {
     ensure_login_approval_tables($pdo);
     $stmt = $pdo->prepare("
-        SELECT la.*, u.firstname, u.lastname, u.email, u.role
+        SELECT la.*, u.firstname, u.lastname, u.email, u.role, u.avatar_path
         FROM login_authorizations la
         JOIN users u ON u.id = la.user_id
         WHERE la.auth_token = :t
@@ -486,9 +520,10 @@ function establish_user_session(PDO $pdo, array $user): void {
     $_SESSION['username']  = $user['username'];
     $_SESSION['firstname'] = $user['firstname'] ?? '';
     $_SESSION['lastname']  = $user['lastname'] ?? '';
-    $_SESSION['email']     = $user['email'] ?? '';
-    $_SESSION['role']      = $user['role'] ?? 'crew';
-    $_SESSION['logged_in'] = true;
+    $_SESSION['email']       = $user['email'] ?? '';
+    $_SESSION['role']        = $user['role'] ?? 'crew';
+    $_SESSION['avatar_path'] = $user['avatar_path'] ?? '';
+    $_SESSION['logged_in']   = true;
 
     // Multi-role support; fall back to the legacy single role.
     try {

@@ -29,17 +29,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo,
             (int)$user['id'],
             [
-                'firstname' => $_POST['firstname'] ?? '',
-                'lastname'  => $_POST['lastname'] ?? '',
-                'email'     => $_POST['email'] ?? '',
-                'phone'     => $_POST['phone'] ?? '',
-                'address'   => $_POST['address'] ?? '',
+                'firstname'     => $_POST['firstname'] ?? '',
+                'lastname'      => $_POST['lastname'] ?? '',
+                'email'         => $_POST['email'] ?? '',
+                'phone'         => $_POST['phone'] ?? '',
+                'address'       => $_POST['address'] ?? '',
+                'remove_avatar' => !empty($_POST['remove_avatar']),
             ],
             $_FILES['avatar'] ?? null
         );
 
         if ($res['ok']) {
             $toast = 'Personal profile updated successfully.';
+        } else {
+            $toast = $res['error'];
+            $toast_type = 'error';
+        }
+        header('Location: profile.php?toast=' . urlencode($toast) . '&type=' . $toast_type);
+        exit;
+    }
+
+    if ($action === 'update_avatar_only' && $can_edit_profile) {
+        $cur_p = get_user_profile($pdo, (int)$user['id']);
+        $remove = !empty($_POST['remove_avatar']);
+        $avatar_file = $_FILES['avatar_quick'] ?? ($_FILES['avatar'] ?? null);
+
+        if (!$remove && (empty($avatar_file) || empty($avatar_file['tmp_name']))) {
+            header('Location: profile.php?toast=' . urlencode('Please select a valid image file.') . '&type=error');
+            exit;
+        }
+
+        $res = update_user_profile(
+            $pdo,
+            (int)$user['id'],
+            [
+                'firstname'     => $cur_p['firstname'] ?? '',
+                'lastname'      => $cur_p['lastname'] ?? '',
+                'email'         => $cur_p['email'] ?? '',
+                'phone'         => $cur_p['phone'] ?? '',
+                'address'       => $cur_p['address'] ?? '',
+                'remove_avatar' => $remove,
+            ],
+            $remove ? null : $avatar_file
+        );
+
+        if ($res['ok']) {
+            $toast = $remove ? 'Profile photo removed successfully.' : 'Profile picture updated successfully!';
         } else {
             $toast = $res['error'];
             $toast_type = 'error';
@@ -126,12 +161,27 @@ $supported_destinations = get_supported_payout_destinations();
     @media (max-width: 900px) { .profile-layout { grid-template-columns: 1fr; } }
 
     .avatar-wrapper {
-      position: relative; width: 110px; height: 110px; margin: 0 auto 16px auto;
-      border-radius: 50%; border: 3px solid var(--caramel, #8B4513); overflow: hidden;
+      position: relative; width: 118px; height: 118px; margin: 0 auto 12px auto;
+      border-radius: 50%; border: 3px solid var(--caramel, #c47d3e); overflow: hidden;
       background: #F8F4EE; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 4px 14px rgba(44, 26, 14, 0.12);
+    }
+    .avatar-wrapper:hover {
+      transform: scale(1.04);
+      box-shadow: 0 8px 24px rgba(196, 125, 62, 0.28);
     }
     .avatar-img { width: 100%; height: 100%; object-fit: cover; }
-    .avatar-placeholder { font-size: 38px; color: var(--caramel, #8B4513); font-weight: 700; }
+    .avatar-placeholder { font-size: 38px; color: var(--caramel, #c47d3e); font-weight: 700; user-select: none; }
+    .avatar-overlay {
+      position: absolute; inset: 0; background: rgba(28, 17, 8, 0.68);
+      color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.2s ease; font-size: 11px; font-weight: 600; text-align: center;
+      padding: 6px; gap: 4px; border-radius: 50%;
+    }
+    .avatar-wrapper:hover .avatar-overlay {
+      opacity: 1;
+    }
 
     .tab-pills { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1.5px solid var(--border, #EDE8E1); padding-bottom: 8px; }
     .tab-pill {
@@ -185,11 +235,41 @@ $supported_destinations = get_supported_payout_destinations();
 
       <!-- LEFT: Profile Snapshot Card -->
       <div class="table-card" style="padding:24px 20px;text-align:center">
-        <div class="avatar-wrapper">
+        <!-- Quick Avatar Forms -->
+        <form id="avatar_quick_form" method="POST" enctype="multipart/form-data" style="display:none;">
+          <input type="hidden" name="action" value="update_avatar_only"/>
+          <input type="file" id="quick_avatar_input" name="avatar_quick" accept=".jpg,.jpeg,.png,.webp,.gif" onchange="submitQuickAvatar(this)"/>
+        </form>
+
+        <form id="avatar_remove_form" method="POST" style="display:none;">
+          <input type="hidden" name="action" value="update_avatar_only"/>
+          <input type="hidden" name="remove_avatar" value="1"/>
+        </form>
+
+        <div class="avatar-wrapper" onclick="triggerQuickAvatar()" title="Click to change profile picture">
           <?php if (!empty($profile['avatar_path'])): ?>
-            <img src="../<?= htmlspecialchars($profile['avatar_path']) ?>" alt="Avatar" class="avatar-img"/>
+            <img id="card-avatar-img" src="../<?= htmlspecialchars(ltrim($profile['avatar_path'], '/')) ?>" alt="Avatar" class="avatar-img" onerror="this.style.display='none'; document.getElementById('card-avatar-placeholder').style.display='block';"/>
+            <span id="card-avatar-placeholder" class="avatar-placeholder" style="display:none;"><?= strtoupper(substr($profile['firstname'] ?: $profile['username'], 0, 1)) ?></span>
           <?php else: ?>
-            <span class="avatar-placeholder"><?= strtoupper(substr($profile['firstname'] ?: $profile['username'], 0, 1)) ?></span>
+            <img id="card-avatar-img" src="" alt="Avatar" class="avatar-img" style="display:none;"/>
+            <span id="card-avatar-placeholder" class="avatar-placeholder"><?= strtoupper(substr($profile['firstname'] ?: $profile['username'], 0, 1)) ?></span>
+          <?php endif; ?>
+          <div class="avatar-overlay">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span>Change Photo</span>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:center; gap:8px; margin-bottom:14px;">
+          <button type="button" onclick="triggerQuickAvatar()" style="background:#F8F4EE; border:1px solid #E2D4C3; color:var(--caramel,#c47d3e); border-radius:8px; padding:5px 12px; font-size:11.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px; transition:all 0.15s;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Change Photo
+          </button>
+          <?php if (!empty($profile['avatar_path'])): ?>
+          <button type="button" onclick="confirmRemoveAvatar()" style="background:#FFF5F5; border:1px solid #FED7D7; color:#E53E3E; border-radius:8px; padding:5px 10px; font-size:11.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all 0.15s;" title="Remove current photo and restore initials">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Remove
+          </button>
           <?php endif; ?>
         </div>
 
@@ -260,9 +340,37 @@ $supported_destinations = get_supported_payout_destinations();
             </div>
 
             <div class="field-group" style="margin-bottom:18px">
-              <label class="field-label">Upload Profile Photo (Avatar)</label>
-              <input type="file" name="avatar" class="field-input" accept=".jpg,.jpeg,.png,.webp"/>
-              <small style="font-size:11px;color:var(--text-muted);display:block;margin-top:3px">Max size: 5MB. Formats: JPG, PNG, WEBP.</small>
+              <label class="field-label" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Upload Profile Photo (Avatar)</span>
+                <?php if (!empty($profile['avatar_path'])): ?>
+                  <span style="font-size:11px; font-weight:600; color:var(--caramel,#c47d3e);">Current photo active</span>
+                <?php endif; ?>
+              </label>
+
+              <div style="display:flex; align-items:center; gap:16px; background:#FDFBF7; border:1.5px dashed #E2D4C3; border-radius:12px; padding:14px 16px;">
+                <div style="width:52px; height:52px; border-radius:50%; border:2px solid var(--caramel,#c47d3e); overflow:hidden; background:#F8F4EE; flex-shrink:0; display:flex; align-items:center; justify-content:center;">
+                  <?php if (!empty($profile['avatar_path'])): ?>
+                    <img id="form-avatar-thumb" src="../<?= htmlspecialchars(ltrim($profile['avatar_path'], '/')) ?>" alt="Preview" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; document.getElementById('form-avatar-placeholder').style.display='block';"/>
+                    <span id="form-avatar-placeholder" style="font-size:18px; font-weight:700; color:var(--caramel); display:none;"><?= strtoupper(substr($profile['firstname'] ?: $profile['username'], 0, 1)) ?></span>
+                  <?php else: ?>
+                    <img id="form-avatar-thumb" src="" alt="Preview" style="width:100%; height:100%; object-fit:cover; display:none;"/>
+                    <span id="form-avatar-placeholder" style="font-size:18px; font-weight:700; color:var(--caramel);"><?= strtoupper(substr($profile['firstname'] ?: $profile['username'], 0, 1)) ?></span>
+                  <?php endif; ?>
+                </div>
+
+                <div style="flex:1; min-width:0;">
+                  <input type="file" id="form-avatar-file" name="avatar" class="field-input" accept=".jpg,.jpeg,.png,.webp,.gif" onchange="previewSelectedAvatar(this)" style="padding:6px; font-size:12px;"/>
+                  <div id="avatar-preview-status" style="display:none; font-size:11.5px; color:#059669; font-weight:600; margin-top:4px;"></div>
+                  <small style="font-size:11px;color:var(--text-muted);display:block;margin-top:2px">Max size: 5MB. Formats: JPG, PNG, WEBP, GIF. Updates your topbar avatar and login approvals.</small>
+                </div>
+              </div>
+
+              <?php if (!empty($profile['avatar_path'])): ?>
+              <label style="display:inline-flex; align-items:center; gap:6px; margin-top:8px; font-size:12px; color:#B91C1C; cursor:pointer;">
+                <input type="checkbox" name="remove_avatar" value="1"/>
+                <span>Remove current photo and restore default initials</span>
+              </label>
+              <?php endif; ?>
             </div>
 
             <div style="text-align:right">
@@ -505,6 +613,57 @@ function validateSalaryForm() {
   }
 
   return true;
+}
+
+function triggerQuickAvatar() {
+  const input = document.getElementById('quick_avatar_input');
+  if (input) input.click();
+}
+
+function submitQuickAvatar(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Profile picture must not exceed 5MB.');
+    input.value = '';
+    return;
+  }
+  document.getElementById('avatar_quick_form').submit();
+}
+
+function confirmRemoveAvatar() {
+  if (confirm('Are you sure you want to remove your profile photo and restore your default initials?')) {
+    document.getElementById('avatar_remove_form').submit();
+  }
+}
+
+function previewSelectedAvatar(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Profile picture must not exceed 5MB.');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const dataUrl = e.target.result;
+    const thumb = document.getElementById('form-avatar-thumb');
+    const formPl = document.getElementById('form-avatar-placeholder');
+    const cardImg = document.getElementById('card-avatar-img');
+    const cardPl = document.getElementById('card-avatar-placeholder');
+    const status = document.getElementById('avatar-preview-status');
+
+    if (thumb) { thumb.src = dataUrl; thumb.style.display = 'block'; }
+    if (formPl) { formPl.style.display = 'none'; }
+    if (cardImg) { cardImg.src = dataUrl; cardImg.style.display = 'block'; }
+    if (cardPl) { cardPl.style.display = 'none'; }
+    if (status) {
+      status.textContent = `Selected: ${file.name} (Ready to save)`;
+      status.style.display = 'block';
+    }
+  };
+  reader.readAsDataURL(file);
 }
 </script>
 </body>

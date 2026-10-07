@@ -11,10 +11,8 @@ $roles = $user['roles'] ?? [$role];
 $toast = '';
 $toast_type = 'success';
 
-// Reviewer check: Admin, HR, Manager, or users with requests.manage permission
+// Reviewer check: Admin or users with requests.manage permission
 $is_reviewer = in_array('admin', $roles, true)
-            || in_array('hr', $roles, true)
-            || in_array('manager', $roles, true)
             || has_permission('requests.manage');
 
 $request_types = ['Certificate of Employment','ID Replacement','Schedule Change','Payslip Copy','Document Correction','Other'];

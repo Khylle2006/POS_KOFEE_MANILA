@@ -611,9 +611,12 @@ function openProgressiveModal(mode = 'add', itemData = null) {
   goToStep(1);
 
   const modal = document.getElementById('progressive-add-modal');
-  modal.classList.add('open');
-  modal.classList.remove('opacity-0', 'pointer-events-none');
-  setTimeout(() => document.getElementById('prog-name').focus(), 60);
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => {
+    modal.classList.add('open');
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+  });
+  setTimeout(() => document.getElementById('prog-name').focus(), 80);
 }
 
 // Aliases for unified invocation
@@ -628,6 +631,11 @@ function closeProgressiveAddModal() {
   if (modal) {
     modal.classList.remove('open');
     modal.classList.add('opacity-0', 'pointer-events-none');
+    setTimeout(() => {
+      if (!modal.classList.contains('open')) {
+        modal.style.display = 'none';
+      }
+    }, 220);
   }
   isDirty = false;
   editingOriginalName = '';
@@ -770,6 +778,8 @@ function showProgError(msg) {
     banner.classList.remove('hidden');
     banner.style.display = 'flex';
   }
+  const modalBody = document.querySelector('.prog-modal-body');
+  if (modalBody) modalBody.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function hideProgError() {
@@ -846,6 +856,13 @@ function goToStep(step) {
 
 function nextStep() {
   if (validateStep(currentStep)) {
+    if (currentStep === 2) {
+      const smallPrice = parseFloat(document.getElementById('prog-price-small')?.value || '0');
+      const largePriceInput = document.getElementById('prog-price-large');
+      if (largePriceInput && (!largePriceInput.value || parseFloat(largePriceInput.value) <= 0) && smallPrice > 0) {
+        largePriceInput.value = (smallPrice + 20).toFixed(2);
+      }
+    }
     goToStep(currentStep + 1);
   }
 }
@@ -901,11 +918,17 @@ function validateStep(step) {
   }
 
   if (step === 3) {
-    const price = parseFloat(document.getElementById('prog-price-large').value);
+    let price = parseFloat(document.getElementById('prog-price-large').value);
     if (isNaN(price) || price <= 0) {
-      showProgError('Please enter a valid base price for Upsize (e.g. ₱110.00).');
-      document.getElementById('prog-price-large').focus();
-      return false;
+      const smallPrice = parseFloat(document.getElementById('prog-price-small')?.value || '0');
+      if (smallPrice > 0) {
+        price = smallPrice + 20;
+        document.getElementById('prog-price-large').value = price.toFixed(2);
+      } else {
+        showProgError('Please enter a valid base price for Upsize (e.g. ₱110.00).');
+        document.getElementById('prog-price-large').focus();
+        return false;
+      }
     }
     return true;
   }
@@ -1086,38 +1109,47 @@ function submitProgressiveItem() {
     method: 'POST',
     body: fd
   })
-  .then(r => {
-    if (!r.ok) {
-      return r.json().then(errData => { throw new Error(errData.error || `Error ${r.status}`); });
+  .then(async r => {
+    let data;
+    try {
+      data = await r.json();
+    } catch (_) {
+      const txt = await r.text();
+      throw new Error(`Server returned error (${r.status}): ${txt.slice(0, 120)}`);
     }
-    return r.json();
+    if (!r.ok || !data.ok) {
+      throw new Error(data?.error || `Failed with status ${r.status}`);
+    }
+    return data;
   })
   .then(res => {
     saveBtn.disabled = false;
     if (spinner) spinner.style.display = 'none';
     label.textContent = isEdit ? 'Save Changes' : 'Save Item';
 
-    if (res.ok) {
-      closeProgressiveAddModal();
-      Swal.fire({
-        title: isEdit ? 'Item Updated!' : 'Item Created!',
-        text: `"${document.getElementById('prog-name').value.trim()}" and its size recipes have been saved.`,
-        icon: 'success',
-        confirmButtonColor: '#8B4513',
-        timer: 1800,
-        showConfirmButton: false
-      }).then(() => {
-        window.location.reload();
-      });
-    } else {
-      showProgError(res.error || 'Failed to save item.');
-    }
+    closeProgressiveAddModal();
+    Swal.fire({
+      title: isEdit ? 'Item Updated!' : 'Item Created!',
+      text: `"${document.getElementById('prog-name').value.trim()}" and its size recipes have been saved.`,
+      icon: 'success',
+      confirmButtonColor: '#8B4513',
+      timer: 1800,
+      showConfirmButton: false
+    }).then(() => {
+      window.location.reload();
+    });
   })
   .catch(err => {
     saveBtn.disabled = false;
     if (spinner) spinner.style.display = 'none';
     label.textContent = isEdit ? 'Save Changes' : 'Save Item';
     showProgError(err.message || 'Network error while saving item.');
+    Swal.fire({
+      title: 'Failed to Save Item',
+      text: err.message || 'An error occurred while saving the menu item.',
+      icon: 'error',
+      confirmButtonColor: '#8B4513'
+    });
   });
 }
 

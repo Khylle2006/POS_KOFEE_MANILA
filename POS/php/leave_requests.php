@@ -11,10 +11,8 @@ $roles = $user['roles'] ?? [$role];
 $toast = '';
 $toast_type = 'success';
 
-// Reviewer check: Admin, HR, Manager, or users with leave.view permission
+// Reviewer check: Admin or users with leave.view permission
 $is_reviewer = in_array('admin', $roles, true)
-            || in_array('hr', $roles, true)
-            || in_array('manager', $roles, true)
             || has_permission('leave.view');
 
 $leave_types = ['Vacation','Sick','Emergency','Unpaid','Other'];
