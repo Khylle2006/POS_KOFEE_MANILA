@@ -116,6 +116,10 @@ try {
     if ($access['procurement_finance_review']) {
         try { $pending_finance_approvals_count = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
     }
+    $pending_supplier_apps_count = 0;
+    if ($access['procurement_suppliers']) {
+        try { $pending_supplier_apps_count = (int)$pdo->query("SELECT COUNT(*) FROM supplier_applications WHERE status IN ('review', 'under_review')")->fetchColumn(); } catch (Throwable $e) {}
+    }
     if ($access['login_approvals']) {
         try { $pending_logins_count = count_pending_login_authorizations($pdo); } catch (Throwable $e) {}
     }
@@ -713,7 +717,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         'procurement' => [
             'title' => (in_array('supplier', $roles, true) && count($roles) === 1) ? 'Supplier Portal' : 'Procurement',
             'icon'  => (in_array('supplier', $roles, true) && count($roles) === 1) ? 'briefcase' : 'truck',
-            'badge' => 0,
+            'badge' => $pending_supplier_apps_count,
             'items' => [
                 [
                     'label'  => 'Overview',
@@ -768,6 +772,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'label'  => 'Suppliers',
                     'url'    => 'suppliers.php',
                     'icon'   => 'employees',
+                    'badge'  => $pending_supplier_apps_count,
                     'access' => $access['procurement_suppliers'],
                     'active' => ($current === 'suppliers.php'),
                 ],

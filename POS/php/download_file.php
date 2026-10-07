@@ -12,13 +12,13 @@ require_login();
 $rel = ltrim(trim($_GET['f'] ?? ''), '/');
 
 // Only these trees are ever served, and only these extensions.
-$allowed_prefixes  = ['uploads/resumes/', 'uploads/attendance/'];
+$allowed_prefixes  = ['uploads/resumes/', 'uploads/attendance/', 'uploads/supplier_permits/'];
 $allowed_exts      = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'webp'];
 
 $user  = current_user();
 $roles = $user['roles'] ?? [$user['role'] ?? ''];
 
-// Each tree needs appropriate permissions; allow HR/Admin/recruitment managers
+// Each tree needs appropriate permissions; allow HR/Admin/recruitment/procurement managers
 $can_download = in_array('admin', $roles, true)
     || has_permission('files.download')
     || (str_starts_with($rel, 'uploads/resumes/') && (
@@ -31,6 +31,13 @@ $can_download = in_array('admin', $roles, true)
         has_permission('attendance.view')
         || has_permission('employee_dashboard.view')
         || in_array('hr', $roles, true)
+        || in_array('manager', $roles, true)
+    ))
+    || (str_starts_with($rel, 'uploads/supplier_permits/') && (
+        has_permission('procurement.suppliers.manage')
+        || has_permission('procurement.manage')
+        || has_permission('procurement.view')
+        || in_array('procurement', $roles, true)
         || in_array('manager', $roles, true)
     ));
 

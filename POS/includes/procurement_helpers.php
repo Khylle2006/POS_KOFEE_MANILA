@@ -763,9 +763,47 @@ function ensure_procurement_tables(?PDO $pdo = null): void {
         if (!in_array('paymongo_payment_id', $pay_cols)) {
             $pdo->exec("ALTER TABLE payments ADD COLUMN paymongo_payment_id VARCHAR(100) NULL AFTER paymongo_checkout_id");
         }
-        if (!in_array('paymongo_channel', $pay_cols)) {
-            $pdo->exec("ALTER TABLE payments ADD COLUMN paymongo_channel VARCHAR(50) NULL AFTER paymongo_payment_id");
-        }
+        // Supplier applications table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS supplier_applications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                application_code VARCHAR(50) NOT NULL UNIQUE,
+                company_name VARCHAR(150) NOT NULL,
+                contact_person VARCHAR(120) NOT NULL,
+                email VARCHAR(150) NOT NULL,
+                phone VARCHAR(50) NOT NULL,
+                address TEXT NOT NULL,
+                tax_id VARCHAR(50) NULL,
+                product_type ENUM('existing_ingredient', 'custom_product') NOT NULL DEFAULT 'existing_ingredient',
+                ingredient_id INT NULL,
+                product_name VARCHAR(150) NOT NULL,
+                product_category VARCHAR(100) NULL,
+                product_description TEXT NULL,
+                proposed_price DECIMAL(10,2) NULL,
+                price_unit VARCHAR(30) NULL DEFAULT 'per kg',
+                supply_capacity VARCHAR(100) NULL,
+                business_permit_filename VARCHAR(255) NOT NULL,
+                business_permit_path VARCHAR(255) NOT NULL,
+                authenticity_cert_filename VARCHAR(255) NOT NULL,
+                authenticity_cert_path VARCHAR(255) NOT NULL,
+                additional_documents_filename VARCHAR(255) NULL,
+                additional_documents_path VARCHAR(255) NULL,
+                company_profile_notes TEXT NULL,
+                status ENUM('review', 'under_review', 'approved', 'rejected') NOT NULL DEFAULT 'review',
+                reviewer_notes TEXT NULL,
+                rejection_reason TEXT NULL,
+                reviewed_by INT NULL,
+                reviewed_at DATETIME NULL,
+                supplier_id INT NULL,
+                created_user_id INT NULL,
+                ip_address VARCHAR(45) NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_supapp_code (application_code),
+                INDEX idx_supapp_email (email),
+                INDEX idx_supapp_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
 
         $done = true;
     } catch (Throwable $e) {
