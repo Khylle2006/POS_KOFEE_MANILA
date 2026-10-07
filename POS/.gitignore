@@ -15,6 +15,8 @@ node_modules/
 # Logs & temp files
 *.log
 scratch/
+cache/*.cache
+cache/*.tmp
 
 # User uploads (keep directories, ignore uploaded files)
 uploads/resumes/*

@@ -4,6 +4,7 @@ require_once __DIR__ . '/permissions.php';
 require_once __DIR__ . '/procurement_helpers.php';
 require_once __DIR__ . '/notify.php';
 require_once __DIR__ . '/login_approval_helpers.php';
+require_once __DIR__ . '/cache.php';
 ob_start();
 require_once __DIR__ . '/icons.php';
 ob_end_clean(); // discard any stray/leaked text icons.php might accidentally output
@@ -92,40 +93,52 @@ $access = [
     'profile'                  => true,
 ];
 
-// ── Live badge counts (best-effort; never break the sidebar if a
-//    table isn't set up yet in this install) ──────────────────────
-$pending_count = 0;
-$requests_count = 0;
-$pending_logins_count = 0;
-try {
-    $pdo = get_db();
-    if ($access['pending']) {
-        $pending_count = (int)$pdo->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
+// ── Live badge counts (cached with 15s TTL; never break the sidebar) ──────
+$cache_key_badges = 'sidebar_badges_user_' . (int)($user['id'] ?? 0);
+$cached_badges = cache_remember($cache_key_badges, 15, function() use ($access) {
+    $counts = [
+        'pending'           => 0,
+        'requests'          => 0,
+        'loans'             => 0,
+        'finance_approvals' => 0,
+        'supplier_apps'     => 0,
+        'pending_logins'    => 0,
+    ];
+    try {
+        $pdo = get_db();
+        if ($access['pending']) {
+            $counts['pending'] = (int)$pdo->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
+        }
+        if ($access['hr_requests'] || $access['hr_leave']) {
+            $c = 0;
+            try { $c += (int)$pdo->query("SELECT COUNT(*) FROM hr_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
+            try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
+            $counts['requests'] = $c;
+        }
+        if ($access['payroll']) {
+            try { $counts['loans'] = (int)$pdo->query("SELECT COUNT(*) FROM employee_loans WHERE status = 'pending_approval'")->fetchColumn(); } catch (Throwable $e) {}
+        }
+        if ($access['procurement_finance_review']) {
+            try { $counts['finance_approvals'] = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
+        }
+        if ($access['procurement_suppliers']) {
+            try { $counts['supplier_apps'] = (int)$pdo->query("SELECT COUNT(*) FROM supplier_applications WHERE status IN ('review', 'under_review')")->fetchColumn(); } catch (Throwable $e) {}
+        }
+        if ($access['login_approvals']) {
+            try { $counts['pending_logins'] = count_pending_login_authorizations($pdo); } catch (Throwable $e) {}
+        }
+    } catch (Throwable $e) {
+        // DB not reachable — sidebar still renders, just without counts.
     }
-    if ($access['hr_requests'] || $access['hr_leave']) {
-        $c = 0;
-        try { $c += (int)$pdo->query("SELECT COUNT(*) FROM hr_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
-        try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
-        $requests_count = $c;
-    }
-    $pending_loans_count = 0;
-    if ($access['payroll']) {
-        try { $pending_loans_count = (int)$pdo->query("SELECT COUNT(*) FROM employee_loans WHERE status = 'pending_approval'")->fetchColumn(); } catch (Throwable $e) {}
-    }
-    $pending_finance_approvals_count = 0;
-    if ($access['procurement_finance_review']) {
-        try { $pending_finance_approvals_count = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
-    }
-    $pending_supplier_apps_count = 0;
-    if ($access['procurement_suppliers']) {
-        try { $pending_supplier_apps_count = (int)$pdo->query("SELECT COUNT(*) FROM supplier_applications WHERE status IN ('review', 'under_review')")->fetchColumn(); } catch (Throwable $e) {}
-    }
-    if ($access['login_approvals']) {
-        try { $pending_logins_count = count_pending_login_authorizations($pdo); } catch (Throwable $e) {}
-    }
-} catch (Throwable $e) {
-    // DB not reachable — sidebar still renders, just without counts.
-}
+    return $counts;
+});
+
+$pending_count                   = (int)($cached_badges['pending'] ?? 0);
+$requests_count                  = (int)($cached_badges['requests'] ?? 0);
+$pending_loans_count             = (int)($cached_badges['loans'] ?? 0);
+$pending_finance_approvals_count = (int)($cached_badges['finance_approvals'] ?? 0);
+$pending_supplier_apps_count     = (int)($cached_badges['supplier_apps'] ?? 0);
+$pending_logins_count            = (int)($cached_badges['pending_logins'] ?? 0);
 
 $initials = strtoupper(substr($user['firstname'] ?: $user['username'] ?: '?', 0, 1));
 

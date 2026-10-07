@@ -112,6 +112,11 @@ try {
 
     $pdo->commit();
 
+    // Invalidate caches dependent on real-time order data
+    require_once __DIR__ . '/../includes/cache.php';
+    cache_delete_pattern('analytics_');
+    cache_delete_pattern('sidebar_badges');
+
     echo json_encode(["success" => true, "order_id" => $order_id]);
 
 } catch (Exception $e) {

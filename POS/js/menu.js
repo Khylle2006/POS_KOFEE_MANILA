@@ -37,10 +37,8 @@ function getProductImage(item, categoryKey) {
     return CATEGORY_DEFAULT_IMAGES[categoryKey] || DEFAULT_DRINK_IMAGE;
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-    const res  = await fetch("../api/get_menu.php");
-    const data = await res.json();
-
+function populateMenuData(data) {
+    if (!Array.isArray(data)) return;
     menuData = {
         "ice-coffee": [],
         "hot-coffee": [],
@@ -49,7 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
     data.forEach(item => {
-        const key = item.category_name.toLowerCase().replace(" ", "-");
+        const key = (item.category_name || '').toLowerCase().replace(" ", "-");
         if (!menuData[key]) menuData[key] = [];
         menuData[key].push({
             id:         item.id,
@@ -63,6 +61,43 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderGrid();
     renderOrder();
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    // 1. Instant Cache Render: load from local cache for 0ms startup time
+    const cacheKey = "kofee_pos_menu_cache";
+    const cachedStr = sessionStorage.getItem(cacheKey) || localStorage.getItem(cacheKey);
+    let renderedFromCache = false;
+
+    if (cachedStr) {
+        try {
+            const cachedItems = JSON.parse(cachedStr);
+            if (Array.isArray(cachedItems) && cachedItems.length > 0) {
+                populateMenuData(cachedItems);
+                renderedFromCache = true;
+            }
+        } catch (e) {
+            console.warn("Cached menu corrupted, skipping cache render", e);
+        }
+    }
+
+    // 2. Background Revalidation: fetch latest catalog from server
+    try {
+        const res = await fetch("../api/get_menu.php");
+        if (res.status === 200) {
+            const freshData = await res.json();
+            if (Array.isArray(freshData)) {
+                const freshStr = JSON.stringify(freshData);
+                if (!renderedFromCache || freshStr !== cachedStr) {
+                    sessionStorage.setItem(cacheKey, freshStr);
+                    localStorage.setItem(cacheKey, freshStr);
+                    populateMenuData(freshData);
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("Could not reach menu API. Operating on cached data:", err);
+    }
 });
 
 let currentCat  = "ice-coffee";

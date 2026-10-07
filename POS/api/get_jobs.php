@@ -5,37 +5,41 @@
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/cache.php';
 
 try {
-    $pdo = get_db();
-
     $search     = trim($_GET['search'] ?? '');
     $location   = trim($_GET['location'] ?? '');
     $department = trim($_GET['department'] ?? '');
 
-    $query = 'SELECT * FROM job_postings WHERE is_active = 1';
-    $params = [];
+    $cacheKey = 'jobs_list_' . md5($search . '|' . $location . '|' . $department);
 
-    if (!empty($search)) {
-        $query .= ' AND (title LIKE :s OR description LIKE :s OR tagline LIKE :s)';
-        $params[':s'] = '%' . $search . '%';
-    }
+    $jobs = cache_remember($cacheKey, 180, function() use ($search, $location, $department) {
+        $pdo = get_db();
+        $query = 'SELECT * FROM job_postings WHERE is_active = 1';
+        $params = [];
 
-    if (!empty($location) && strtolower($location) !== 'all locations') {
-        $query .= ' AND location = :loc';
-        $params[':loc'] = $location;
-    }
+        if (!empty($search)) {
+            $query .= ' AND (title LIKE :s OR description LIKE :s OR tagline LIKE :s)';
+            $params[':s'] = '%' . $search . '%';
+        }
 
-    if (!empty($department) && strtolower($department) !== 'all departments') {
-        $query .= ' AND department = :dept';
-        $params[':dept'] = $department;
-    }
+        if (!empty($location) && strtolower($location) !== 'all locations') {
+            $query .= ' AND location = :loc';
+            $params[':loc'] = $location;
+        }
 
-    $query .= ' ORDER BY id ASC';
+        if (!empty($department) && strtolower($department) !== 'all departments') {
+            $query .= ' AND department = :dept';
+            $params[':dept'] = $department;
+        }
 
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $jobs = $stmt->fetchAll();
+        $query .= ' ORDER BY id ASC';
+
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    });
 
     echo json_encode([
         'success' => true,
