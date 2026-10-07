@@ -172,8 +172,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $valid) {
     100%{ opacity:1; transform: translateY(0) scale(1); }
   }
 </style>
+<link rel="stylesheet" href="../css/auth-ui.css?v=<?= filemtime(__DIR__ . '/../css/auth-ui.css') ?>">
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 sm:p-8">
+<body class="kfs-auth min-h-screen flex items-center justify-center p-4 sm:p-8">
 
 <div class="relative w-full max-w-md sm:max-w-2xl rounded-[28px] overflow-hidden card-pop"
      style="background: linear-gradient(150deg, var(--espresso) 0%, var(--espresso-deep) 100%); box-shadow:0 30px 60px -18px rgba(24,17,32,0.45);">
@@ -215,15 +216,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $valid) {
           <input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>"/>
 
           <div class="field">
-            <label class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">New Password</label>
-            <input type="password" name="new_password" id="new_password" placeholder="Minimum 6 characters" minlength="6" required autofocus
+            <label for="new_password" class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">New Password</label>
+            <input type="password" name="new_password" id="new_password" autocomplete="new-password" placeholder="Minimum 6 characters" minlength="6" required autofocus
               class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
               style="color:var(--espresso)">
           </div>
 
           <div class="field">
-            <label class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Confirm Password</label>
-            <input type="password" name="confirm_password" id="confirm_password" placeholder="Re-type new password" minlength="6" required
+            <label for="confirm_password" class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Confirm Password</label>
+            <input type="password" name="confirm_password" id="confirm_password" autocomplete="new-password" placeholder="Re-type new password" minlength="6" required
               class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
               style="color:var(--espresso)">
           </div>

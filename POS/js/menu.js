@@ -1,5 +1,8 @@
-console.log("menu.js loaded");
 let menuData = {};
+let menuLoaded = false;
+let menuLoading = false;
+let menuUnavailable = false;
+let menuStale = false;
 
 // High-resolution real drink pictures mapped by category / drink profile
 const CATEGORY_DEFAULT_IMAGES = {
@@ -50,7 +53,7 @@ function populateMenuData(data) {
         const key = (item.category_name || '').toLowerCase().replace(" ", "-");
         if (!menuData[key]) menuData[key] = [];
         menuData[key].push({
-            id:         item.id,
+            id:         Number.parseInt(item.id, 10),
             name:       item.name,
             imageSrc:   getProductImage(item, key),
             priceSmall: parseFloat(item.price_small),
@@ -59,14 +62,23 @@ function populateMenuData(data) {
         });
     });
 
+    menuLoaded = true;
     renderGrid();
     renderOrder();
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+async function loadMenu() {
+    if (menuLoading) return;
+    menuLoading = true;
+    menuUnavailable = false;
     // 1. Instant Cache Render: load from local cache for 0ms startup time
     const cacheKey = "kofee_pos_menu_cache";
-    const cachedStr = sessionStorage.getItem(cacheKey) || localStorage.getItem(cacheKey);
+    let cachedStr = null;
+    try {
+        cachedStr = sessionStorage.getItem(cacheKey) || localStorage.getItem(cacheKey);
+    } catch (error) {
+        // Restricted browser storage still allows a fresh server catalog.
+    }
     let renderedFromCache = false;
 
     if (cachedStr) {
@@ -80,25 +92,34 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.warn("Cached menu corrupted, skipping cache render", e);
         }
     }
+    renderGrid();
 
     // 2. Background Revalidation: fetch latest catalog from server
     try {
-        const res = await fetch("../api/get_menu.php");
-        if (res.status === 200) {
-            const freshData = await res.json();
-            if (Array.isArray(freshData)) {
-                const freshStr = JSON.stringify(freshData);
-                if (!renderedFromCache || freshStr !== cachedStr) {
+        const res = await fetch("../api/get_menu.php", { signal: AbortSignal.timeout(10000) });
+        if (!res.ok) throw new Error('Menu request failed');
+        const freshData = await res.json();
+        if (!Array.isArray(freshData)) throw new Error('Invalid menu response');
+        menuStale = false;
+        const freshStr = JSON.stringify(freshData);
+        if (!renderedFromCache || freshStr !== cachedStr) {
+            populateMenuData(freshData);
+            try {
                     sessionStorage.setItem(cacheKey, freshStr);
                     localStorage.setItem(cacheKey, freshStr);
-                    populateMenuData(freshData);
-                }
+            } catch (error) {
+                // Cache failure must not hide a successfully fetched catalog.
             }
         }
     } catch (err) {
-        console.warn("Could not reach menu API. Operating on cached data:", err);
+        menuUnavailable = !menuLoaded;
+        menuStale = menuLoaded;
+    } finally {
+        menuLoading = false;
+        renderGrid();
     }
-});
+}
+document.addEventListener('DOMContentLoaded', loadMenu);
 
 let currentCat  = "ice-coffee";
 let currentSize = "small";
@@ -108,22 +129,34 @@ let searchTerm  = "";
 
 // ── Category & Size ───────────────────────────
 function switchCat(el, cat) {
-    document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.cat-tab').forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-pressed', 'false');
+    });
     el.classList.add('active');
+    el.setAttribute('aria-pressed', 'true');
     currentCat = cat;
-    renderGrid();
+    resetProductSearch();
 }
 
 function switchSize(el, size) {
-    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.size-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+    });
     el.classList.add('active');
+    el.setAttribute('aria-pressed', 'true');
     currentSize = size;
     renderGrid();
 }
 
 function switchOrderType(el, type) {
-    document.querySelectorAll('.order-type-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.order-type-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+    });
     el.classList.add('active');
+    el.setAttribute('aria-pressed', 'true');
     orderType = type;
 }
 
@@ -132,10 +165,28 @@ function filterProducts(value) {
     renderGrid();
 }
 
+function resetProductSearch() {
+    searchTerm = '';
+    const search = document.getElementById('menu-search');
+    if (search) search.value = '';
+    renderGrid();
+}
+
 // ── Menu Grid ─────────────────────────────────
 function renderGrid() {
     const grid = document.getElementById('menu-grid');
     if (!grid) return;
+    const status = document.getElementById('catalog-status');
+    const reset = document.getElementById('reset-menu-search');
+    if (reset) reset.hidden = !searchTerm;
+    grid.setAttribute('aria-busy', String(menuLoading));
+    if (!menuLoaded) {
+        if (status) status.textContent = menuUnavailable ? 'Catalog unavailable' : 'Loading drinks…';
+        grid.innerHTML = menuUnavailable
+            ? '<div class="empty-cat"><p>We couldn’t load the drinks.</p><small>Check your connection and try again.</small><button type="button" class="btn btn-outline" onclick="loadMenu()">Try again</button></div>'
+            : '<div class="empty-cat"><p>Loading the catalog…</p><small>Your drinks will appear here shortly.</small></div>';
+        return;
+    }
 
     // Searching looks across every category so staff can find a drink
     // without first guessing which tab it lives under.
@@ -146,12 +197,13 @@ function renderGrid() {
     const items = searchTerm
         ? pool.filter(i => i.name.toLowerCase().includes(searchTerm))
         : pool;
+    if (status) status.textContent = `${items.length} drink${items.length === 1 ? '' : 's'}${searchTerm ? ' found across all categories' : ' in this category'}${menuStale ? ' · Offline catalog — availability checked when adding' : ''}`;
 
     if (items.length === 0) {
         grid.innerHTML = searchTerm ? `<div class="empty-cat">
             <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
             <p>No drinks match "${escapeHtml(searchTerm)}"</p>
-            <small>Try a different name or check another category</small>
+            <small>Try a different name or clear the search.</small>
         </div>` : `<div class="empty-cat">
             <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
             <p>No items in this category yet</p>
@@ -164,22 +216,22 @@ function renderGrid() {
         const price   = currentSize === 'small' ? item.priceSmall : item.priceLarge;
         const soldOut = item.stock <= 0;
         return `
-        <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`}>
-            <div class="item-img">
-                <img src="${escapeHtml(item.imageSrc)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
-            </div>
-            <div class="item-name">${escapeHtml(item.name)}</div>
+        <button type="button" class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? 'disabled' : `onclick="addToOrder(${item.id})"`} aria-label="${escapeHtml(item.name)}, ${currentSize === 'small' ? 'regular 16 ounces' : 'large 22 ounces'}, ${soldOut ? 'sold out' : `₱${price.toFixed(2)}. Add to order`}">
+            <span class="item-img">
+                <img src="${escapeHtml(item.imageSrc)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
+            </span>
+            <span class="item-name">${escapeHtml(item.name)}</span>
             ${soldOut
-                ? `<div class="item-soldout">Sold out</div>`
-                : `<div class="item-price">₱${parseFloat(price).toFixed(2)}</div>`}
-        </div>`;
+                ? `<span class="item-soldout">Sold out</span>`
+                : `<span class="item-price">₱${parseFloat(price).toFixed(2)}</span>`}
+        </button>`;
     }).join('');
 }
 
 function escapeHtml(str) {
     const d = document.createElement('div');
     d.textContent = str;
-    return d.innerHTML;
+    return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ── Order & Auto Storage Deduction ───────────
@@ -280,12 +332,12 @@ function renderOrder() {
             </div>
             <div class="oi-info">
                 <div class="oi-name">${escapeHtml(o.name)}</div>
-                <div class="oi-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
+                <div class="oi-size">${o.size === 'small' ? 'Regular · 16oz' : 'Large · 22oz'}</div>
             </div>
             <div class="oi-controls">
-                <button class="qty-btn" onclick="changeQty(${i}, -1)">−</button>
+                <button class="qty-btn" aria-label="Decrease quantity of ${escapeHtml(o.name)}" onclick="changeQty(${i}, -1)">−</button>
                 <span class="qty-num">${o.qty}</span>
-                <button class="qty-btn" onclick="changeQty(${i}, 1)">+</button>
+                <button class="qty-btn" aria-label="Increase quantity of ${escapeHtml(o.name)}" onclick="changeQty(${i}, 1)">+</button>
             </div>
             <div class="oi-price">₱${(o.price * o.qty).toFixed(2)}</div>
         </div>
@@ -394,6 +446,9 @@ function updateTotals() {
     if (el('subtotal')) el('subtotal').textContent = '₱' + subtotal.toFixed(2);
     if (el('tax'))      el('tax').textContent      = '₱' + vat.toFixed(2);
     if (el('total'))    el('total').textContent    = '₱' + total.toFixed(2);
+    if (el('review-order-btn')) el('review-order-btn').disabled = totalCount === 0;
+    if (el('clear-order-btn')) el('clear-order-btn').disabled = totalCount === 0;
+    if (el('desktop-ticket-count')) el('desktop-ticket-count').textContent = `${totalCount} item${totalCount === 1 ? '' : 's'}`;
 
     // Sync Mobile Cart Bar & Mobile Drawer Counters
     if (el('mobile-ticket-count')) {
@@ -407,6 +462,7 @@ function updateTotals() {
     }
     const mobileBar = el('mobile-cart-bar');
     if (mobileBar) {
+        mobileBar.inert = totalCount === 0 || Boolean(el('order-panel')?.classList.contains('drawer-open'));
         if (totalCount > 0) {
             mobileBar.classList.add('has-items');
         } else {
@@ -534,16 +590,59 @@ function clearTendered() {
 }
 
 function openMobileCart() {
+    if (window.innerWidth >= 1024) return;
+    const panel = document.getElementById('order-panel');
+    if (panel) panel.inert = false;
     document.getElementById('order-panel')?.classList.add('drawer-open');
     document.getElementById('mobile-cart-backdrop')?.classList.add('drawer-open');
     document.body.style.overflow = 'hidden';
+    document.getElementById('mobile-cart-toggle')?.setAttribute('aria-expanded', 'true');
+    const catalog = document.querySelector('.menu-left');
+    if (catalog) catalog.inert = true;
+    const mobileBar = document.getElementById('mobile-cart-bar');
+    if (mobileBar) mobileBar.inert = true;
+    document.getElementById('kofee-topbar')?.setAttribute('inert', '');
+    panel?.querySelector('.op-mobile-close-btn')?.focus();
 }
 
 function closeMobileCart() {
+    const panel = document.getElementById('order-panel');
+    const wasOpen = panel?.classList.contains('drawer-open');
     document.getElementById('order-panel')?.classList.remove('drawer-open');
     document.getElementById('mobile-cart-backdrop')?.classList.remove('drawer-open');
-    document.body.style.overflow = '';
+    if (panel) panel.inert = window.innerWidth < 1024;
+    document.getElementById('mobile-cart-toggle')?.setAttribute('aria-expanded', 'false');
+    if (wasOpen) {
+        document.body.style.overflow = '';
+        const catalog = document.querySelector('.menu-left');
+        if (catalog) catalog.inert = false;
+        document.getElementById('kofee-topbar')?.removeAttribute('inert');
+        const mobileBar = document.getElementById('mobile-cart-bar');
+        if (mobileBar) mobileBar.inert = orderItems.length === 0;
+        document.getElementById('mobile-cart-toggle')?.focus();
+    }
 }
+
+document.addEventListener('DOMContentLoaded', closeMobileCart);
+window.addEventListener('resize', () => {
+    if (window.innerWidth >= 1024) closeMobileCart();
+    else {
+        const panel = document.getElementById('order-panel');
+        if (panel) panel.inert = !panel.classList.contains('drawer-open');
+    }
+});
+document.addEventListener('keydown', event => {
+    const panel = document.getElementById('order-panel');
+    if (!panel?.classList.contains('drawer-open')) return;
+    if (event.key === 'Escape') closeMobileCart();
+    if (event.key === 'Tab') {
+        const controls = Array.from(panel.querySelectorAll('button:not(:disabled)')).filter(element => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+});
 
 function checkout() {
     if (orderItems.length === 0) {

@@ -141,8 +141,9 @@ $preselected_id = (int)($_GET['item_id'] ?? 0);
       word-break: break-all;
     }
   </style>
+  <link rel="stylesheet" href="css/public-ui.css?v=<?= filemtime(__DIR__ . '/css/public-ui.css') ?>">
 </head>
-<body>
+<body class="kfs-public">
 
   <!-- TOP NAVIGATION HEADER -->
   <header class="km-header">

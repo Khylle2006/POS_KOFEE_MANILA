@@ -191,6 +191,7 @@ if (!function_exists('navBtnClasses')) {
 $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
 ?>
 <script>
+  document.body.classList.add('kfs-workspace');
   try {
     if (localStorage.getItem('kfs_sidebar_minimized') === 'true' && window.innerWidth >= 1024) {
       document.documentElement.classList.add('sidebar-minimized');
@@ -200,6 +201,10 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 <link rel="stylesheet" href="../css/index.css?v=<?= filemtime(__DIR__ . '/../css/index.css') ?>">
 <link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__ . '/../css/sidebar.css') ?>">
 <link rel="stylesheet" href="../css/notifications.css?v=<?= file_exists(__DIR__ . '/../css/notifications.css') ? filemtime(__DIR__ . '/../css/notifications.css') : time() ?>">
+<link rel="stylesheet" href="../css/workspace.css?v=<?= filemtime(__DIR__ . '/../css/workspace.css') ?>">
+<script src="../js/workspace.js?v=<?= filemtime(__DIR__ . '/../js/workspace.js') ?>" defer></script>
+<script src="../js/sidebar-navigation.js?v=<?= filemtime(__DIR__ . '/../js/sidebar-navigation.js') ?>" defer></script>
+<a class="kfs-skip-link" href="#workspace-main">Skip to main content</a>
 
 <!-- ── Kofee Manila Smooth Page Transition & Loader ── -->
 <style>
@@ -328,7 +333,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 </style>
 
 
-<div id="kofee-loader" aria-live="polite" role="status" aria-label="Loading page">
+<div id="kofee-loader" class="loader-hidden" aria-live="polite" role="status" aria-label="Loading page">
   <div class="kfs-loader-card">
     <div class="kfs-cup-wrap">
       <div class="kfs-steam-lines">
@@ -364,7 +369,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         aria-expanded="false" aria-controls="main-sidebar">
         <svg id="menu-icon-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-        <span id="menu-btn-label">Expand</span>
+        <span id="menu-btn-label">Menu</span>
     </button>
 
     <div class="flex items-center gap-2.5 min-w-0">
@@ -534,11 +539,10 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     $topbar_avatar_path = !empty($user['avatar_path']) ? trim($user['avatar_path']) : '';
     $topbar_avatar_url = $topbar_avatar_path ? ('../' . ltrim($topbar_avatar_path, '/')) : '';
     ?>
-    <div class="kfs-topbar-profile-btn relative w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold cursor-pointer transition-all duration-150 hover:scale-105 hover:ring-2 hover:ring-[var(--caramel,#c47d3e)] shadow-xs overflow-hidden
+    <a href="profile.php" aria-label="My profile" class="kfs-topbar-profile-btn relative w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold cursor-pointer transition-all duration-150 hover:scale-105 hover:ring-2 hover:ring-[var(--caramel,#c47d3e)] shadow-xs overflow-hidden
                 bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                 text-[var(--espresso-deep,#1c1108)]"
-         title="My Profile &amp; Account Details"
-         onclick="window.location.href='profile.php'">
+         title="My Profile &amp; Account Details">
         <?php if ($topbar_avatar_url): ?>
             <img src="<?= htmlspecialchars($topbar_avatar_url) ?>"
                  alt="<?= htmlspecialchars($user['name'] ?: $user['username']) ?>"
@@ -549,7 +553,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         <?php else: ?>
             <span><?= htmlspecialchars($initials) ?></span>
         <?php endif; ?>
-    </div>
+    </a>
 </header>
 
 <!-- ── Notification Detail Modal (Outside header to avoid overflow/display issues) ── -->
@@ -581,7 +585,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
      class="fixed inset-0 bg-black/50 z-[220] opacity-0 pointer-events-none transition-opacity duration-200"></div>
 
 <!-- ── Sidebar popover panel ── -->
-<nav id="main-sidebar"
+<nav id="main-sidebar" aria-label="Main navigation"
      class="fixed top-0 left-0 h-full w-[256px] z-[230] flex flex-col
             px-3.5 pt-4 pb-4 overflow-y-auto
             bg-[linear-gradient(165deg,var(--espresso,#2c1a0e)_0%,var(--espresso-deep,#1c1108)_115%)]
@@ -601,6 +605,10 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     <path d="M17 10.5c2.5 0 2.5 4 0 4"/>
                     <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2"/>
                 </svg>
+            </div>
+            <div class="kfs-brand-text">
+                <div class="kfs-brand-name">Kofee Manila</div>
+                <div class="kfs-brand-caption">Staff workspace</div>
             </div>
         </div>
 
@@ -943,16 +951,16 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
             <div class="kfs-cat-body" id="cat-body-<?= $catKey ?>" role="region" aria-label="<?= htmlspecialchars($cat['title']) ?> Submenu">
                 <div class="kfs-cat-content">
                     <?php foreach ($visibleItems as $item): ?>
-                    <button type="button"
+                    <a href="<?= htmlspecialchars($item['url']) ?>"
                             class="kfs-cat-item <?= !empty($item['active']) ? 'active' : '' ?>"
                             title="<?= htmlspecialchars($item['label']) ?>"
-                            onclick="window.location.href='<?= htmlspecialchars($item['url']) ?>'">
+                            aria-label="<?= htmlspecialchars($item['label']) ?>"<?= !empty($item['active']) ? ' aria-current="page"' : '' ?>>
                         <?= icon($item['icon'], 16) ?>
                         <span class="flex-1 truncate"><?= htmlspecialchars($item['label']) ?></span>
                         <?php if (!empty($item['badge']) && (int)$item['badge'] > 0): ?>
                         <span class="kfs-nav-badge"><?= (int)$item['badge'] ?></span>
                         <?php endif; ?>
-                    </button>
+                    </a>
                     <?php endforeach; ?>
                 </div>
             </div>
@@ -962,9 +970,8 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 
     <div class="flex-1"></div>
 
-    <div class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2 cursor-pointer hover:bg-[rgba(251,243,233,0.12)] transition-colors"
-         title="View My Profile & Salary Payment Details"
-         onclick="window.location.href='profile.php'">
+    <a href="profile.php" aria-label="My profile and payment details" class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2 cursor-pointer hover:bg-[rgba(251,243,233,0.12)] transition-colors"
+         title="View My Profile &amp; Salary Payment Details">
         <div class="kfs-user-avatar w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                     bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                     text-[var(--espresso-deep,#1c1108)] overflow-hidden">
@@ -987,7 +994,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                 <?= htmlspecialchars(implode(' + ', $roles)) ?>
             </div>
         </div>
-    </div>
+    </a>
 
     <button class="kfs-logout-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
                    bg-[rgba(198,40,40,0.14)] text-[#f2a9a9] hover:bg-[rgba(198,40,40,0.24)] transition-colors duration-150"
@@ -1522,128 +1529,6 @@ document.getElementById('notif-detail-modal')?.addEventListener('click', e => {
     if (e.target.id === 'notif-detail-modal') closeNotificationDetail();
 });
 
-function toggleSidebarOrMinimize() {
-    if (window.innerWidth >= 1024) {
-        toggleSidebarMinimize();
-    } else {
-        toggleSidebar();
-    }
-}
-
-function toggleSidebar(force) {
-    if (window.innerWidth >= 1024) {
-        toggleSidebarMinimize();
-        return;
-    }
-
-    const panel    = document.getElementById('main-sidebar');
-    const backdrop = document.getElementById('sidebar-backdrop');
-    const btn      = document.getElementById('sidebar-menu-btn');
-
-    const willOpen = typeof force === 'boolean' ? force : !panel.classList.contains('open');
-
-    panel.classList.toggle('open', willOpen);
-    panel.classList.toggle('translate-x-0', willOpen);
-    panel.classList.toggle('-translate-x-full', !willOpen);
-
-    backdrop.classList.toggle('opacity-0', !willOpen);
-    backdrop.classList.toggle('pointer-events-none', !willOpen);
-    backdrop.classList.toggle('opacity-100', willOpen);
-    backdrop.classList.toggle('pointer-events-auto', willOpen);
-
-    if (btn) {
-        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-    }
-
-    document.body.classList.toggle('overflow-hidden', willOpen);
-}
-
-function toggleSidebarMinimize() {
-    const docEl = document.documentElement;
-    const isMin = docEl.classList.toggle('sidebar-minimized');
-    document.body.classList.toggle('sidebar-minimized', isMin);
-
-    try {
-        localStorage.setItem('kfs_sidebar_minimized', isMin ? 'true' : 'false');
-    } catch(e) {}
-
-    updateCollapseButtonState(isMin);
-}
-
-function updateCollapseButtonState(isMin) {
-    const label = document.getElementById('menu-btn-label');
-    if (label) {
-        if (window.innerWidth >= 1024) {
-            label.textContent = 'Expand';
-        } else {
-            label.textContent = 'Menu';
-        }
-    }
-}
-
-// Initial sync on script load & resize
-(function initSidebarMinimizeState() {
-    const isMin = document.documentElement.classList.contains('sidebar-minimized');
-    if (isMin && document.body) {
-        document.body.classList.add('sidebar-minimized');
-    }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            const min = document.documentElement.classList.contains('sidebar-minimized');
-            if (min) document.body.classList.add('sidebar-minimized');
-            updateCollapseButtonState(min);
-        });
-    } else {
-        updateCollapseButtonState(isMin);
-    }
-
-    window.addEventListener('resize', () => {
-        const min = document.documentElement.classList.contains('sidebar-minimized');
-        updateCollapseButtonState(min);
-    });
-})();
-
-function toggleSidebarCategory(catId) {
-    const group = document.getElementById('cat-group-' + catId);
-    if (!group) return;
-    const btn = group.querySelector('.kfs-cat-header');
-    const willOpen = !group.classList.contains('is-open');
-
-    group.classList.toggle('is-open', willOpen);
-    if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-
-    try {
-        const saved = JSON.parse(localStorage.getItem('kfs_open_cats') || '{}');
-        saved[catId] = willOpen;
-        localStorage.setItem('kfs_open_cats', JSON.stringify(saved));
-    } catch(e) {}
-}
-
-(function restoreCategoryState() {
-    try {
-        const saved = JSON.parse(localStorage.getItem('kfs_open_cats') || '{}');
-        Object.keys(saved).forEach(catId => {
-            const group = document.getElementById('cat-group-' + catId);
-            if (!group) return;
-            // Retain active category open state if it has the current page
-            if (group.classList.contains('has-active-child')) return;
-
-            const btn = group.querySelector('.kfs-cat-header');
-            if (saved[catId] === true) {
-                group.classList.add('is-open');
-                if (btn) btn.setAttribute('aria-expanded', 'true');
-            } else if (saved[catId] === false) {
-                group.classList.remove('is-open');
-                if (btn) btn.setAttribute('aria-expanded', 'false');
-            }
-        });
-    } catch(e) {}
-})();
-
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') toggleSidebar(false);
-});
-
 // ── Kofee Manila Loading Screen Controller ──
 (function() {
     function showKofeeLoader(text) {
@@ -1705,13 +1590,6 @@ document.addEventListener('keydown', e => {
             } catch (_) {}
         }
     }, true);
-
-    // Intercept sidebar navigation buttons, category items, and logout
-    document.querySelectorAll('.kfs-nav-btn, .kfs-cat-item, .kfs-logout-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            showKofeeLoader();
-        });
-    });
 
     // Intercept page unloads (form posts that redirect or reload)
     window.addEventListener('beforeunload', () => {

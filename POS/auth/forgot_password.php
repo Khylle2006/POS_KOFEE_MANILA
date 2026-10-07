@@ -177,8 +177,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     100%{ opacity:1; transform: translateY(0) scale(1); }
   }
 </style>
+<link rel="stylesheet" href="../css/auth-ui.css?v=<?= filemtime(__DIR__ . '/../css/auth-ui.css') ?>">
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 sm:p-8">
+<body class="kfs-auth min-h-screen flex items-center justify-center p-4 sm:p-8">
 
 <div class="relative w-full max-w-md sm:max-w-2xl rounded-[28px] overflow-hidden card-pop"
      style="background: linear-gradient(150deg, var(--espresso) 0%, var(--espresso-deep) 100%); box-shadow:0 30px 60px -18px rgba(24,17,32,0.45);">
@@ -220,8 +221,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <form class="space-y-4" method="POST" action="forgot_password.php">
         <?= csrf_field() ?>
         <div class="field">
-          <label class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Username or Email</label>
-          <input type="text" name="identity" placeholder="e.g. barista or user@example.com" value="<?= $input_value ?>" required autofocus
+          <label for="identity" class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Username or Email</label>
+          <input type="text" id="identity" name="identity" autocomplete="username" placeholder="e.g. barista or user@example.com" value="<?= $input_value ?>" required autofocus
             class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
             style="color:var(--espresso)">
         </div>

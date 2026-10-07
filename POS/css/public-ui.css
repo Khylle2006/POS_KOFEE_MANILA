@@ -1,0 +1,25 @@
+@import url('brand.css');
+
+.kfs-public { font-family: var(--font-ui); }
+.kfs-public .btn { min-height: 44px; border-radius: 10px; }
+.kfs-public .btn-primary { background: var(--caramel); color: white; box-shadow: none; }
+.kfs-public .btn-primary:hover { background: #71380f; transform: none; }
+.kfs-public .nav-toggle { min-width: 44px; min-height: 44px; }
+.kfs-public .nav-links a:not(.btn) { padding-block: 12px; }
+.kfs-public :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { font-size: 16px; }
+.kfs-public .km-btn { min-height: 44px; }
+
+/* The portal is a module preview, with explicit paths to the workspace. */
+.kfs-portal * { font-family: var(--font-ui); }
+.kfs-portal .font-serif { font-family: var(--font-brand); }
+.kfs-portal .nav-item { min-height: 44px; }
+.kfs-portal .portal-menu-toggle { display: none; padding: 10px; border: 1px solid #67566f; border-radius: 8px; background: transparent; color: white; }
+@media (max-width: 767px) {
+  .kfs-portal .portal-menu-toggle { display: inline-flex; }
+  .kfs-portal > header { flex-wrap: wrap; gap: 12px; }
+  .kfs-portal > header > div:last-child { flex-wrap: wrap; gap: 8px; }
+  .kfs-portal aside { display: none; width: 100%; max-height: 45dvh; }
+  .kfs-portal aside.portal-nav-open { display: flex; }
+  .kfs-portal > div.flex-1 { flex-direction: column; }
+  .kfs-portal #mainCanvas { min-width: 0; }
+}

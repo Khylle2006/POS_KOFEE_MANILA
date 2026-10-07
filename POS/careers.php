@@ -47,8 +47,9 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/careers.css?v=<?= filemtime(__DIR__ . '/css/careers.css') ?>">
+  <link rel="stylesheet" href="css/public-ui.css?v=<?= filemtime(__DIR__ . '/css/public-ui.css') ?>">
 </head>
-<body>
+<body class="kfs-public">
 
   <!-- TOP NAVIGATION HEADER -->
   <header class="km-header">

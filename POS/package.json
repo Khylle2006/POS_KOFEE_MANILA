@@ -8,6 +8,7 @@
     "@tailwindcss/cli": "^4.3.3"
   },
   "scripts": {
+    "test": "node --test tests/ui.test.cjs",
     "build": "tailwindcss -i ./src/input.css -o ./css/index.css --minify",
     "watch": "tailwindcss -i ./src/input.css -o ./css/index.css --watch"
   }

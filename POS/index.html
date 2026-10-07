@@ -926,9 +926,10 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="css/public-ui.css">
 </head>
 
-<body>
+<body class="kfs-public">
 
   <header>
     <nav>
@@ -946,7 +947,7 @@
           <div class="tag">Coffee &amp; Bites</div>
         </div>
       </div>
-      <div class="nav-links">
+      <div class="nav-links" id="public-navigation">
         <a href="#menu">Menu</a>
         <a href="#about">About</a>
         <a href="#visit">Visit Us</a>
@@ -954,9 +955,9 @@
         <a href="supplier_partnership.php">Suppliers</a>
       </div>
       <div class="nav-cta">
-        <a href="auth/login.php" class="btn btn-primary">Login</a>
+        <a href="auth/login.php" class="btn btn-primary">Staff sign in</a>
       </div>
-      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-controls="public-navigation" aria-expanded="false">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round">
           <line x1="3" y1="12" x2="21" y2="12" />
@@ -1276,6 +1277,15 @@
         navToggle.innerHTML = isOpen ? iconClose : iconHamburger;
       });
 
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && navLinks.classList.contains('open')) {
+          navLinks.classList.remove('open');
+          navToggle.setAttribute('aria-expanded', 'false');
+          navToggle.innerHTML = iconHamburger;
+          navToggle.focus();
+        }
+      });
+
       navLinks.querySelectorAll('a').forEach(link => {
         link.addEventListener('click', () => {
           navLinks.classList.remove('open');
@@ -1285,7 +1295,8 @@
       });
 
       document.addEventListener('click', (e) => {
-        if (!navToggle.contains(e.target) && !navLinks.contains(e.target)) {
+        // The toggle replaces its SVG; the original event target may be detached.
+        if (!e.composedPath().includes(navToggle) && !navLinks.contains(e.target)) {
           navLinks.classList.remove('open');
           navToggle.setAttribute('aria-expanded', 'false');
           navToggle.innerHTML = iconHamburger;

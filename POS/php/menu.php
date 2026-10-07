@@ -11,7 +11,7 @@ require_permission('orders.new');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>POS System</title>
+  <title>New Order — Kofee Manila</title>
   <link rel="stylesheet" href="../css/style.css?v=<?= filemtime(__DIR__.'/../css/style.css') ?>">
   <link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__.'/../css/sidebar.css') ?>">
   <link rel="stylesheet" href="../css/menu.css?v=<?= filemtime(__DIR__.'/../css/menu.css') ?>">
@@ -31,26 +31,18 @@ require_permission('orders.new');
       <!-- Executive POS Header matching reference design -->
       <div class="pos-page-head">
         <div class="pos-head-title-wrap">
-          <h1 class="pos-title">Point of Sale</h1>
-          <div class="pos-breadcrumbs">
-            <span class="p-crumb active">Catalog</span>
-            <span class="p-sep">&rarr;</span>
-            <span class="p-crumb">Size &amp; Add-ons</span>
-            <span class="p-sep">&rarr;</span>
-            <span class="p-crumb">Order Receipt</span>
-            <span class="p-sep">&rarr;</span>
-            <span class="p-crumb">Checkout &amp; Receipt</span>
-          </div>
+          <h1 class="pos-title">New order</h1>
+          <p class="pos-description">Choose a size, add drinks, then review the order.</p>
         </div>
 
         <div class="pos-head-actions">
           <div class="menu-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-            <input type="search" id="menu-search" placeholder="Search drinks…" oninput="filterProducts(this.value)">
+            <input type="search" id="menu-search" aria-label="Search drinks in all categories" placeholder="Search all drinks…" oninput="filterProducts(this.value)">
           </div>
           <div class="pos-shift-badge">
             <span class="pos-pulse-ring"></span>
-            <span class="pos-shift-text">Active POS Counter</span>
+            <span class="pos-shift-text">Ready for orders</span>
           </div>
         </div>
       </div>
@@ -58,48 +50,53 @@ require_permission('orders.new');
       <!-- POS Process Workflow Card (Inspired by reference design) -->
 
       <div class="catalog-controls-bar">
-        <div class="category-tabs">
-          <button type="button" class="cat-tab active" onclick="switchCat(this,'ice-coffee')">
+        <div class="category-tabs" role="group" aria-label="Drink category">
+          <button type="button" class="cat-tab active" aria-pressed="true" onclick="switchCat(this,'ice-coffee')">
             <?= icon('ice-coffee', 14) ?>
-            <span>Ice Coffee</span>
+            <span>Iced Coffee</span>
           </button>
-          <button type="button" class="cat-tab" onclick="switchCat(this,'hot-coffee')">
+          <button type="button" class="cat-tab" aria-pressed="false" onclick="switchCat(this,'hot-coffee')">
             <?= icon('coffee', 14) ?>
             <span>Hot Coffee</span>
           </button>
-          <button type="button" class="cat-tab" onclick="switchCat(this,'milk-tea')">
+          <button type="button" class="cat-tab" aria-pressed="false" onclick="switchCat(this,'milk-tea')">
             <?= icon('cup-tea', 14) ?>
             <span>Milk Tea</span>
           </button>
-          <button type="button" class="cat-tab" onclick="switchCat(this,'fruit-tea')">
+          <button type="button" class="cat-tab" aria-pressed="false" onclick="switchCat(this,'fruit-tea')">
             <?= icon('fruit', 14) ?>
             <span>Fruit Tea</span>
           </button>
         </div>
 
-        <div class="size-bar">
-          <button type="button" class="size-btn active" onclick="switchSize(this,'small')">
+        <div class="size-bar" role="group" aria-label="Drink size">
+          <button type="button" class="size-btn active" aria-pressed="true" onclick="switchSize(this,'small')">
             <span>Regular</span> <small>(16oz)</small>
           </button>
-          <button type="button" class="size-btn" onclick="switchSize(this,'large')">
-            <span>Up Size</span> <small>(22oz)</small>
+          <button type="button" class="size-btn" aria-pressed="false" onclick="switchSize(this,'large')">
+            <span>Large</span> <small>(22oz)</small>
           </button>
         </div>
       </div>
 
-      <div class="menu-grid-wrap">
-        <div id="menu-grid" class="menu-grid"></div>
+      <div class="pos-catalog-summary">
+        <p id="catalog-status" role="status" aria-live="polite">Loading drinks…</p>
+        <button type="button" class="pos-reset-search" id="reset-menu-search" onclick="resetProductSearch()" hidden>Clear search</button>
+      </div>
+      <div class="menu-grid-wrap" aria-label="Drink catalog">
+        <div id="menu-grid" class="menu-grid" aria-busy="true"></div>
       </div>
     </div>
 
     <!-- Order Panel (Right side on Desktop, Bottom Sheet Drawer on Mobile) -->
-    <div class="order-panel" id="order-panel">
+    <section class="order-panel" id="order-panel" aria-label="Current order">
+      <div class="order-panel-heading"><h2>Current order</h2><span id="desktop-ticket-count">0 items</span></div>
       <!-- Mobile Drawer Handle & Header (Visible only on mobile/tablet) -->
       <div class="order-panel-mobile-bar">
         <div class="op-drag-handle"></div>
         <div class="op-mobile-head">
           <div class="op-mobile-title">
-            <strong>Order Receipt</strong>
+            <strong>Current order</strong>
             <span class="op-mobile-count" id="mobile-ticket-count">0 items</span>
           </div>
           <button type="button" class="op-mobile-close-btn" onclick="closeMobileCart()">
@@ -108,12 +105,12 @@ require_permission('orders.new');
         </div>
       </div>
 
-      <div class="order-type-bar">
-        <button class="order-type-btn active" onclick="switchOrderType(this,'dine')">
+      <div class="order-type-bar" role="group" aria-label="Order type">
+        <button class="order-type-btn active" aria-pressed="true" onclick="switchOrderType(this,'dine')">
           <?= icon('utensils', 15) ?>
           <span>Dine In</span>
         </button>
-        <button class="order-type-btn" onclick="switchOrderType(this,'take')">
+        <button class="order-type-btn" aria-pressed="false" onclick="switchOrderType(this,'take')">
           <?= icon('shopping-bag', 15) ?>
           <span>Take Out</span>
         </button>
@@ -131,13 +128,13 @@ require_permission('orders.new');
         <div class="order-row"><span>Subtotal (VAT-ex)</span><span id="subtotal">₱0.00</span></div>
         <div class="order-row"><span>VAT (12%)</span><span id="tax">₱0.00</span></div>
         <div class="order-row total"><strong>Total</strong><strong id="total">₱0.00</strong></div>
-        <button class="checkout-btn" onclick="checkout()"><?= icon('credit-card', 16) ?> Place Order</button>
-        <button class="clear-btn" onclick="clearOrder()"><?= icon('trash', 14) ?> Clear Order</button>
+        <button class="checkout-btn" id="review-order-btn" onclick="checkout()" disabled><?= icon('credit-card', 16) ?> Review &amp; pay</button>
+        <button class="clear-btn" id="clear-order-btn" onclick="clearOrder()" disabled><?= icon('trash', 14) ?> Clear order</button>
       </div>
-    </div>
+    </section>
 
     <!-- Sticky Mobile Cart Bar for Phones & Tablets -->
-    <div class="mobile-cart-bar" id="mobile-cart-bar" onclick="openMobileCart()">
+    <div class="mobile-cart-bar" id="mobile-cart-bar" inert>
       <div class="mcb-left">
         <div class="mcb-icon-wrap">
           <?= icon('cart', 20) ?>
@@ -148,8 +145,8 @@ require_permission('orders.new');
           <strong class="mcb-total" id="mcb-total">₱0.00</strong>
         </div>
       </div>
-      <button type="button" class="mcb-btn">
-        <span>View Receipt &amp; Pay</span>
+      <button type="button" class="mcb-btn" id="mobile-cart-toggle" onclick="openMobileCart()" aria-controls="order-panel" aria-expanded="false">
+        <span>View order</span>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </button>
     </div>

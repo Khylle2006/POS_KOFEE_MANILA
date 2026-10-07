@@ -27,11 +27,11 @@ $saved_username = htmlspecialchars($_SESSION['login_username'] ?? ($_POST['usern
 unset($_SESSION['login_username']);
 ?>
 <!DOCTYPE html>
-<html lang="tl">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kofee Café — Sign In</title>
+<title>Kofee Manila — Sign In</title>
 <?= csrf_meta() ?>
 <link rel="stylesheet" href="../css/index.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -140,8 +140,10 @@ unset($_SESSION['login_username']);
   ::selection{ background: var(--caramel-light); color: var(--espresso-deep); }
 </style>
 
+<link rel="stylesheet" href="../css/auth-ui.css?v=<?= filemtime(__DIR__ . '/../css/auth-ui.css') ?>">
+<script src="../js/auth-ui.js?v=<?= filemtime(__DIR__ . '/../js/auth-ui.js') ?>" defer></script>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 sm:p-8">
+<body class="kfs-auth min-h-screen flex items-center justify-center p-4 sm:p-8">
 
 <!-- Single dark card, everything inside it -->
 <div class="relative w-full max-w-md sm:max-w-2xl rounded-[28px] overflow-hidden card-pop"
@@ -156,10 +158,11 @@ unset($_SESSION['login_username']);
     <!-- Floating white login form, inset within the dark card -->
     <div class="form-pop bg-[color:var(--cream)] rounded-2xl shadow-2xl w-full sm:w-[280px] px-6 py-7 shrink-0"
          style="box-shadow:0 18px 40px -12px rgba(0,0,0,0.35);">
-      <h1 class="font-display text-xl mb-5" style="color:var(--espresso)">Sign In</h1>
+      <h1 class="font-display text-xl mb-5" style="color:var(--espresso)">Welcome back</h1>
+      <p class="auth-intro">Sign in to your staff workspace.</p>
 
       <?php if ($error): ?>
-      <div class="mb-4 rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2 text-[12px] text-red-600 font-medium">
+      <div role="alert" class="mb-4 rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2 text-[12px] text-red-600 font-medium">
         <?= htmlspecialchars($error) ?>
       </div>
       <?php elseif ($info): ?>
@@ -177,19 +180,22 @@ unset($_SESSION['login_username']);
         <input type="hidden" name="device_info" id="geo_device_info" value="">
 
         <div class="field">
-          <label class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Username</label>
-          <input type="text" name="username" placeholder="Username" value="<?= $saved_username ?>" required
+          <label for="username" class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Username</label>
+          <input type="text" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Enter your username" value="<?= $saved_username ?>" required
             class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
             style="color:var(--espresso)">
         </div>
 
         <div class="field">
           <div class="flex items-center justify-between mb-1">
-            <label class="block text-[11px] font-semibold uppercase tracking-wide" style="color:var(--espresso)">Password</label>
+            <label for="password" class="block text-[11px] font-semibold uppercase tracking-wide" style="color:var(--espresso)">Password</label>
           </div>
-          <input type="password" name="password" placeholder="••••••••" required
+          <div class="auth-password-field">
+          <input type="password" id="password" name="password" autocomplete="current-password" placeholder="Enter your password" required
             class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
             style="color:var(--espresso)">
+          <button type="button" id="toggle-password" aria-controls="password" aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
         </div>
 
         <!-- Workplace GPS Status Indicator -->
@@ -232,9 +238,9 @@ unset($_SESSION['login_username']);
         </svg>
       </div>
 
-      <h2 class="font-display text-2xl sm:text-3xl text-[color:var(--cream)] mb-1">Kofee Café</h2>
+      <h2 class="font-display text-2xl sm:text-3xl text-[color:var(--cream)] mb-1">Kofee Manila</h2>
       <p class="text-xs sm:text-sm tracking-wide" style="color:var(--latte); opacity:0.75;">
-        Sign in into your account.
+        Your daily work, in one place.
     </p>
 
       <div class="mt-5 flex items-center justify-center gap-2">

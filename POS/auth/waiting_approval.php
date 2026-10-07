@@ -134,6 +134,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
     40% { transform: scale(1); }
   }
 </style>
+<link rel="stylesheet" href="../css/brand.css?v=<?= filemtime(__DIR__ . '/../css/brand.css') ?>">
 </head>
 <body class="min-h-screen flex items-center justify-center p-4 sm:p-6 text-[var(--espresso)]">
 
