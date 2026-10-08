@@ -4,14 +4,14 @@
    ============================================================ */
 
 :root {
-  --kfs-espresso: #241A2E;
-  --kfs-espresso-deep: #181120;
-  --kfs-cream: #FBF3E9;
-  --kfs-bg: #F8F5EE;
-  --kfs-caramel: #C97B3D;
-  --kfs-caramel-light: #E6A25C;
-  --kfs-latte: #EFE0CC;
-  --kfs-border: rgba(226, 212, 195, 0.7);
+  --kfs-espresso: #1A1316;
+  --kfs-espresso-deep: #110c0e;
+  --kfs-cream: #FDFBF7;
+  --kfs-bg: #F8F6F2;
+  --kfs-caramel: #CFA04E;
+  --kfs-caramel-light: #FFD68A;
+  --kfs-latte: #705E52;
+  --kfs-border: rgba(184, 153, 111, 0.4);
   --kfs-green: #16A34A;
   --kfs-green-hover: #15803D;
   --kfs-red: #DC2626;

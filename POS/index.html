@@ -1,1259 +1,2425 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kofee Manila — Coffee & Bites</title>
-  <link rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,500&family=Inter:wght@400;500;600;700;800&display=swap" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrewVanti — Artisan Coffee &amp; Brew</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,600;1,700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
+    /* ============================================================
+       BrewVanti Design System — 2.5D Luxury Coffee Experience
+       Palette: Cream (#FAF7F2), Gold (#D9BA85), Mocha (#68584B), Espresso (#1E1517)
+       ============================================================ */
     :root {
-      --espresso: #241A2E;
-      --espresso-deep: #181120;
-      --espresso-mid: #2f2238;
-      --caramel: #C97B3D;
-      --caramel-light: #E6A25C;
-      --latte: #EFE0CC;
-      --cream: #FBF3E9;
-      --text-main: #2B2130;
-      --text-muted: #8B7C88;
+      --color-cream: #FAF7F2;          /* Canvas Light */
+      --color-gold: #D9BA85;           /* Accent Gold */
+      --color-gold-bright: #ECC98F;
+      --color-mocha: #68584B;          /* Muted Roast / Taupe */
+      --color-espresso: #1E1517;       /* Deep Charcoal Espresso */
+      --color-espresso-pure: #120C0D;  /* Ultra Deep Void */
+      --color-card-dark: #241A1C;
     }
 
-    *,
-    *::before,
-    *::after {
+    * {
       box-sizing: border-box;
       margin: 0;
-      padding: 0
+      padding: 0;
     }
 
     html {
-      scroll-behavior: smooth
+      scroll-behavior: smooth;
     }
 
     body {
-      font-family: 'Inter', sans-serif;
-      background: var(--cream);
-      color: var(--text-main);
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--color-cream);
+      color: var(--color-espresso);
+      overflow-x: hidden;
+      line-height: 1.6;
     }
 
-    a {
-      text-decoration: none;
-      color: inherit
-    }
-
-    img,
-    svg {
-      display: block;
-      max-width: 100%
-    }
-
-    h1,
-    h2,
-    h3,
-    .font-display {
-      font-family: 'Playfair Display', serif
-    }
-
-    .wrap {
-      max-width: 1120px;
+    .container {
+      max-width: 1240px;
       margin: 0 auto;
-      padding: 0 24px
+      padding: 0 28px;
+      position: relative;
     }
 
-    /* ---------- Nav ---------- */
+    /* ─── 2.5D Floating Toast Notification ─── */
+    .toast-container {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      z-index: 9999;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .toast-msg {
+      background: rgba(18, 12, 13, 0.94);
+      color: var(--color-cream);
+      border: 1.5px solid var(--color-gold);
+      padding: 14px 22px;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(217, 186, 133, 0.3);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13.5px;
+      font-weight: 600;
+      transform: translateY(30px) scale(0.9);
+      opacity: 0;
+      transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+      pointer-events: auto;
+    }
+
+    .toast-msg.show {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+
+    .toast-icon {
+      font-size: 20px;
+    }
+
+    /* ─── 2.5D Sticky Floating Header ─── */
     header {
-      position: sticky;
+      position: fixed;
       top: 0;
-      z-index: 50;
-      background: rgba(251, 243, 233, .88);
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--latte)
+      left: 0;
+      right: 0;
+      z-index: 990;
+      background: rgba(18, 12, 13, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(217, 186, 133, 0.15);
+      transition: all 0.3s ease;
     }
 
-    nav {
+    .nav-wrap {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 24px;
-      max-width: 1120px;
-      margin: 0 auto;
-      position: relative
+      height: 86px;
     }
 
-    .brand {
+    .brand-group {
       display: flex;
       align-items: center;
-      gap: 10px
+      gap: 14px;
+      text-decoration: none;
     }
 
-    .brand-mark {
-      width: 38px;
-      height: 38px;
-      border-radius: 11px;
-      background: linear-gradient(150deg, var(--caramel) 0%, var(--espresso) 140%);
+    .brand-logo-frame {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 6px 14px -4px rgba(201, 123, 61, .55)
+      position: relative;
+      filter: drop-shadow(0 0 12px rgba(217, 186, 133, 0.5));
+      animation: logoAuraPulse 4s ease-in-out infinite alternate;
     }
 
-    .brand-mark svg {
-      width: 20px;
-      height: 20px
+    @keyframes logoAuraPulse {
+      0% { filter: drop-shadow(0 0 8px rgba(217, 186, 133, 0.35)); }
+      100% { filter: drop-shadow(0 0 18px rgba(217, 186, 133, 0.75)); }
     }
 
-    .brand-text {
-      line-height: 1.2
+    .brand-logo-img {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
     }
 
-    .brand-text .name {
-      font-family: 'Playfair Display', serif;
+    .brand-meta h1 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 23px;
       font-weight: 700;
-      font-size: 16px;
-      color: var(--espresso)
+      color: var(--color-cream);
+      letter-spacing: 0.5px;
+      line-height: 1.1;
     }
 
-    .brand-text .tag {
-      font-size: 10.5px;
-      color: var(--caramel);
-      letter-spacing: .04em
+    .brand-meta span {
+      font-size: 9.5px;
+      letter-spacing: 2.4px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--color-gold);
     }
 
     .nav-links {
       display: flex;
-      align-items: center;
-      gap: 30px
+      gap: 36px;
+      list-style: none;
     }
 
     .nav-links a {
+      color: rgba(250, 247, 242, 0.75);
+      text-decoration: none;
       font-size: 13.5px;
       font-weight: 600;
-      color: var(--text-muted)
+      letter-spacing: 0.8px;
+      transition: all 0.25s ease;
+      position: relative;
     }
 
-    .nav-links a:hover {
-      color: var(--caramel)
+    .nav-links a:hover, .nav-links a.active {
+      color: var(--color-gold);
     }
 
-    .nav-cta {
+    .nav-links a.active::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: var(--color-gold);
+      border-radius: 2px;
+      box-shadow: 0 0 8px var(--color-gold);
+    }
+
+    .nav-right-actions {
       display: flex;
       align-items: center;
-      gap: 12px
+      gap: 16px;
     }
 
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
+    /* Cart Indicator Pill */
+    .cart-indicator-pill {
+      background: rgba(250, 247, 242, 0.08);
+      border: 1px solid rgba(217, 186, 133, 0.3);
+      color: var(--color-gold);
+      padding: 8px 18px;
       border-radius: 999px;
-      font-weight: 700;
       font-size: 13px;
-      padding: 11px 22px;
-      transition: transform .15s ease, box-shadow .15s ease;
-      border: none;
-      cursor: pointer
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.25s ease;
     }
 
-    .btn-primary {
-      background: linear-gradient(135deg, var(--caramel) 0%, var(--espresso) 160%);
-      color: #fff;
-      box-shadow: 0 8px 18px -8px rgba(201, 123, 61, .55)
-    }
-
-    .btn-primary:hover {
+    .cart-indicator-pill:hover {
+      background: rgba(217, 186, 133, 0.18);
+      border-color: var(--color-gold);
       transform: translateY(-2px);
-      box-shadow: 0 12px 22px -8px rgba(201, 123, 61, .6)
     }
 
-    .btn-ghost {
-      background: transparent;
-      color: var(--espresso);
-      border: 1.5px solid var(--latte)
+    .cart-badge-count {
+      background: var(--color-gold);
+      color: var(--color-espresso-pure);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 999px;
+      transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
-    .btn-ghost:hover {
-      border-color: var(--caramel);
-      color: var(--caramel)
+    .cart-badge-count.pop {
+      transform: scale(1.4);
     }
 
-    .nav-toggle {
-      display: none;
-      background: none;
-      border: none;
-      font-size: 22px;
-      color: var(--espresso)
-    }
-
-    /* ---------- Hero ---------- */
-    .hero {
+    .btn-login-cta {
+      background: linear-gradient(135deg, #E6CA9A 0%, #D9BA85 50%, #B89968 100%);
+      color: var(--color-espresso-pure);
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 700;
+      padding: 10px 24px;
+      border-radius: 999px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 18px rgba(217, 186, 133, 0.35);
+      transition: all 0.25s ease;
       position: relative;
       overflow: hidden;
-      background: linear-gradient(165deg, var(--espresso) 0%, var(--espresso-deep) 120%);
-      color: var(--cream)
     }
 
-    .hero-inner {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 96px 24px 110px;
+    .btn-login-cta::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -60%;
+      width: 40%;
+      height: 200%;
+      background: linear-gradient(to right, transparent, rgba(255,255,255,0.45), transparent);
+      transform: rotate(30deg);
+      animation: btnShimmer 4s infinite;
+    }
+
+    @keyframes btnShimmer {
+      0% { left: -60%; }
+      30%, 100% { left: 140%; }
+    }
+
+    .btn-login-cta:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 24px rgba(217, 186, 133, 0.6);
+    }
+
+    /* ─── 2.5D HERO SECTION (Dark Espresso) ─── */
+    .hero-section {
+      background: radial-gradient(circle at 75% 45%, #251B1E 0%, var(--color-espresso-pure) 70%);
+      padding: 160px 0 130px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ambient-sparkle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: var(--color-gold);
+      border-radius: 50%;
+      box-shadow: 0 0 12px 3px var(--color-gold);
+      opacity: 0.7;
+      animation: sparkleFloat 5s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+    .sp-1 { top: 25%; left: 15%; animation-duration: 4s; }
+    .sp-2 { top: 60%; left: 40%; animation-duration: 6s; }
+    .sp-3 { top: 35%; right: 25%; animation-duration: 4.5s; }
+    .sp-4 { bottom: 20%; right: 10%; animation-duration: 5.5s; }
+
+    @keyframes sparkleFloat {
+      0% { transform: translateY(0) scale(0.8); opacity: 0.3; }
+      50% { opacity: 0.9; }
+      100% { transform: translateY(-30px) scale(1.2); opacity: 0.4; }
+    }
+
+    .floating-bean {
+      position: absolute;
+      z-index: 2;
+      opacity: 0.65;
+      pointer-events: none;
+      filter: drop-shadow(0 15px 15px rgba(0,0,0,0.6));
+      animation: floatBean 7s ease-in-out infinite alternate;
+    }
+    .bean-1 { top: 18%; left: 6%; width: 44px; transform: rotate(25deg); }
+    .bean-2 { bottom: 12%; left: 45%; width: 36px; transform: rotate(-40deg); animation-delay: -3s; }
+    .bean-3 { top: 25%; right: 4%; width: 52px; transform: rotate(15deg); filter: blur(1px) drop-shadow(0 20px 20px rgba(0,0,0,0.8)); animation-delay: -1.5s; }
+
+    @keyframes floatBean {
+      0% { transform: translateY(0) rotate(0deg); }
+      100% { transform: translateY(-24px) rotate(18deg); }
+    }
+
+    .hero-grid {
       display: grid;
-      grid-template-columns: 1.1fr .9fr;
+      grid-template-columns: 1.05fr 0.95fr;
       gap: 50px;
-      align-items: center
+      align-items: center;
+      position: relative;
+      z-index: 3;
     }
 
-    .eyebrow {
+    .hero-badge-chip {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: rgba(251, 243, 233, .08);
-      border: 1px solid rgba(251, 243, 233, .18);
-      padding: 6px 14px;
+      background: rgba(217, 186, 133, 0.1);
+      border: 1px solid rgba(217, 186, 133, 0.3);
+      padding: 7px 18px;
       border-radius: 999px;
-      font-size: 11.5px;
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: .06em;
+      letter-spacing: 2px;
       text-transform: uppercase;
-      color: var(--caramel-light);
-      margin-bottom: 22px
+      color: var(--color-gold);
+      margin-bottom: 24px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
     }
 
-    .hero h1 {
-      font-size: 46px;
-      line-height: 1.12;
+    .hero-heading {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 72px;
       font-weight: 700;
-      margin-bottom: 18px
+      line-height: 1.08;
+      color: var(--color-cream);
+      margin-bottom: 24px;
+      letter-spacing: -1px;
+      text-shadow: 0 4px 18px rgba(0,0,0,0.4);
     }
 
-    .hero h1 em {
+    .hero-heading .gold-script {
       font-style: italic;
-      color: var(--caramel-light)
+      background: linear-gradient(135deg, #FFF0D4 0%, #D9BA85 60%, #B89968 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: inline-block;
+      filter: drop-shadow(0 0 20px rgba(217, 186, 133, 0.4));
     }
 
-    .hero p {
-      font-size: 15px;
-      color: rgba(251, 243, 233, .72);
-      max-width: 440px;
-      line-height: 1.7;
-      margin-bottom: 32px
+    .hero-copy {
+      font-size: 16px;
+      color: rgba(250, 247, 242, 0.75);
+      max-width: 480px;
+      line-height: 1.8;
+      margin-bottom: 38px;
     }
 
-    .hero-ctas {
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap
-    }
-
-    .hero-stats {
-      display: flex;
-      gap: 32px;
-      margin-top: 44px
-    }
-
-    .hero-stats div b {
-      display: block;
-      font-family: 'Playfair Display', serif;
-      font-size: 24px;
-      color: var(--caramel-light)
-    }
-
-    .hero-stats div span {
-      font-size: 11.5px;
-      color: rgba(251, 243, 233, .55)
-    }
-
-    .hero-art {
-      position: relative;
+    .hero-btn-row {
       display: flex;
       align-items: center;
-      justify-content: center
+      gap: 18px;
+      margin-bottom: 48px;
     }
 
-    .cup-wrap {
-      position: relative;
-      width: 230px
-    }
-
-    .cup-float {
-      animation: float 4.5s ease-in-out infinite
-    }
-
-    @keyframes float {
-
-      0%,
-      100% {
-        transform: translateY(0)
-      }
-
-      50% {
-        transform: translateY(-14px)
-      }
-    }
-
-    .steam {
-      position: absolute;
-      bottom: 78%;
-      width: 5px;
-      height: 46px;
-      border-radius: 20px;
-      background: linear-gradient(to top, rgba(251, 243, 233, .55), transparent);
-      animation: steam 3.2s ease-in-out infinite
-    }
-
-    @keyframes steam {
-      0% {
-        opacity: 0;
-        transform: translateY(0) scaleY(.6)
-      }
-
-      30% {
-        opacity: .8
-      }
-
-      100% {
-        opacity: 0;
-        transform: translateY(-38px) scaleY(1.3)
-      }
-    }
-
-    .hero-glow {
-      position: absolute;
-      width: 340px;
-      height: 340px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(201, 123, 61, .35), transparent 70%);
-      filter: blur(10px);
-      z-index: 0
-    }
-
-    /* ---------- Sections ---------- */
-    section {
-      padding: 88px 0
-    }
-
-    .section-eyebrow {
-      font-size: 11.5px;
+    .btn-hero-primary {
+      background: linear-gradient(135deg, #E6CA9A 0%, #D9BA85 50%, #B89968 100%);
+      color: var(--color-espresso-pure);
+      font-size: 14px;
       font-weight: 700;
-      letter-spacing: .08em;
+      padding: 16px 36px;
+      border-radius: 999px;
+      text-decoration: none;
+      letter-spacing: 1px;
       text-transform: uppercase;
-      color: var(--caramel);
-      margin-bottom: 10px
-    }
-
-    .section-title {
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--espresso);
-      margin-bottom: 14px
-    }
-
-    .section-sub {
-      font-size: 14.5px;
-      color: var(--text-muted);
-      max-width: 520px;
-      line-height: 1.7
-    }
-
-    .section-head {
-      margin-bottom: 44px
-    }
-
-    .section-head.center {
-      text-align: center;
-      max-width: 600px;
-      margin-left: auto;
-      margin-right: auto
-    }
-
-    /* Menu */
-    .menu-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px
-    }
-
-    .menu-card {
-      background: #fff;
-      border: 1.5px solid var(--latte);
-      border-radius: 20px;
-      padding: 30px 22px;
-      text-align: center;
-      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease
-    }
-
-    .menu-card:hover {
-      transform: translateY(-6px);
-      box-shadow: 0 20px 34px -18px rgba(36, 26, 46, .25);
-      border-color: var(--caramel-light)
-    }
-
-    .menu-card .ic {
-      width: 56px;
-      height: 56px;
-      border-radius: 16px;
-      background: linear-gradient(150deg, #FCEFE1, var(--latte));
-      display: flex;
+      box-shadow: 0 10px 28px rgba(217, 186, 133, 0.4), 0 2px 0 #FFF inset;
+      transition: all 0.25s ease;
+      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      font-size: 26px
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
     }
 
-    .menu-card h3 {
-      font-size: 15.5px;
+    .btn-hero-primary::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -60%;
+      width: 40%;
+      height: 200%;
+      background: linear-gradient(to right, transparent, rgba(255,255,255,0.45), transparent);
+      transform: rotate(30deg);
+      animation: btnShimmer 3.5s infinite;
+    }
+
+    .btn-hero-primary:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 14px 36px rgba(217, 186, 133, 0.6);
+    }
+
+    .btn-hero-secondary {
+      background: rgba(250, 247, 242, 0.05);
+      color: var(--color-cream);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 15px 34px;
+      border-radius: 999px;
+      text-decoration: none;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border: 1.5px solid rgba(217, 186, 133, 0.35);
+      backdrop-filter: blur(8px);
+      transition: all 0.25s ease;
+    }
+
+    .btn-hero-secondary:hover {
+      border-color: var(--color-gold);
+      color: var(--color-gold);
+      background: rgba(217, 186, 133, 0.12);
+    }
+
+    .hero-key-facts {
+      display: flex;
+      gap: 40px;
+      padding-top: 30px;
+      border-top: 1px solid rgba(217, 186, 133, 0.18);
+    }
+
+    .fact-item h4 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 28px;
       font-weight: 700;
-      color: var(--espresso);
-      margin-bottom: 6px
+      color: var(--color-gold);
+      line-height: 1;
+      margin-bottom: 4px;
     }
 
-    .menu-card p {
+    .fact-item p {
       font-size: 12px;
-      color: var(--text-muted);
-      line-height: 1.6
+      font-weight: 600;
+      color: rgba(250, 247, 242, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
 
-    /* About */
-    .about {
-      background: #fff;
-      border-top: 1px solid var(--latte);
-      border-bottom: 1px solid var(--latte)
-    }
-
-    .about-inner {
-      display: grid;
-      grid-template-columns: .9fr 1.1fr;
-      gap: 60px;
-      align-items: center;
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 88px 24px
-    }
-
-    .about-art {
-      background: linear-gradient(155deg, var(--latte), #fff);
-      border-radius: 24px;
-      aspect-ratio: 4/3.2;
+    /* ─── 2.5D Hero Stage: Showcase Card + Exact Floating 2.5D Logo ─── */
+    .hero-3d-stage {
+      position: relative;
       display: flex;
-      align-items: center;
       justify-content: center;
-      border: 1.5px solid var(--latte)
+      align-items: center;
+      transform-style: preserve-3d;
+      perspective: 1200px;
     }
 
-    .about-art svg {
-      width: 110px;
-      height: 110px;
-      color: var(--caramel)
+    .hero-plinth {
+      position: relative;
+      width: 480px;
+      height: 480px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transform-style: preserve-3d;
     }
 
-    .about ul {
-      margin-top: 22px;
+    .plinth-ring {
+      position: absolute;
+      width: 450px;
+      height: 450px;
+      border-radius: 50%;
+      border: 2px dashed rgba(217, 186, 133, 0.25);
+      animation: rotateRing 35s linear infinite;
+    }
+
+    @keyframes rotateRing {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .hero-coffee-card {
+      position: relative;
+      width: 410px;
+      border-radius: 32px;
+      background: linear-gradient(160deg, rgba(38, 26, 29, 0.92) 0%, rgba(18, 12, 14, 0.98) 100%);
+      border: 1.5px solid rgba(217, 186, 133, 0.35);
+      box-shadow: 0 40px 80px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(217, 186, 133, 0.1) inset;
+      padding: 22px;
       display: flex;
       flex-direction: column;
-      gap: 12px
+      gap: 18px;
+      transform-style: preserve-3d;
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
-    .about li {
+    .steam-container {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90px;
+      height: 70px;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .steam-particle {
+      position: absolute;
+      bottom: 0;
+      width: 10px;
+      height: 40px;
+      border-radius: 20px;
+      background: linear-gradient(to top, rgba(250, 247, 242, 0.65), transparent);
+      filter: blur(4px);
+      animation: steamRise 3s ease-in-out infinite;
+    }
+    .st-1 { left: 18px; animation-delay: 0s; }
+    .st-2 { left: 40px; animation-delay: 1s; height: 50px; }
+    .st-3 { left: 62px; animation-delay: 2s; height: 35px; }
+
+    @keyframes steamRise {
+      0% { transform: translateY(0) scaleX(0.8) scaleY(0.6); opacity: 0; }
+      40% { opacity: 0.8; }
+      100% { transform: translateY(-45px) scaleX(1.4) scaleY(1.3); opacity: 0; }
+    }
+
+    .coffee-image-display {
+      width: 100%;
+      height: 270px;
+      border-radius: 22px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.5);
+    }
+
+    .coffee-image-display img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.6s ease;
+    }
+
+    .hero-coffee-card:hover .coffee-image-display img {
+      transform: scale(1.06);
+    }
+
+    .photo-inner-badge {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: rgba(18, 12, 13, 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(217, 186, 133, 0.45);
+      color: var(--color-gold);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      z-index: 3;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--color-gold);
+      box-shadow: 0 0 6px var(--color-gold);
+    }
+
+    .hero-card-meta {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 0 4px;
+    }
+
+    .hero-card-meta-left h3 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--color-cream);
+      margin-bottom: 4px;
+      line-height: 1.2;
+    }
+
+    .hero-card-meta-left p {
+      font-size: 12.5px;
+      color: rgba(250, 247, 242, 0.7);
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+
+    .flavor-notes-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .flavor-notes-row span {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      background: rgba(217, 186, 133, 0.12);
+      border: 1px solid rgba(217, 186, 133, 0.25);
+      color: var(--color-gold);
+      padding: 3px 9px;
+      border-radius: 6px;
+    }
+
+    .hero-card-meta-right {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .hero-card-meta-right .price-tag {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--color-gold);
+      line-height: 1;
+    }
+
+    .hero-card-meta-right .serve-type {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(250, 247, 242, 0.5);
+      margin-top: 4px;
+    }
+
+    /* Balanced 2.5D Floating Badges */
+    .hero-floating-badge {
+      position: absolute;
+      background: rgba(18, 12, 13, 0.88);
+      border: 1.5px solid rgba(217, 186, 133, 0.45);
+      backdrop-filter: blur(14px);
+      padding: 10px 18px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.5), 0 0 15px rgba(217, 186, 133, 0.15);
+      z-index: 15;
+      pointer-events: none;
+      transform-style: preserve-3d;
+    }
+
+    .badge-top-right {
+      top: -18px;
+      right: -24px;
+      transform: translateZ(45px);
+      animation: floatBadgeA 5s ease-in-out infinite alternate;
+    }
+
+    .badge-bottom-left {
+      bottom: -18px;
+      left: -22px;
+      transform: translateZ(45px);
+      animation: floatBadgeB 5s ease-in-out infinite alternate;
+    }
+
+    @keyframes floatBadgeA {
+      0% { transform: translateZ(45px) translateY(0); }
+      100% { transform: translateZ(45px) translateY(-8px); }
+    }
+
+    @keyframes floatBadgeB {
+      0% { transform: translateZ(45px) translateY(0); }
+      100% { transform: translateZ(45px) translateY(8px); }
+    }
+
+    .hero-floating-badge .badge-icon {
+      font-size: 14px;
+      color: var(--color-gold);
+    }
+
+    .hero-floating-badge .badge-stars {
+      color: var(--color-gold);
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+
+    .hero-floating-badge .badge-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.25;
+    }
+
+    .hero-floating-badge .badge-text strong {
+      font-size: 12.5px;
+      color: var(--color-cream);
+      font-weight: 700;
+    }
+
+    .hero-floating-badge .badge-text small {
+      font-size: 10px;
+      color: var(--color-gold);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ─── Seamless Wavy Curve Transition ─── */
+    .section-divider-curve {
+      position: relative;
+      background: var(--color-espresso-pure);
+      line-height: 0;
+    }
+
+    .section-divider-curve svg {
+      width: 100%;
+      height: 60px;
+      fill: var(--color-cream);
+    }
+
+    /* ─── 2.5D FEATURED DRINKS SECTION (Warm Cream #FAF7F2) ─── */
+    .featured-drinks-section {
+      background: var(--color-cream);
+      padding: 70px 0 100px;
+      position: relative;
+    }
+
+    .section-headline-wrap {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .section-headline-wrap .eyebrow {
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--color-mocha);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .section-headline-wrap h2 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 44px;
+      font-weight: 700;
+      color: var(--color-espresso);
+      letter-spacing: -0.5px;
+    }
+
+    .featured-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 28px;
+    }
+
+    .card-25d {
+      background: #FFFFFF;
+      border-radius: 28px;
+      padding: 16px;
+      border: 1px solid rgba(104, 88, 75, 0.12);
+      box-shadow: 0 18px 40px -15px rgba(30, 21, 23, 0.08);
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+      position: relative;
+      cursor: pointer;
+      transform-style: preserve-3d;
+      overflow: hidden;
+    }
+
+    .card-gloss-sheen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.45), transparent 70%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 10;
+    }
+
+    .card-25d:hover .card-gloss-sheen {
+      opacity: 1;
+    }
+
+    .card-25d:hover {
+      border-color: var(--color-gold);
+      box-shadow: 0 28px 60px -15px rgba(104, 88, 75, 0.28);
+    }
+
+    .card-img-box {
+      width: 100%;
+      height: 220px;
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      background: #251B1E;
+    }
+
+    .card-img-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.5s ease;
+    }
+
+    .card-25d:hover .card-img-box img {
+      transform: scale(1.08);
+    }
+
+    .badge-category {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: rgba(18, 12, 13, 0.85);
+      border: 1px solid rgba(217, 186, 133, 0.6);
+      color: var(--color-gold);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 8px;
+      backdrop-filter: blur(6px);
+      z-index: 2;
+    }
+
+    .card-info {
+      padding: 20px 10px 10px;
+    }
+
+    .card-info h3 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 21px;
+      font-weight: 700;
+      color: var(--color-espresso);
+      margin-bottom: 6px;
+    }
+
+    .card-info p {
+      font-size: 13px;
+      color: var(--color-mocha);
+      line-height: 1.5;
+      margin-bottom: 20px;
+      min-height: 40px;
+    }
+
+    .card-foot-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 12px;
+      border-top: 1px dashed rgba(104, 88, 75, 0.18);
+    }
+
+    .card-foot-row .price {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--color-espresso);
+    }
+
+    .card-25d {
+      cursor: pointer;
+    }
+
+    .btn-preview {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: var(--color-espresso);
+      color: var(--color-gold);
+      border: 1px solid rgba(217, 186, 133, 0.38);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(30, 21, 23, 0.25);
+      transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .btn-preview svg {
+      transition: transform 0.2s ease;
+    }
+
+    .btn-preview:hover {
+      background: var(--color-gold);
+      color: var(--color-espresso);
+      border-color: var(--color-gold);
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 6px 18px rgba(217, 186, 133, 0.5);
+    }
+
+    .btn-preview:hover svg {
+      transform: scale(1.15);
+    }
+
+    /* ─── 2.5D Menu Item Preview Modal ─── */
+    .menu-preview-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(10, 5, 7, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.28s ease;
+    }
+
+    .menu-preview-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .menu-preview-card {
+      position: relative;
+      width: 100%;
+      max-width: 820px;
+      background: linear-gradient(160deg, #24161B 0%, #120A0D 100%);
+      border: 1.5px solid rgba(217, 186, 133, 0.42);
+      border-radius: 26px;
+      padding: 34px;
+      box-shadow: 0 35px 85px rgba(0, 0, 0, 0.85), 0 0 50px rgba(217, 186, 133, 0.18);
+      color: #FAF7F2;
+      transform: translateY(24px) scale(0.97);
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      overflow: hidden;
+    }
+
+    .menu-preview-overlay.active .menu-preview-card {
+      transform: translateY(0) scale(1);
+    }
+
+    .preview-close-btn {
+      position: absolute;
+      top: 18px;
+      right: 20px;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: rgba(250, 247, 242, 0.08);
+      border: 1px solid rgba(217, 186, 133, 0.3);
+      color: #FAF7F2;
+      font-size: 24px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 10;
+    }
+
+    .preview-close-btn:hover {
+      background: var(--color-gold);
+      color: var(--color-espresso);
+      transform: rotate(90deg) scale(1.08);
+    }
+
+    .preview-card-grid {
+      display: grid;
+      grid-template-columns: 310px 1fr;
+      gap: 30px;
+      align-items: center;
+    }
+
+    .preview-img-column {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .preview-img-stage {
+      position: relative;
+      height: 300px;
+      border-radius: 20px;
+      overflow: hidden;
+      background: radial-gradient(circle, rgba(217, 186, 133, 0.22) 0%, rgba(18, 10, 13, 0.95) 100%);
+      border: 1px solid rgba(217, 186, 133, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .preview-img-stage img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.35s ease;
+    }
+
+    .preview-img-stage:hover img {
+      transform: scale(1.06);
+    }
+
+    .preview-cat-badge {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 2;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: rgba(18, 10, 13, 0.85);
+      border: 1px solid var(--color-gold);
+      color: var(--color-gold);
+      backdrop-filter: blur(8px);
+    }
+
+    .preview-roast-badge {
+      text-align: center;
+      font-size: 11px;
+      color: var(--color-gold);
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(217, 186, 133, 0.08);
+      border: 1px solid rgba(217, 186, 133, 0.2);
+      font-weight: 600;
+    }
+
+    .preview-content-column {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .preview-eyebrow {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--color-gold);
+    }
+
+    .preview-header h2 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 26px;
+      font-weight: 700;
+      color: #FAF7F2;
+      margin: 4px 0 8px;
+      line-height: 1.15;
+    }
+
+    .preview-price-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .preview-price {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-gold);
+    }
+
+    .preview-prep-tag {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(250, 247, 242, 0.08);
+      color: rgba(250, 247, 242, 0.8);
+      border: 1px solid rgba(250, 247, 242, 0.14);
+    }
+
+    .preview-desc {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: rgba(250, 247, 242, 0.85);
+      margin: 0;
+    }
+
+    .preview-specs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(250, 247, 242, 0.04);
+      border: 1px solid rgba(217, 186, 133, 0.18);
+    }
+
+    .spec-box small {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-gold);
+      margin-bottom: 5px;
+    }
+
+    .spec-box strong {
+      font-size: 12px;
+      color: #FAF7F2;
+      font-weight: 600;
+    }
+
+    .spec-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .spec-tags span {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(217, 186, 133, 0.15);
+      color: var(--color-gold);
+    }
+
+    .preview-barista-note {
       display: flex;
       align-items: flex-start;
       gap: 10px;
-      font-size: 13.5px;
-      color: var(--text-main)
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(217, 186, 133, 0.07);
+      border-left: 3px solid var(--color-gold);
+      font-size: 11.5px;
     }
 
-    .check {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: var(--caramel);
-      color: #fff;
-      flex-shrink: 0;
+    .note-icon {
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .note-text strong {
+      display: block;
+      color: var(--color-gold);
+      font-size: 11.5px;
+      margin-bottom: 2px;
+    }
+
+    .note-text p {
+      margin: 0;
+      color: rgba(250, 247, 242, 0.75);
+      line-height: 1.4;
+    }
+
+    .preview-foot-actions {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 800
+      gap: 12px;
+      margin-top: 4px;
     }
 
-    /* Visit / hours */
-    .visit-grid {
+    .btn-pos-launch {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 20px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #ECC98F 0%, #D9BA85 100%);
+      color: #140C0E;
+      font-size: 12.5px;
+      font-weight: 800;
+      text-decoration: none;
+      box-shadow: 0 4px 18px rgba(217, 186, 133, 0.35);
+      transition: all 0.22s ease;
+    }
+
+    .btn-pos-launch:hover {
+      filter: brightness(1.1);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(217, 186, 133, 0.55);
+    }
+
+    .btn-preview-dismiss {
+      padding: 11px 18px;
+      border-radius: 999px;
+      background: transparent;
+      color: rgba(250, 247, 242, 0.75);
+      border: 1px solid rgba(250, 247, 242, 0.2);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-preview-dismiss:hover {
+      background: rgba(250, 247, 242, 0.08);
+      color: #FAF7F2;
+    }
+
+    @media (max-width: 768px) {
+      .preview-card-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      .preview-img-stage {
+        height: 220px;
+      }
+      .menu-preview-card {
+        padding: 24px 20px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+    }
+
+    /* ─── 2.5D INTERACTIVE MENU CATALOG (Warm Cream) ─── */
+    .menu-catalog-section {
+      background: var(--color-cream);
+      padding: 30px 0 120px;
+    }
+
+    .catalog-filters {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 50px;
+      flex-wrap: wrap;
+    }
+
+    .filter-pill {
+      background: #FFFFFF;
+      border: 1.5px solid rgba(104, 88, 75, 0.18);
+      color: var(--color-mocha);
+      font-size: 13.5px;
+      font-weight: 700;
+      padding: 11px 26px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+
+    .filter-pill:hover, .filter-pill.active {
+      background: var(--color-espresso);
+      border-color: var(--color-espresso);
+      color: var(--color-gold);
+      box-shadow: 0 8px 20px rgba(30, 21, 23, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .catalog-split-grid {
+      display: grid;
+      grid-template-columns: 0.35fr 0.65fr;
+      gap: 36px;
+    }
+
+    .promo-special-card {
+      background: linear-gradient(145deg, #1E1517 0%, #120C0D 100%);
+      border-radius: 28px;
+      padding: 36px 28px;
+      color: var(--color-cream);
+      border: 1.5px solid rgba(217, 186, 133, 0.3);
+      box-shadow: 0 20px 45px -10px rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .promo-special-card::after {
+      content: '';
+      position: absolute;
+      top: -50px; right: -50px;
+      width: 180px; height: 180px;
+      background: radial-gradient(circle, rgba(217, 186, 133, 0.2) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .promo-tag {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--color-gold);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .promo-special-card h3 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 14px;
+    }
+
+    .promo-special-card p {
+      font-size: 14px;
+      color: rgba(250, 247, 242, 0.7);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .btn-promo-claim {
+      background: var(--color-gold);
+      color: var(--color-espresso);
+      border: none;
+      padding: 13px 26px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      align-self: flex-start;
+      box-shadow: 0 6px 18px rgba(217, 186, 133, 0.4);
+      transition: all 0.2s ease;
+    }
+
+    .btn-promo-claim:hover {
+      background: #E8CA97;
+      transform: translateY(-2px);
+    }
+
+    .menu-items-columns {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 26px
+      gap: 20px 30px;
     }
 
-    .visit-card {
-      background: #fff;
-      border: 1.5px solid var(--latte);
+    .menu-list-row {
+      background: #FFFFFF;
       border-radius: 20px;
-      padding: 30px
-    }
-
-    .visit-card h3 {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--espresso);
-      margin-bottom: 16px;
+      padding: 14px 18px;
       display: flex;
       align-items: center;
-      gap: 10px
+      gap: 16px;
+      border: 1px solid rgba(104, 88, 75, 0.08);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.02);
+      transition: all 0.25s ease;
+      cursor: pointer;
     }
 
-    .visit-card .ic-sm {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      background: #FCEFE1;
-      color: var(--caramel);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      flex-shrink: 0
+    .menu-list-row:hover {
+      transform: translateX(6px);
+      border-color: var(--color-gold);
+      box-shadow: 0 10px 24px rgba(104, 88, 75, 0.12);
     }
 
-    .row {
+    .thumb-box {
+      width: 58px;
+      height: 58px;
+      border-radius: 14px;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: var(--color-espresso);
+    }
+
+    .thumb-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .row-meta {
+      flex: 1;
+    }
+
+    .row-meta-top {
       display: flex;
       justify-content: space-between;
-      padding: 9px 0;
-      border-bottom: 1px dashed var(--latte);
-      font-size: 13px
+      align-items: baseline;
+      margin-bottom: 3px;
     }
 
-    .row:last-child {
-      border-bottom: none
-    }
-
-    .row span:first-child {
-      color: var(--text-muted)
-    }
-
-    .row span:last-child {
+    .row-meta-top h4 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 16.5px;
+      color: var(--color-espresso);
       font-weight: 700;
-      color: var(--espresso)
     }
 
-    /* Careers */
-    .careers {
-      background: #fff;
-      border-top: 1px solid var(--latte);
-      border-bottom: 1px solid var(--latte)
+    .row-meta-top .item-price {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 16.5px;
+      font-weight: 700;
+      color: var(--color-espresso);
     }
 
-    .careers-inner {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 88px 24px
+    .row-meta p {
+      font-size: 12px;
+      color: var(--color-mocha);
+      line-height: 1.4;
     }
 
-    .careers-grid {
+    /* ─── 2.5D BRAND EMBLEM SHOWCASE ─── */
+    .emblem-feature-section {
+      background: radial-gradient(circle at center, #23181B 0%, var(--color-espresso-pure) 80%);
+      color: var(--color-cream);
+      padding: 100px 0;
+      position: relative;
+      overflow: hidden;
+      border-top: 1px solid rgba(217, 186, 133, 0.15);
+      border-bottom: 1px solid rgba(217, 186, 133, 0.15);
+    }
+
+    .emblem-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 18px;
-      margin-bottom: 28px
-    }
-
-    .role-card {
-      border: 1.5px solid var(--latte);
-      border-radius: 18px;
-      padding: 24px;
-      background: var(--cream);
-      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease
-    }
-
-    .role-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 16px 28px -18px rgba(36, 26, 46, .25);
-      border-color: var(--caramel-light)
-    }
-
-    .role-icon {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      background: #fff;
-      color: var(--caramel);
-      display: flex;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 60px;
       align-items: center;
+    }
+
+    .emblem-stage {
+      display: flex;
       justify-content: center;
-      font-size: 20px;
-      margin-bottom: 16px;
-      border: 1px solid var(--latte)
-    }
-
-    .role-card h3 {
-      font-size: 16px;
-      color: var(--espresso);
-      margin-bottom: 7px
-    }
-
-    .role-card p {
-      font-size: 12.5px;
-      color: var(--text-muted);
-      line-height: 1.65
-    }
-
-    .career-footer {
-      display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 24px;
-      padding: 22px 24px;
-      border: 1.5px solid var(--latte);
-      border-radius: 18px;
-      background: linear-gradient(110deg, #fff, var(--accent-lt))
+      position: relative;
     }
 
-    .career-footer h3 {
-      font-size: 18px;
-      color: var(--espresso);
-      margin-bottom: 5px
+    .emblem-aura-ring {
+      position: absolute;
+      width: 380px;
+      height: 380px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(217, 186, 133, 0.18) 0%, transparent 70%);
+      filter: blur(20px);
+      animation: auraBreathe 6s ease-in-out infinite alternate;
     }
 
-    .career-footer p {
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.6
+    @keyframes auraBreathe {
+      0% { transform: scale(0.9); opacity: 0.4; }
+      100% { transform: scale(1.15); opacity: 0.85; }
     }
 
-    /* CTA band */
-    .cta-band {
-      background: linear-gradient(165deg, var(--espresso) 0%, var(--espresso-deep) 120%);
-      color: var(--cream);
-      text-align: center;
-      padding: 80px 24px;
-      border-radius: 28px;
-      max-width: 1120px;
-      margin: 0 auto
+    .emblem-image-display {
+      width: 240px;
+      height: 340px;
+      position: relative;
+      z-index: 2;
+      filter: drop-shadow(0 20px 30px rgba(0,0,0,0.8)) drop-shadow(0 0 35px rgba(217, 186, 133, 0.5));
+      animation: floatMidEmblem 6s ease-in-out infinite alternate;
     }
 
-    .cta-band h2 {
-      font-size: 30px;
-      margin-bottom: 14px
+    .emblem-image-display img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
 
-    .cta-band p {
-      color: rgba(251, 243, 233, .7);
+    @keyframes floatMidEmblem {
+      0% { transform: translateY(0px) rotate(-2deg); }
+      100% { transform: translateY(-18px) rotate(2deg); }
+    }
+
+    .emblem-copy h2 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 46px;
+      font-weight: 700;
+      color: var(--color-cream);
+      margin-bottom: 18px;
+      line-height: 1.15;
+    }
+
+    .emblem-copy h2 span {
+      color: var(--color-gold);
+      font-style: italic;
+    }
+
+    .emblem-copy p {
+      font-size: 15.5px;
+      color: rgba(250, 247, 242, 0.75);
+      line-height: 1.8;
       margin-bottom: 30px;
-      font-size: 14px
     }
 
-    /* Footer */
+    .pillars-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .pillar-box {
+      background: rgba(250, 247, 242, 0.05);
+      border: 1px solid rgba(217, 186, 133, 0.25);
+      padding: 18px;
+      border-radius: 18px;
+      backdrop-filter: blur(8px);
+    }
+
+    .pillar-box h4 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 18px;
+      color: var(--color-gold);
+      margin-bottom: 6px;
+    }
+
+    .pillar-box p {
+      font-size: 12.5px;
+      color: rgba(250, 247, 242, 0.65);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    /* ─── LUXURY DARK FOOTER ─── */
     footer {
-      padding: 50px 24px 30px;
-      border-top: 1px solid var(--latte)
+      background: var(--color-espresso-pure);
+      color: var(--color-cream);
+      padding: 90px 0 40px;
     }
 
-    .footer-inner {
-      max-width: 1120px;
-      margin: 0 auto;
+    .footer-top-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 0.9fr 0.9fr 0.9fr;
+      gap: 40px;
+      margin-bottom: 70px;
+    }
+
+    .footer-brand p {
+      font-size: 14px;
+      color: rgba(250, 247, 242, 0.65);
+      line-height: 1.8;
+      max-width: 320px;
+      margin-top: 18px;
+    }
+
+    .footer-col h5 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 18px;
+      color: var(--color-cream);
+      margin-bottom: 22px;
+      position: relative;
+    }
+
+    .footer-col h5::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 0;
+      width: 24px;
+      height: 2px;
+      background: var(--color-gold);
+    }
+
+    .footer-col ul {
+      list-style: none;
+    }
+
+    .footer-col ul li {
+      margin-bottom: 12px;
+    }
+
+    .footer-col ul li a {
+      color: rgba(250, 247, 242, 0.6);
+      text-decoration: none;
+      font-size: 13.5px;
+      transition: color 0.2s ease;
+    }
+
+    .footer-col ul li a:hover {
+      color: var(--color-gold);
+    }
+
+    .footer-bottom-bar {
+      padding-top: 30px;
+      border-top: 1px solid rgba(217, 186, 133, 0.1);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 16px
-    }
-
-    .footer-inner p {
       font-size: 12.5px;
-      color: var(--text-muted)
+      color: rgba(250, 247, 242, 0.5);
     }
 
-    .footer-links {
-      display: flex;
-      gap: 22px
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .hero-grid { grid-template-columns: 1fr; text-align: center; }
+      .hero-copy { margin: 0 auto 38px; }
+      .hero-btn-row { justify-content: center; }
+      .hero-key-facts { justify-content: center; }
+      .featured-grid { grid-template-columns: repeat(2, 1fr); }
+      .catalog-split-grid { grid-template-columns: 1fr; }
+      .emblem-grid { grid-template-columns: 1fr; text-align: center; }
+      .pillars-list { justify-content: center; }
+      .footer-top-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
-    .footer-links a {
-      font-size: 12.5px;
-      color: var(--text-muted);
-      font-weight: 600
-    }
-
-    .footer-links a:hover {
-      color: var(--caramel)
-    }
-
-    @media (max-width:880px) {
-      .nav-links {
-        display: none;
-        flex-direction: column;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: rgba(251, 243, 233, .98);
-        backdrop-filter: blur(10px);
-        border-bottom: 1.5px solid var(--latte);
-        padding: 16px 24px;
-        gap: 14px;
-        box-shadow: 0 12px 24px -6px rgba(36, 26, 46, .12);
-        z-index: 100;
-      }
-
-      .nav-links.open {
-        display: flex
-      }
-
-      .nav-links a {
-        font-size: 14.5px;
-        padding: 8px 0;
-        border-bottom: 1px dashed var(--latte)
-      }
-
-      .nav-links a:last-child {
-        border-bottom: none
-      }
-
-      .nav-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
-        background: var(--latte);
-        border: none;
-        font-size: 18px;
-        color: var(--espresso);
-        cursor: pointer;
-        margin-left: 4px;
-      }
-
-      .hero-inner {
-        grid-template-columns: 1fr;
-        padding: 56px 24px 70px;
-        text-align: center;
-        gap: 36px
-      }
-
-      .eyebrow {
-        margin-left: auto;
-        margin-right: auto
-      }
-
-      .hero h1 {
-        font-size: clamp(28px, 6vw, 40px)
-      }
-
-      .hero p {
-        margin-left: auto;
-        margin-right: auto
-      }
-
-      .hero-ctas {
-        justify-content: center
-      }
-
-      .hero-stats {
-        justify-content: center;
-        gap: 24px;
-        margin-top: 34px;
-        padding-top: 24px;
-        border-top: 1px solid rgba(251, 243, 233, .12)
-      }
-
-      .hero-art {
-        order: -1
-      }
-
-      .cup-wrap {
-        margin: 0 auto;
-        width: min(210px, 60vw)
-      }
-
-      .hero-glow {
-        width: min(300px, 80vw);
-        height: min(300px, 80vw)
-      }
-
-      .menu-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 16px
-      }
-
-      .about-inner {
-        grid-template-columns: 1fr;
-        gap: 36px;
-        padding: 60px 24px
-      }
-
-      .about-art {
-        aspect-ratio: 16/9;
-        max-height: 260px
-      }
-
-      .visit-grid {
-        grid-template-columns: 1fr;
-        gap: 18px
-      }
-
-      .careers-grid {
-        grid-template-columns: 1fr 1fr
-      }
-
-      .career-footer {
-        align-items: flex-start;
-        flex-direction: column
-      }
-    }
-
-    @media (max-width:540px) {
-      .wrap {
-        padding: 0 16px
-      }
-
-      nav {
-        padding: 12px 16px
-      }
-
-      .brand-text .tag {
-        display: none
-      }
-
-      .nav-cta .btn {
-        padding: 8px 15px;
-        font-size: 12px
-      }
-
-      .hero-inner {
-        padding: 40px 16px 52px
-      }
-
-      .hero-ctas {
-        flex-direction: column;
-        width: 100%
-      }
-
-      .hero-ctas .btn {
-        width: 100%
-      }
-
-      .hero-stats {
-        gap: 16px
-      }
-
-      .hero-stats div b {
-        font-size: 20px
-      }
-
-      .hero-stats div span {
-        font-size: 10.5px
-      }
-
-      section {
-        padding: 54px 0
-      }
-
-      .section-head {
-        margin-bottom: 28px
-      }
-
-      .section-title {
-        font-size: 25px
-      }
-
-      .menu-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px
-      }
-
-      .menu-card {
-        padding: 20px 12px;
-        border-radius: 16px
-      }
-
-      .menu-card .ic {
-        width: 46px;
-        height: 46px;
-        font-size: 22px;
-        margin-bottom: 12px
-      }
-
-      .menu-card h3 {
-        font-size: 14px
-      }
-
-      .visit-card {
-        padding: 20px 16px;
-        border-radius: 16px
-      }
-
-      .row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 3px;
-        padding: 8px 0
-      }
-
-      .careers-inner {
-        padding: 54px 16px
-      }
-
-      .careers-grid {
-        grid-template-columns: 1fr;
-        gap: 12px
-      }
-
-      .role-card {
-        padding: 20px 18px
-      }
-
-      .cta-band {
-        padding: 48px 18px;
-        border-radius: 20px
-      }
-
-      .footer-inner {
-        flex-direction: column;
-        text-align: center;
-        gap: 16px
-      }
-
-      .footer-links {
-        justify-content: center;
-        gap: 16px
-      }
-    }
-
-    @media (max-width:360px) {
-      .menu-grid {
-        grid-template-columns: 1fr
-      }
+    @media (max-width: 640px) {
+      .hero-heading { font-size: 46px; }
+      .featured-grid { grid-template-columns: 1fr; }
+      .menu-items-columns { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      .footer-top-grid { grid-template-columns: 1fr; }
+      .hero-plinth { width: 320px; height: 320px; }
+      .hero-coffee-card { width: 300px; height: 400px; }
     }
   </style>
 </head>
-
 <body>
 
+  <!-- Floating Toast Notification -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Ambient Light Sparkles -->
+  <div class="ambient-sparkle sp-1"></div>
+  <div class="ambient-sparkle sp-2"></div>
+  <div class="ambient-sparkle sp-3"></div>
+  <div class="ambient-sparkle sp-4"></div>
+
+  <!-- 2.5D Floating Coffee Beans -->
+  <svg class="floating-bean bean-1" viewBox="0 0 50 70" fill="none">
+    <ellipse cx="25" cy="35" rx="20" ry="30" fill="#38251C" stroke="#D9BA85" stroke-width="1.5"/>
+    <path d="M25,8 Q33,35 25,62" stroke="#D9BA85" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+  <svg class="floating-bean bean-2" viewBox="0 0 50 70" fill="none">
+    <ellipse cx="25" cy="35" rx="20" ry="30" fill="#281A14" stroke="#D9BA85" stroke-width="1.2"/>
+    <path d="M25,10 Q18,35 25,60" stroke="#D9BA85" stroke-width="1.8" stroke-linecap="round"/>
+  </svg>
+  <svg class="floating-bean bean-3" viewBox="0 0 50 70" fill="none">
+    <ellipse cx="25" cy="35" rx="22" ry="32" fill="#1C120D" stroke="#D9BA85" stroke-width="1"/>
+    <path d="M25,7 Q32,35 25,63" stroke="#D9BA85" stroke-width="2"/>
+  </svg>
+
+  <!-- ─── Header ─── -->
   <header>
-    <nav>
-      <div class="brand">
-        <div class="brand-mark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--cream)" stroke-width="1.8" stroke-linecap="round"
-            stroke-linejoin="round">
-            <path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z" />
-            <path d="M17 10.5c2.5 0 2.5 4 0 4" />
-            <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2" />
-          </svg>
+    <div class="container nav-wrap">
+      <a href="#" class="brand-group">
+        <div class="brand-logo-frame">
+          <img class="brand-logo-img" src="assets/brewvanti_logo.png" alt="BrewVanti Logo" onerror="this.src='assets/brewvanti_pos_logo.svg'">
         </div>
-        <div class="brand-text">
-          <div class="name">Kofee Manila</div>
-          <div class="tag">Coffee &amp; Bites</div>
+        <div class="brand-meta">
+          <h1>BrewVanti</h1>
+          <span>Artisan Coffee &amp; Brew</span>
         </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#" class="active">Home</a></li>
+        <li><a href="#featured">Featured</a></li>
+        <li><a href="#menu">Our Menu</a></li>
+        <li><a href="#craft">The Craft</a></li>
+        <li><a href="careers.php">Hiring</a></li>
+        <li><a href="#contact">Visit Us</a></li>
+      </ul>
+
+      <div class="nav-right-actions">
+        <a href="auth/login.php" class="btn-login-cta">Login POS</a>
       </div>
-      <div class="nav-links">
-        <a href="#menu">Menu</a>
-        <a href="#about">About</a>
-        <a href="#visit">Visit Us</a>
-        <a href="careers.php">Hiring</a>
-      </div>
-      <div class="nav-cta">
-        <a href="auth/login.php" class="btn btn-primary">Login</a>
-      </div>
-      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round">
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
-      </button>
-    </nav>
+    </div>
   </header>
 
-  <section class="hero" style="padding:0">
-    <div class="hero-inner">
-      <div>
-        <span class="eyebrow">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round"
-            style="display:inline-block;vertical-align:middle;margin-right:4px;">
-            <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-            <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-          </svg>
-          Freshly brewed, every day
-        </span>
-        <h1>Your everyday <em>coffee ritual,</em> made better.</h1>
-        <p>From bold iced coffees to comforting milk teas — Kofee Manila brews every cup fresh, right in your
-          neighborhood.</p>
-        <div class="hero-ctas">
-          <a href="#menu" class="btn btn-primary">See Our Menu</a>
-          <a href="#visit" class="btn btn-ghost" style="border-color:rgba(251,243,233,.3);color:var(--cream)">Visit
-            Us</a>
+  <!-- ─── 2.5D Hero Section (Dark Espresso) ─── -->
+  <section class="hero-section">
+    <div class="container hero-grid">
+      <!-- Left Column: Headline & Action -->
+      <div class="hero-copy-column">
+        <div class="hero-badge-chip">
+          <span>✦ Fresh Brew, Warm Moments</span>
         </div>
-        <div class="hero-stats">
-          <div><b>4</b><span>Menu Categories</span></div>
-          <div><b>100%</b><span>Freshly Brewed</span></div>
-          <div><b>Daily</b><span>New Specials</span></div>
+        <h2 class="hero-heading">
+          Good Coffee,<br>
+          <span class="gold-script">Good Day</span>
+        </h2>
+        <p class="hero-copy">
+          Handcrafted coffee made with passion, perfect for your everyday moments. Experience the warmth in every brew and the pure joy in every sip.
+        </p>
+
+        <div class="hero-btn-row">
+          <a href="#featured" class="btn-hero-primary">
+            <span>Explore Menu</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </a>
+          <a href="#craft" class="btn-hero-secondary">Our Story</a>
+        </div>
+
+        <div class="hero-key-facts">
+          <div class="fact-item">
+            <h4>100%</h4>
+            <p>Single Origin Beans</p>
+          </div>
+          <div class="fact-item">
+            <h4>4.9 ★</h4>
+            <p>Customer Rating</p>
+          </div>
+          <div class="fact-item">
+            <h4>Daily</h4>
+            <p>Micro-Batch Roasted</p>
+          </div>
         </div>
       </div>
-      <div class="hero-art">
-        <div class="hero-glow"></div>
-        <div class="cup-wrap cup-float" style="position:relative">
-          <span class="steam" style="left:36%;animation-delay:0s"></span>
-          <span class="steam" style="left:50%;animation-delay:1.1s"></span>
-          <span class="steam" style="left:63%;animation-delay:2.1s"></span>
-          <svg viewBox="0 0 200 200" style="position:relative;z-index:1">
-            <path d="M40 70h100v50a45 45 0 01-45 45h-10a45 45 0 01-45-45V70z" fill="none" stroke="var(--caramel-light)"
-              stroke-wi />dth="4"
-            <path d="M140 85c22 0 22 34 0 34" fill="none" stroke="var(--caramel-light)" stroke-width="4" />
-            <ellipse cx="90" cy="70" rx="50" ry="10" fill="var(--caramel)" opacity=".85" />
-            <path d="M55 40c-6 8-6 14 0 22M75 40c-6 8-6 14 0 22M95 40c-6 8-6 14 0 22" fill="none"
-              stroke="rgba(251,243,233,.4)" stroke-width="3" stroke-linecap="round" />
-          </svg>
+
+      <!-- Right Column: 2.5D Interactive Hero Showcase (Balanced & Spacious) -->
+      <div class="hero-3d-stage">
+        <div class="hero-plinth" id="heroPlinth">
+          <div class="plinth-ring"></div>
+
+          <div class="hero-coffee-card" data-tilt>
+            <!-- Rising Steam Animation Particles -->
+            <div class="steam-container">
+              <div class="steam-particle st-1"></div>
+              <div class="steam-particle st-2"></div>
+              <div class="steam-particle st-3"></div>
+            </div>
+
+            <!-- Cinematic Coffee Showcase Frame -->
+            <div class="coffee-image-display">
+              <img src="https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=700&q=80" 
+                   alt="BrewVanti Signature Flat White"
+                   onerror="this.src='assets/menu/1.jpg'">
+              
+              <!-- Subtle Inner Badge -->
+              <div class="photo-inner-badge">
+                <span class="badge-dot"></span>
+                <span>Signature Roast</span>
+              </div>
+            </div>
+
+            <!-- Integrated Content Block -->
+            <div class="hero-card-meta">
+              <div class="hero-card-meta-left">
+                <h3>Artisan Flat White</h3>
+                <p>Double ristretto with micro-textured velvety milk</p>
+                <div class="flavor-notes-row">
+                  <span>Caramel Notes</span>
+                  <span>Single Origin</span>
+                  <span>Velvet Crema</span>
+                </div>
+              </div>
+              <div class="hero-card-meta-right">
+                <span class="price-tag">₱160</span>
+                <span class="serve-type">Hot Brew</span>
+              </div>
+            </div>
+
+            <!-- Balanced 2.5D Floating Badges -->
+            <div class="hero-floating-badge badge-top-right">
+              <span class="badge-icon">✦</span>
+              <div class="badge-text">
+                <strong>Single Origin</strong>
+                <small>100% Arabica</small>
+              </div>
+            </div>
+
+            <div class="hero-floating-badge badge-bottom-left">
+              <span class="badge-stars">★★★★★</span>
+              <div class="badge-text">
+                <strong>4.9 Rating</strong>
+                <small>1.2k+ Sips</small>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="menu">
-    <div class="wrap">
-      <div class="section-head center">
-        <div class="section-eyebrow">What We Serve</div>
-        <h2 class="section-title">Something for every craving</h2>
-        <p class="section-sub" style="margin:0 auto">Four simple categories, made fresh to order.</p>
+  <!-- ─── Organic Divider ─── -->
+  <div class="section-divider-curve">
+    <svg viewBox="0 0 1440 60" preserveAspectRatio="none">
+      <path d="M0,0 C320,50 640,65 1440,25 L1440,60 L0,60 Z"></path>
+    </svg>
+  </div>
+
+  <!-- ─── 2.5D FEATURED DRINKS SECTION (Warm Cream #FAF7F2) ─── -->
+  <section class="featured-drinks-section" id="featured">
+    <div class="container">
+      <div class="section-headline-wrap">
+        <span class="eyebrow">OUR FAVORITES</span>
+        <h2>Featured Drinks</h2>
       </div>
-      <div class="menu-grid">
-        <div class="menu-card">
-          <div class="ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--caramel)" stroke-width="1.8"
-              style="width:28px;height:28px;">
-              <path d="M7 2h10l1 18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L7 2z" />
-              <line x1="5" y1="6" x2="19" y2="6" />
-              <path d="M10 10h4" />
-              <path d="M9 14h6" />
-              <line x1="12" y1="2" x2="12" y2="4" />
-            </svg>
+
+      <div class="featured-grid">
+        <!-- 1. Caramel Macchiato -->
+        <div class="card-25d" data-tilt data-name="Caramel Macchiato" data-price="₱175" onclick="openMenuPreview(event, 'Caramel Macchiato')">
+          <div class="card-gloss-sheen"></div>
+          <div class="card-img-box">
+            <span class="badge-category">HOT COFFEE</span>
+            <img src="https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=600&q=80" 
+                 alt="Caramel Macchiato" 
+                 onerror="this.src='assets/menu/3.jpg'">
           </div>
-          <h3>Ice Coffee</h3>
-          <p>Bold, cold, and ready to go.</p>
+          <div class="card-info">
+            <h3>Caramel Macchiato</h3>
+            <p>Smooth espresso with creamy caramel &amp; rich steamed milk.</p>
+            <div class="card-foot-row">
+              <span class="price">₱175</span>
+              <button class="btn-preview" onclick="openMenuPreview(event, 'Caramel Macchiato')" title="Preview Menu Details">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span>Preview</span>
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="menu-card">
-          <div class="ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--caramel)" stroke-width="1.8"
-              style="width:28px;height:28px;">
-              <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-              <line x1="6" y1="1" x2="6" y2="4" />
-              <line x1="10" y1="1" x2="10" y2="4" />
-              <line x1="14" y1="1" x2="14" y2="4" />
-            </svg>
+
+        <!-- 2. Iced Spanish Latte -->
+        <div class="card-25d" data-tilt data-name="Iced Spanish Latte" data-price="₱185" onclick="openMenuPreview(event, 'Iced Spanish Latte')">
+          <div class="card-gloss-sheen"></div>
+          <div class="card-img-box">
+            <span class="badge-category">COLD BREW</span>
+            <img src="https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=600&q=80" 
+                 alt="Iced Spanish Latte" 
+                 onerror="this.src='assets/menu/4.jpg'">
           </div>
-          <h3>Hot Coffee</h3>
-          <p>Classic brews to start your day.</p>
+          <div class="card-info">
+            <h3>Iced Spanish Latte</h3>
+            <p>Bold espresso shot poured over ice cubes &amp; sweet cold milk.</p>
+            <div class="card-foot-row">
+              <span class="price">₱185</span>
+              <button class="btn-preview" onclick="openMenuPreview(event, 'Iced Spanish Latte')" title="Preview Menu Details">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span>Preview</span>
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="menu-card">
-          <div class="ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--caramel)" stroke-width="1.8"
-              style="width:28px;height:28px;">
-              <path d="M6 3h12l-1.5 16a2 2 0 0 1-2 1.8H9.5A2 2 0 0 1 7.5 19L6 3z" />
-              <line x1="10" y1="7" x2="14" y2="7" />
-              <circle cx="10" cy="14" r="1.2" fill="currentColor" />
-              <circle cx="14" cy="14" r="1.2" fill="currentColor" />
-              <circle cx="12" cy="17" r="1.2" fill="currentColor" />
-            </svg>
+
+        <!-- 3. Artisan Cappuccino -->
+        <div class="card-25d" data-tilt data-name="Artisan Cappuccino" data-price="₱160" onclick="openMenuPreview(event, 'Artisan Cappuccino')">
+          <div class="card-gloss-sheen"></div>
+          <div class="card-img-box">
+            <span class="badge-category">CRAFT BREW</span>
+            <img src="https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=600&q=80" 
+                 alt="Artisan Cappuccino" 
+                 onerror="this.src='assets/menu/1.jpg'">
           </div>
-          <h3>Milk Tea</h3>
-          <p>Creamy, sweet, always a favorite.</p>
+          <div class="card-info">
+            <h3>Artisan Cappuccino</h3>
+            <p>Classic espresso with a velvety balance of micro-foam &amp; cinnamon.</p>
+            <div class="card-foot-row">
+              <span class="price">₱160</span>
+              <button class="btn-preview" onclick="openMenuPreview(event, 'Artisan Cappuccino')" title="Preview Menu Details">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span>Preview</span>
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="menu-card">
-          <div class="ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--caramel)" stroke-width="1.8"
-              style="width:28px;height:28px;">
-              <circle cx="12" cy="14" r="7" />
-              <path d="M12 7V3" />
-              <path d="M12 3c3 0 5 1.5 5 4" />
-              <circle cx="10" cy="13" r="1" />
-              <circle cx="14" cy="13" r="1" />
-            </svg>
+
+        <!-- 4. Mocha Delight -->
+        <div class="card-25d" data-tilt data-name="Mocha Delight" data-price="₱195" onclick="openMenuPreview(event, 'Mocha Delight')">
+          <div class="card-gloss-sheen"></div>
+          <div class="card-img-box">
+            <span class="badge-category">SIGNATURE</span>
+            <img src="https://images.unsplash.com/photo-1578314670559-338c356f1784?auto=format&fit=crop&w=600&q=80" 
+                 alt="Mocha Delight" 
+                 onerror="this.src='assets/menu/3.jpg'">
           </div>
-          <h3>Fruit Tea</h3>
-          <p>Light, fruity, refreshingly cool.</p>
+          <div class="card-info">
+            <h3>Mocha Delight</h3>
+            <p>Rich dark chocolate shavings combined with bold espresso roast.</p>
+            <div class="card-foot-row">
+              <span class="price">₱195</span>
+              <button class="btn-preview" onclick="openMenuPreview(event, 'Mocha Delight')" title="Preview Menu Details">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span>Preview</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="about" id="about">
-    <div class="about-inner">
-      <div class="about-art">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"
-          stroke-linejoin="round">
-          <path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z" />
-          <path d="M17 10.5c2.5 0 2.5 4 0 4" />
-          <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2" />
-        </svg>
+  <!-- ─── 2.5D INTERACTIVE MENU CATALOG (Warm Cream) ─── -->
+  <section class="menu-catalog-section" id="menu">
+    <div class="container">
+      <div class="catalog-filters">
+        <button class="filter-pill active" onclick="filterCategory('all', this)">All Items</button>
+        <button class="filter-pill" onclick="filterCategory('hot', this)">Hot Coffee</button>
+        <button class="filter-pill" onclick="filterCategory('iced', this)">Iced Coffee</button>
+        <button class="filter-pill" onclick="filterCategory('special', this)">Special Brews</button>
+        <button class="filter-pill" onclick="filterCategory('pastry', this)">Pastries &amp; Bites</button>
       </div>
-      <div>
-        <div class="section-eyebrow">Our Story</div>
-        <h2 class="section-title">A neighborhood café, brewed with care</h2>
-        <p class="section-sub">Kofee Manila started as a small counter with one goal — serve honest, well-made coffee
-          and bites without the wait. Every order is prepared fresh, right when you ask for it.</p>
-        <ul>
-          <li><span class="check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFF"
-                stroke-width="3.2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg></span> Fresh ingredients, prepared daily</li>
-          <li><span class="check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFF"
-                stroke-width="3.2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg></span> Friendly, fast counter service</li>
-          <li><span class="check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFF"
-                stroke-width="3.2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg></span> Dine-in, take-out, or delivery</li>
-        </ul>
-      </div>
-    </div>
-  </section>
 
-  <section id="visit">
-    <div class="wrap">
-      <div class="section-head center">
-        <div class="section-eyebrow">Find Us</div>
-        <h2 class="section-title">Come say hi</h2>
-      </div>
-      <div class="visit-grid">
-        <div class="visit-card">
-          <h3><span class="ic-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                style="width:16px;height:16px">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg></span> Location</h3>
-          <div class="row"><span>Address</span><span>Blk 44 Lot 2</span></div>
-          <div class="row"><span>Contact</span><span>Kofeemanila@gmail.com</span></div>
-        </div>
-        <div class="visit-card">
-          <h3><span class="ic-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                style="width:16px;height:16px">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg></span> Store Hours</h3>
-          <div class="row"><span>Mon – Fri</span><span>7:00 AM – 9:00 PM</span></div>
-          <div class="row"><span>Sat – Sun</span><span>8:00 AM – 10:00 PM</span></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="careers" id="careers">
-    <div class="careers-inner">
-      <div class="section-head center">
-        <div class="section-eyebrow">Come Work With Us</div>
-        <h2 class="section-title">Good coffee needs good people</h2>
-        <p class="section-sub" style="margin:0 auto">We are building a warm, thoughtful team that cares about every cup
-          and every guest.</p>
-      </div>
-      <div class="careers-grid">
-        <article class="role-card">
-          <div class="role-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              style="width:20px;height:20px">
-              <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-            </svg>
+      <div class="catalog-split-grid">
+        <!-- Promo 2.5D Card Banner -->
+        <div class="promo-special-card" data-tilt>
+          <div>
+            <span class="promo-tag">★ LIMITED PROMO</span>
+            <h3>Flat 20% OFF</h3>
+            <p>On all Handcrafted Pour-Overs and Signature Spanish Lattes when you order online.</p>
           </div>
-          <h3>Barista</h3>
-          <p>Prepare quality drinks, learn the craft, and make each customer feel welcome.</p>
-        </article>
-        <article class="role-card">
-          <div class="role-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              style="width:20px;height:20px">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </div>
-          <h3>Counter Crew</h3>
-          <p>Keep orders moving with friendly service, careful preparation, and a sharp eye for detail.</p>
-        </article>
-        <article class="role-card">
-          <div class="role-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              style="width:20px;height:20px">
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-          </div>
-          <h3>Shift Lead</h3>
-          <p>Support the team on the floor, guide daily operations, and help the café run smoothly.</p>
-        </article>
-      </div>
-      <div class="career-footer">
-        <div>
-          <h3>Ready to join the crew?</h3>
-          <p>Explore all active openings and apply directly through our Careers portal.</p>
+          <button class="btn-promo-claim" onclick="triggerPromoToast()">Claim Promo Code</button>
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <a class="btn btn-primary" href="careers.php">Browse Open Positions</a>
-          <a class="btn btn-ghost"
-            href="mailto:careers@kofeemanila.com?subject=Kofee%20Manila%20Job%20Application">Apply by Email</a>
+
+        <!-- Menu List Grid (Two Columns) -->
+        <div class="menu-items-columns" id="menuColumns">
+          <!-- Item 1 (Hot) -->
+          <div class="menu-list-row" data-cat="hot" onclick="openMenuPreview(event, 'Caramel Macchiato')" title="Preview Drink Details">
+            <div class="thumb-box">
+              <img src="https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=150&q=80" alt="Caramel Macchiato" onerror="this.src='assets/menu/1.jpg'">
+            </div>
+            <div class="row-meta">
+              <div class="row-meta-top">
+                <h4>Caramel Macchiato</h4>
+                <span class="item-price">₱175</span>
+              </div>
+              <p>Smooth espresso, caramel drizzle</p>
+            </div>
+          </div>
+
+          <!-- Item 2 (Hot) -->
+          <div class="menu-list-row" data-cat="hot" onclick="openMenuPreview(event, 'Caffe Americano')" title="Preview Drink Details">
+            <div class="thumb-box">
+              <img src="https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=150&q=80" alt="Caffe Americano" onerror="this.src='assets/menu/3.jpg'">
+            </div>
+            <div class="row-meta">
+              <div class="row-meta-top">
+                <h4>Caffe Americano</h4>
+                <span class="item-price">₱140</span>
+              </div>
+              <p>Strong smooth double-shot coffee</p>
+            </div>
+          </div>
+
+          <!-- Item 3 (Iced) -->
+          <div class="menu-list-row" data-cat="iced" onclick="openMenuPreview(event, 'Iced Vanilla Latte')" title="Preview Drink Details">
+            <div class="thumb-box">
+              <img src="https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=150&q=80" alt="Iced Vanilla Latte" onerror="this.src='assets/menu/4.jpg'">
+            </div>
+            <div class="row-meta">
+              <div class="row-meta-top">
+                <h4>Iced Vanilla Latte</h4>
+                <span class="item-price">₱180</span>
+              </div>
+              <p>French vanilla with fresh cold milk</p>
+            </div>
+          </div>
+
+          <!-- Item 4 (Hot) -->
+          <div class="menu-list-row" data-cat="hot" onclick="openMenuPreview(event, 'Classic Cappuccino')" title="Preview Drink Details">
+            <div class="thumb-box">
+              <img src="https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=150&q=80" alt="Classic Cappuccino" onerror="this.src='assets/menu/1.jpg'">
+            </div>
+            <div class="row-meta">
+              <div class="row-meta-top">
+                <h4>Classic Cappuccino</h4>
+                <span class="item-price">₱160</span>
+              </div>
+              <p>Dense foam dusting with cocoa</p>
+            </div>
+          </div>
+
+          <!-- Item 5 (Special) -->
+          <div class="menu-list-row" data-cat="special" onclick="openMenuPreview(event, 'Dark Chocolate Mocha')" title="Preview Drink Details">
+            <div class="thumb-box">
+              <img src="https://images.unsplash.com/photo-1578314670559-338c356f1784?auto=format&fit=crop&w=150&q=80" alt="Dark Mocha" onerror="this.src='assets/menu/3.jpg'">
+            </div>
+            <div class="row-meta">
+              <div class="row-meta-top">
+                <h4>Dark Chocolate Mocha</h4>
+                <span class="item-price">₱195</span>
+              </div>
+              <p>Belgian chocolate, double espresso</p>
+            </div>
+          </div>
+
+          <!-- Item 6 (Special) -->
+          <div class="menu-list-row" data-cat="special" onclick="openMenuPreview(event, 'Nitro Cold Brew')" title="Preview Drink Details">
+            <div class="thumb-box">
+              <img src="https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=150&q=80" alt="Nitro Cold Brew" onerror="this.src='assets/menu/4.jpg'">
+            </div>
+            <div class="row-meta">
+              <div class="row-meta-top">
+                <h4>Nitro Cold Brew</h4>
+                <span class="item-price">₱190</span>
+              </div>
+              <p>Velvety smooth nitrogen infused</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section>
-    <div class="wrap">
-      <div class="cta-band">
-        <h2 class="font-display">Ready for your next cup?</h2>
-        <p>Order ahead or drop by the counter — either way, it's fresh.</p>
-        <a href="#menu" class="btn btn-primary">Order Now</a>
+  <!-- ─── 2.5D SACRED EMBLEM SHOWCASE SECTION ─── -->
+  <section class="emblem-feature-section" id="craft">
+    <div class="container emblem-grid">
+      <!-- Left Stage: Huge Glowing 2.5D Emblem -->
+      <div class="emblem-stage">
+        <div class="emblem-aura-ring"></div>
+        <div class="emblem-image-display" data-tilt>
+          <img src="assets/brewvanti_logo.png" alt="BrewVanti Sacred Emblem" onerror="this.src='assets/brewvanti_pos_logo.svg'">
+        </div>
+      </div>
+
+      <!-- Right Column: Brand Philosophy -->
+      <div class="emblem-copy">
+        <h2>More Than Coffee,<br>It's an <span>Experience</span></h2>
+        <p>
+          The hourglass seal of BrewVanti represents the precision of time in each roast, the clock of deliberate craftsmanship, and the celestial harmony between night harvesting and daytime brewing.
+        </p>
+
+        <div class="pillars-list">
+          <div class="pillar-box">
+            <h4>✦ Ethically Sourced</h4>
+            <p>100% Arabica direct trade beans from high-altitude estates.</p>
+          </div>
+          <div class="pillar-box">
+            <h4>✦ Micro-Batch Roasted</h4>
+            <p>Roasted locally every 48 hours to preserve floral aromatic oils.</p>
+          </div>
+          <div class="pillar-box">
+            <h4>✦ Master Baristas</h4>
+            <p>Extraction recipes dialled-in daily to precise TDS percentages.</p>
+          </div>
+          <div class="pillar-box">
+            <h4>✦ Cozy Sanctuary</h4>
+            <p>An executive acoustic atmosphere made for slow mornings and deep work.</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <footer>
-    <div class="footer-inner">
-      <p>© 2026 Kofee Manila. All rights reserved.</p>
-      <div class="footer-links">
-        <a href="#menu">Menu</a>
-        <a href="#about">About</a>
-        <a href="#visit">Visit Us</a>
-        <a href="careers.php">Careers</a>
-        <a href="auth/login.php">Login</a>
+  <!-- ─── Footer (Dark Espresso) ─── -->
+  <footer id="contact">
+    <div class="container">
+      <div class="footer-top-grid">
+        <div class="footer-brand">
+          <div class="brand-group">
+            <div class="brand-logo-frame">
+              <img class="brand-logo-img" src="assets/brewvanti_logo.png" alt="BrewVanti Logo" onerror="this.src='assets/brewvanti_pos_logo.svg'">
+            </div>
+            <div class="brand-meta">
+              <h1>BrewVanti</h1>
+              <span>Artisan Coffee &amp; Brew</span>
+            </div>
+          </div>
+          <p>
+            Crafting third-wave coffee experiences through ethically sourced beans, meticulous roasting profiles, and genuine hospitality.
+          </p>
+        </div>
+
+        <div class="footer-col">
+          <h5>Quick Links</h5>
+          <ul>
+            <li><a href="#">Home</a></li>
+            <li><a href="#featured">Featured Menu</a></li>
+            <li><a href="#menu">Full Drinks List</a></li>
+            <li><a href="#craft">The Craft &amp; Roastery</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Visit Our Store</h5>
+          <ul>
+            <li><a href="#">102 Artisan Ave, Manila</a></li>
+            <li><a href="#">Mon - Fri: 7:00 AM - 10:00 PM</a></li>
+            <li><a href="#">Sat - Sun: 8:00 AM - 11:00 PM</a></li>
+            <li><a href="#">+63 (2) 8920-BREW</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Experience</h5>
+          <ul>
+            <li><a href="auth/login.php">POS Order Terminal</a></li>
+            <li><a href="#">Table Reservation</a></li>
+            <li><a href="#">Private Tastings</a></li>
+            <li><a href="careers.php">Careers &amp; Hiring</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom-bar">
+        <p>&copy; 2026 BrewVanti Artisan Coffee &amp; Brew. All rights reserved.</p>
+        <p>Crafted with Passion &bull; Manila, Philippines</p>
       </div>
     </div>
   </footer>
 
+  <!-- ─── 2.5D Menu Item Preview Modal ─── -->
+  <div class="menu-preview-overlay" id="menuPreviewModal" onclick="closeMenuPreview(event)">
+    <div class="menu-preview-card" onclick="event.stopPropagation()">
+      <div class="card-gloss-sheen"></div>
+      <button class="preview-close-btn" onclick="closeMenuPreview()" aria-label="Close Preview">&times;</button>
+      
+      <div class="preview-card-grid">
+        <!-- Visual Display Column -->
+        <div class="preview-img-column">
+          <div class="preview-img-stage" data-tilt>
+            <span class="preview-cat-badge" id="previewCategory">HOT COFFEE</span>
+            <img id="previewImage" src="" alt="Drink Preview">
+          </div>
+          <div class="preview-roast-badge" id="previewRoast">
+            <span>✦ 100% Arabica Micro-Roast</span>
+          </div>
+        </div>
+
+        <!-- Details Column -->
+        <div class="preview-content-column">
+          <div class="preview-header">
+            <span class="preview-eyebrow">ARTISAN MENU SHOWCASE</span>
+            <h2 id="previewTitle">Caramel Macchiato</h2>
+            <div class="preview-price-row">
+              <span class="preview-price" id="previewPrice">₱175.00</span>
+              <span class="preview-prep-tag" id="previewServing">Signature Extraction</span>
+            </div>
+          </div>
+
+          <p class="preview-desc" id="previewDesc">
+            Smooth espresso with creamy caramel &amp; rich steamed milk.
+          </p>
+
+          <div class="preview-specs-grid">
+            <div class="spec-box">
+              <small>Tasting Notes</small>
+              <div class="spec-tags" id="previewNotes">
+                <span>Caramel</span>
+                <span>Vanilla</span>
+                <span>Velvet</span>
+              </div>
+            </div>
+            <div class="spec-box">
+              <small>Origin &amp; Profile</small>
+              <strong id="previewOrigin">Single Origin • Medium Dark</strong>
+            </div>
+          </div>
+
+          <div class="preview-barista-note">
+            <span class="note-icon">☕</span>
+            <div class="note-text">
+              <strong>Master Barista Recipe</strong>
+              <p id="previewRecipe">Dialed in with 36g espresso yield over silky micro-textured milk.</p>
+            </div>
+          </div>
+
+          <div class="preview-foot-actions">
+            <a href="auth/login.php" class="btn-pos-launch">
+              <span>Order via POS Terminal</span>
+              <span>&rarr;</span>
+            </a>
+            <button class="btn-preview-dismiss" onclick="closeMenuPreview()">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 2.5D Interactive JavaScript Engine ─── -->
   <script>
-    const navToggle = document.getElementById('navToggle');
-    const navLinks = document.querySelector('.nav-links');
+    // 1. 2.5D Mouse Tilt on all [data-tilt] elements
+    const tiltCards = document.querySelectorAll('[data-tilt]');
 
-    if (navToggle && navLinks) {
-      const iconHamburger = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
-      const iconClose = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    tiltCards.forEach(card => {
+      card.addEventListener('mousemove', e => {
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
 
-      navToggle.addEventListener('click', () => {
-        const isOpen = navLinks.classList.toggle('open');
-        navToggle.setAttribute('aria-expanded', String(isOpen));
-        navToggle.innerHTML = isOpen ? iconClose : iconHamburger;
+        const rotateX = ((y - centerY) / centerY) * -12;
+        const rotateY = ((x - centerX) / centerX) * 12;
+
+        card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateZ(18px)`;
       });
 
-      navLinks.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', () => {
-          navLinks.classList.remove('open');
-          navToggle.setAttribute('aria-expanded', 'false');
-          navToggle.innerHTML = iconHamburger;
-        });
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)';
+      });
+    });
+
+    // 2. Parallax Follow on Hero Plinth
+    const stage = document.querySelector('.hero-3d-stage');
+    const plinth = document.getElementById('heroPlinth');
+
+    if (stage && plinth) {
+      stage.addEventListener('mousemove', e => {
+        const rect = stage.getBoundingClientRect();
+        const x = e.clientX - rect.left - rect.width / 2;
+        const y = e.clientY - rect.top - rect.height / 2;
+
+        const rotX = (y / rect.height) * -14;
+        const rotY = (x / rect.width) * 14;
+
+        plinth.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
       });
 
-      document.addEventListener('click', (e) => {
-        if (!navToggle.contains(e.target) && !navLinks.contains(e.target)) {
-          navLinks.classList.remove('open');
-          navToggle.setAttribute('aria-expanded', 'false');
-          navToggle.innerHTML = iconHamburger;
+      stage.addEventListener('mouseleave', () => {
+        plinth.style.transform = 'rotateX(0deg) rotateY(0deg)';
+      });
+    }
+
+    // 3. 2.5D Menu Preview Logic
+    const menuPreviewData = {
+      'Caramel Macchiato': {
+        category: 'HOT COFFEE',
+        price: '₱175.00',
+        desc: 'Slow-pulled double ristretto layered over velvety steamed milk, kissed with Madagascar vanilla and drizzled with artisan salted caramel.',
+        image: 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ 100% Arabica House Blend',
+        notes: ['Salted Caramel', 'Warm Vanilla', 'Sweet Buttercream'],
+        origin: 'Mount Apo & Colombian Supremo',
+        serving: 'Hot (65°C) • 16oz',
+        recipe: 'Extracted at 9 bars pressure, 36g liquid yield over micro-textured velvety foam.'
+      },
+      'Iced Spanish Latte': {
+        category: 'COLD BREW / ICED',
+        price: '₱185.00',
+        desc: 'A decadent harmony of robust espresso poured over crystal clear ice, balanced with silky sweetened condensed milk and fresh highland dairy.',
+        image: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ Dark Roast Espresso Roast',
+        notes: ['Brown Sugar', 'Condensed Milk', 'Dark Cocoa'],
+        origin: 'Benguet Highland Estate',
+        serving: 'Chilled / Over Ice • 16oz',
+        recipe: 'Slow cold-pour technique over hand-cracked artisan ice.'
+      },
+      'Artisan Cappuccino': {
+        category: 'CRAFT BREW',
+        price: '₱160.00',
+        desc: 'The timeless hallmark of Italian coffee mastery. Equal parts intense espresso, silky steamed milk, and a crown of pillowy micro-foam dusted with cinnamon.',
+        image: 'https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ Medium Dark Roast',
+        notes: ['Toasted Almond', 'Cinnamon Bark', 'Dark Chocolate'],
+        origin: 'Ethiopian Yirgacheffe & Brazil Cerrado',
+        serving: 'Hot (68°C) • 12oz Ceramic',
+        recipe: 'Precision 1:1:1 extraction ratio with hand-dusted Ceylon cinnamon.'
+      },
+      'Mocha Delight': {
+        category: 'SIGNATURE ROAST',
+        price: '₱195.00',
+        desc: 'Indulgent single-origin Davao dark chocolate ganache melted into a fresh double espresso shot and textured whole milk. Finished with cocoa shavings.',
+        image: 'https://images.unsplash.com/photo-1578314670559-338c356f1784?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ Full City Roast',
+        notes: ['Belgian Chocolate', 'Roasted Pecan', 'Dark Molasses'],
+        origin: 'Davao Single-Origin Cacao & Sumatra Blend',
+        serving: 'Hot or Iced • 16oz',
+        recipe: '70% dark Criollo chocolate melted directly at 65°C steam wand temperature.'
+      },
+      'Caffe Americano': {
+        category: 'HOT COFFEE',
+        price: '₱140.00',
+        desc: 'Bold double espresso tempered with filtered hot mineral water, preserving the fragrant crema and complex floral acidity of the beans.',
+        image: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ Medium Roast Single Origin',
+        notes: ['Citrus Zest', 'Floral Honey', 'Clean Cedar'],
+        origin: 'Guatemala Antigua',
+        serving: 'Hot (72°C) • 12oz',
+        recipe: 'Double shot poured gently over 92°C reverse-osmosis mineralized water.'
+      },
+      'Iced Vanilla Latte': {
+        category: 'ICED COFFEE',
+        price: '₱180.00',
+        desc: 'Freshly extracted espresso chilled instantly over ice, married with house-made vanilla bean syrup and fresh cold milk.',
+        image: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ Medium Dark Roast',
+        notes: ['Vanilla Orchid', 'Sweet Cream', 'Light Hazelnut'],
+        origin: 'Highland Arabica Blend',
+        serving: 'Over Ice • 16oz',
+        recipe: 'Shaken with ice cubes and infused with genuine Madagascar vanilla beans.'
+      },
+      'Classic Cappuccino': {
+        category: 'HOT COFFEE',
+        price: '₱160.00',
+        desc: 'Rich, comforting traditional cappuccino with thick, glossy foam and intense roasted bean aromatics.',
+        image: 'https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ Espresso Blend',
+        notes: ['Dark Cacao', 'Malted Grain', 'Roasted Walnut'],
+        origin: 'Italian Style Roast Blend',
+        serving: 'Hot (68°C) • 12oz',
+        recipe: 'Dense microfoam poured with latte art heart.'
+      },
+      'Dark Chocolate Mocha': {
+        category: 'SPECIAL BREWS',
+        price: '₱195.00',
+        desc: 'Deep bittersweet chocolate sauce melted into an intense double ristretto and velvety milk for the ultimate chocolate-coffee indulgence.',
+        image: 'https://images.unsplash.com/photo-1578314670559-338c356f1784?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ Dark Roast',
+        notes: ['Bittersweet Cocoa', 'Fudge', 'Espresso Crema'],
+        origin: 'Artisan Cacao & Arabica',
+        serving: 'Hot (65°C) • 16oz',
+        recipe: 'Handcrafted chocolate blend with single-origin espresso.'
+      },
+      'Nitro Cold Brew': {
+        category: 'SPECIAL BREWS',
+        price: '₱190.00',
+        desc: 'Cold brew steeped for 24 hours, infused with pure nitrogen on tap to create a cascading Guinness-like creamy head without any dairy.',
+        image: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ Light-Medium Roast',
+        notes: ['Blackberry', 'Dark Chocolate', 'Naturally Sweet Crema'],
+        origin: 'Ethiopian Sidamo 24-hr Cold Extraction',
+        serving: 'Draft Nitrogen Tap • 14oz',
+        recipe: 'Direct tap draft poured cold at 4°C with velvety cascading microbubbles.'
+      }
+    };
+
+    function openMenuPreview(event, drinkName) {
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+      const modal = document.getElementById('menuPreviewModal');
+      if (!modal) return;
+      
+      const data = menuPreviewData[drinkName] || {
+        category: 'ARTISAN SPECIALTY',
+        price: '₱160.00',
+        desc: 'Carefully curated specialty coffee brewed with ethically sourced beans and roasted to peak flavor profile.',
+        image: 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=800&q=80',
+        roast: '✦ 100% Arabica Direct Trade',
+        notes: ['Aromatic Caramel', 'Dark Chocolate', 'Balanced Acidity'],
+        origin: 'Artisan Roastery Selection',
+        serving: 'Handcrafted Brew',
+        recipe: 'Handcrafted with signature BrewVanti extraction profiles.'
+      };
+
+      document.getElementById('previewTitle').textContent = drinkName;
+      document.getElementById('previewCategory').textContent = data.category;
+      document.getElementById('previewPrice').textContent = data.price;
+      document.getElementById('previewDesc').textContent = data.desc;
+      document.getElementById('previewImage').src = data.image;
+      document.getElementById('previewImage').alt = drinkName;
+      document.getElementById('previewRoast').innerHTML = `<span>${data.roast}</span>`;
+      document.getElementById('previewOrigin').textContent = data.origin;
+      document.getElementById('previewServing').textContent = data.serving;
+      document.getElementById('previewRecipe').textContent = data.recipe;
+
+      const notesEl = document.getElementById('previewNotes');
+      notesEl.innerHTML = '';
+      data.notes.forEach(note => {
+        const span = document.createElement('span');
+        span.textContent = note;
+        notesEl.appendChild(span);
+      });
+
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeMenuPreview(event) {
+      if (event && event.target && event.target !== event.currentTarget && !event.target.classList.contains('preview-close-btn') && !event.target.classList.contains('btn-preview-dismiss')) {
+        return;
+      }
+      const modal = document.getElementById('menuPreviewModal');
+      if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeMenuPreview();
+    });
+
+    const toastContainer = document.getElementById('toastContainer');
+
+    function showToast(message) {
+      const toast = document.createElement('div');
+      toast.className = 'toast-msg';
+      toast.innerHTML = `<span class="toast-icon">✨</span><div>${message}</div>`;
+      toastContainer.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.add('show');
+      });
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+      }, 3000);
+    }
+
+    function triggerPromoToast() {
+      showToast(`🎟️ Promo Code <strong>BREWVANTI20</strong> applied! (20% OFF)`);
+    }
+
+    // 4. Interactive Category Filtering with Staggered Fade
+    function filterCategory(cat, btn) {
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+
+      const rows = document.querySelectorAll('.menu-list-row');
+      rows.forEach(row => {
+        const rowCat = row.getAttribute('data-cat');
+        if (cat === 'all' || rowCat === cat) {
+          row.style.display = 'flex';
+          row.style.opacity = '0';
+          row.style.transform = 'translateY(10px)';
+          setTimeout(() => {
+            row.style.opacity = '1';
+            row.style.transform = 'translateY(0)';
+          }, 50);
+        } else {
+          row.style.display = 'none';
         }
       });
     }
   </script>
 </body>
-
 </html>

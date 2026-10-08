@@ -12,14 +12,14 @@
 }
 
 :root {
-  /* Brand (matches login.php) */
-  --espresso:       #241A2E;
-  --espresso-deep:  #181120;
-  --espresso-mid:   #2f2238;
-  --caramel:        #8B4513;
-  --caramel-light:  #A85A1E;
-  --latte:          #D8C7B5;
-  --cream:          #FBF3E9;
+  /* Brand (matches BrewVanti Gold & Espresso Theme) */
+  --espresso:       #1A1316;
+  --espresso-deep:  #110c0e;
+  --espresso-mid:   #2a1f22;
+  --caramel:        #CFA04E;
+  --caramel-light:  #FFD68A;
+  --latte:          #705E52;
+  --cream:          #FDFBF7;
 
   /* Aliases used across the app */
   --accent:      var(--caramel);
@@ -29,7 +29,7 @@
   --border:      var(--latte);
   --text-main:   #1E1224;
   --text-muted:  #52434F;
-  --sidebar-w:   248px;
+  --sidebar-w:   280px;
 
   /* Semantic status colors */
   --green: #1b5e20; --green-lt: #e8f5e9;

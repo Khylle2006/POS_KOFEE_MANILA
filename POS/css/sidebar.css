@@ -6,8 +6,16 @@
 
 /* ── Sidebar Width Tokens ─────────────────────────────────── */
 :root {
-  --sidebar-w: 256px;
+  --sidebar-w: 280px;
   --sidebar-w-min: 68px;
+  --espresso: #140C0E;
+  --espresso-deep: #0E0709;
+  --gold: #D9BA85;
+  --gold-glow: rgba(217, 186, 133, 0.25);
+  --cream: #FAF7F2;
+  --mocha: #68584B;
+  --caramel-light: #D9BA85;
+  --caramel: #CFA04E;
 }
 
 html.sidebar-minimized,
@@ -32,12 +40,12 @@ header#kofee-topbar {
   align-items: center !important;
   gap: 12px !important;
   padding: 0 20px !important;
-  background: rgba(36, 26, 46, 0.96) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border-bottom: 1px solid rgba(251, 243, 233, 0.08) !important;
-  color: var(--cream, #FBF3E9) !important;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14) !important;
+  background: linear-gradient(90deg, #181013 0%, #120A0D 50%, #0E0709 100%) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border-bottom: 1px solid rgba(217, 186, 133, 0.22) !important;
+  color: #FAF7F2 !important;
+  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.45) !important;
   box-sizing: border-box !important;
   margin: 0 !important;
 }
@@ -59,16 +67,16 @@ header#kofee-topbar {
   border-radius: 999px !important;
   font-size: 12.5px !important;
   font-weight: 600 !important;
-  background: rgba(251, 243, 233, 0.08) !important;
-  border: 1px solid rgba(251, 243, 233, 0.14) !important;
-  color: var(--cream, #FBF3E9) !important;
+  background: rgba(217, 186, 133, 0.08) !important;
+  border: 1px solid rgba(217, 186, 133, 0.22) !important;
+  color: #FAF7F2 !important;
   cursor: pointer !important;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease !important;
   flex-shrink: 0 !important;
 }
 #sidebar-menu-btn:hover {
-  background: rgba(251, 243, 233, 0.16) !important;
-  border-color: rgba(230, 162, 92, 0.4) !important;
+  background: rgba(217, 186, 133, 0.18) !important;
+  border-color: rgba(217, 186, 133, 0.5) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -82,9 +90,9 @@ header#kofee-topbar {
   font-size: 11.5px !important;
   font-weight: 600 !important;
   line-height: 1 !important;
-  background: rgba(251, 243, 233, 0.08) !important;
-  border: 1px solid rgba(251, 243, 233, 0.16) !important;
-  color: var(--cream, #FBF3E9) !important;
+  background: rgba(217, 186, 133, 0.08) !important;
+  border: 1px solid rgba(217, 186, 133, 0.22) !important;
+  color: #FAF7F2 !important;
   cursor: pointer !important;
   transition: all 0.15s ease !important;
   white-space: nowrap !important;
@@ -92,10 +100,67 @@ header#kofee-topbar {
 }
 
 .kfs-inner-collapse-btn:hover {
-  background: rgba(251, 243, 233, 0.18) !important;
-  border-color: rgba(230, 162, 92, 0.45) !important;
+  background: rgba(217, 186, 133, 0.18) !important;
+  border-color: rgba(217, 186, 133, 0.5) !important;
   color: #ffffff !important;
   transform: translateY(-1px) !important;
+}
+
+/* ── Sidebar Logo & Brand Header ─────────────────────────── */
+.kfs-sidebar-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding-bottom: 12px !important;
+  margin-bottom: 12px !important;
+  border-bottom: 1px solid rgba(217, 186, 133, 0.16) !important;
+  min-height: 44px !important;
+  box-sizing: border-box !important;
+}
+
+.kfs-brand-block {
+  display: flex !important;
+  align-items: center !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+}
+
+.kfs-brand-block img,
+.kfs-sidebar-logo,
+#main-sidebar .kfs-sidebar-header img {
+  height: 38px !important;
+  max-height: 38px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.6)) !important;
+  transition: transform 0.2s ease !important;
+}
+
+.kfs-brand-block:hover img,
+.kfs-sidebar-logo:hover {
+  transform: scale(1.05) !important;
+}
+
+/* Minimized mode centering */
+html.sidebar-minimized .kfs-brand-block img,
+body.sidebar-minimized .kfs-brand-block img,
+html.sidebar-minimized .kfs-sidebar-logo,
+body.sidebar-minimized .kfs-sidebar-logo {
+  height: 34px !important;
+  max-height: 34px !important;
+  margin: 0 auto !important;
+}
+
+/* Topbar Logo */
+.kfs-topbar-logo,
+header.kfs-topbar img {
+  height: 30px !important;
+  max-height: 30px !important;
+  width: auto !important;
+  object-fit: contain !important;
+  display: block !important;
 }
 
 /* ── Notifications Dropdown ───────────────────────────────── */
@@ -119,7 +184,7 @@ header#kofee-topbar {
   flex-shrink: 0 !important;
 }
 #notification-btn:hover {
-  background: rgba(251, 243, 233, 0.12) !important;
+  background: rgba(217, 186, 133, 0.12) !important;
 }
 
 #notification-count {
@@ -130,8 +195,8 @@ header#kofee-topbar {
   height: 17px !important;
   padding: 0 4px !important;
   border-radius: 999px !important;
-  background: var(--caramel-light, #E6A25C) !important;
-  color: var(--espresso-deep, #181120) !important;
+  background: #D9BA85 !important;
+  color: #140C0E !important;
   font-size: 10px !important;
   font-weight: 800 !important;
   display: flex !important;
@@ -188,8 +253,9 @@ header#kofee-topbar {
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box !important;
-  background: linear-gradient(165deg, var(--espresso, #241A2E) 0%, var(--espresso-deep, #181120) 115%) !important;
-  color: var(--cream, #FBF3E9) !important;
+  background: linear-gradient(165deg, #1C1215 0%, #0E0709 115%) !important;
+  border-right: 1px solid rgba(217, 186, 133, 0.18) !important;
+  color: #FAF7F2 !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s ease !important;
@@ -208,21 +274,21 @@ header#kofee-topbar {
   #main-sidebar,
   #main-sidebar.-translate-x-full,
   #main-sidebar.translate-x-0 {
-    width: var(--sidebar-w, 256px) !important;
+    width: var(--sidebar-w, 280px) !important;
     max-width: none !important;
     transform: none !important;
     translate: 0 0 !important;
     --tw-translate-x: 0px !important;
     --tw-translate-y: 0px !important;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.16) !important;
-    padding: 16px 12px !important;
+    padding: 16px 14px !important;
   }
 
   /* Desktop Topbar matches sidebar width */
   header.kfs-topbar,
   header#kofee-topbar {
-    left: var(--sidebar-w, 256px) !important;
-    width: calc(100% - var(--sidebar-w, 256px)) !important;
+    left: var(--sidebar-w, 280px) !important;
+    width: calc(100% - var(--sidebar-w, 280px)) !important;
     transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
 
@@ -242,9 +308,9 @@ header#kofee-topbar {
   .page, .pages,
   body > main,
   main.md\:ml-\[var\(--sidebar-w\,248px\)\] {
-    margin-left: var(--sidebar-w, 256px) !important;
-    width: calc(100% - var(--sidebar-w, 256px)) !important;
-    max-width: calc(100% - var(--sidebar-w, 256px)) !important;
+    margin-left: var(--sidebar-w, 280px) !important;
+    width: calc(100% - var(--sidebar-w, 280px)) !important;
+    max-width: calc(100% - var(--sidebar-w, 280px)) !important;
     transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     box-sizing: border-box !important;
   }
@@ -394,7 +460,7 @@ header#kofee-topbar {
 /* ── Mobile / Tablet (< 1024px): Slide-out Drawer ─────────── */
 @media (max-width: 1023px) {
   #main-sidebar {
-    width: 256px !important;
+    width: 280px !important;
     max-width: 85vw !important;
     padding: 16px 14px !important;
     box-shadow: 10px 0 35px rgba(0, 0, 0, 0.4) !important;
@@ -453,15 +519,15 @@ header#kofee-topbar {
 
 /* ── Category Dropdown Accordion Architecture ─────────────── */
 .kfs-cat-group {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .kfs-cat-header {
   display: flex !important;
   align-items: center !important;
-  gap: 10px !important;
+  gap: 12px !important;
   width: 100% !important;
-  padding: 9px 12px !important;
+  padding: 10px 14px !important;
   border-radius: 10px !important;
   font-size: 13px !important;
   font-weight: 700 !important;
@@ -482,7 +548,7 @@ header#kofee-topbar {
 
 .kfs-cat-group.has-active-child > .kfs-cat-header,
 .kfs-cat-header.is-active-cat {
-  color: var(--caramel-light, #E6A25C) !important;
+  color: #D9BA85 !important;
 }
 
 .kfs-cat-icon {
@@ -508,8 +574,8 @@ header#kofee-topbar {
   font-weight: 800 !important;
   padding: 1.5px 6.5px !important;
   border-radius: 999px !important;
-  background: var(--caramel-light, #E6A25C) !important;
-  color: var(--espresso-deep, #181120) !important;
+  background: #D9BA85 !important;
+  color: #140C0E !important;
   line-height: 1 !important;
   flex-shrink: 0 !important;
 }
@@ -542,26 +608,26 @@ header#kofee-topbar {
 
 .kfs-cat-content {
   min-height: 0 !important;
-  padding: 2px 0 4px 10px !important;
-  border-left: 1.5px solid rgba(251, 243, 233, 0.12) !important;
-  margin-left: 19px !important;
-  margin-top: 2px !important;
+  padding: 4px 0 6px 12px !important;
+  border-left: 1.5px solid rgba(217, 186, 133, 0.16) !important;
+  margin-left: 20px !important;
+  margin-top: 3px !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 2px !important;
+  gap: 3.5px !important;
 }
 
 .kfs-cat-item {
   display: flex !important;
   align-items: center !important;
-  gap: 10px !important;
+  gap: 11px !important;
   width: 100% !important;
   text-align: left !important;
-  padding: 7px 10px !important;
-  border-radius: 8px !important;
-  font-size: 12.5px !important;
+  padding: 8px 12px !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
   font-weight: 500 !important;
-  color: rgba(251, 243, 233, 0.78) !important;
+  color: rgba(251, 243, 233, 0.82) !important;
   background: transparent !important;
   border: none !important;
   cursor: pointer !important;
@@ -582,10 +648,11 @@ header#kofee-topbar {
 }
 
 .kfs-cat-item.active {
-  color: #ffffff !important;
+  color: #FAF7F2 !important;
   font-weight: 700 !important;
-  background: linear-gradient(135deg, var(--caramel, #C97B3D) 0%, var(--espresso-deep, #181120) 100%) !important;
-  box-shadow: 0 4px 12px -4px rgba(201, 123, 61, 0.6) !important;
+  background: linear-gradient(135deg, rgba(217, 186, 133, 0.24) 0%, rgba(217, 186, 133, 0.08) 100%) !important;
+  border: 1px solid rgba(217, 186, 133, 0.38) !important;
+  box-shadow: 0 4px 14px -3px rgba(217, 186, 133, 0.25) !important;
 }
 
 .kfs-cat-item.active svg {
@@ -638,10 +705,11 @@ header#kofee-topbar {
 }
 .kfs-nav-btn.active,
 .nav-btn.active {
-  color: #ffffff !important;
+  color: #FAF7F2 !important;
   font-weight: 600 !important;
-  background: linear-gradient(135deg, var(--caramel, #C97B3D) 0%, var(--espresso-deep, #181120) 100%) !important;
-  box-shadow: 0 6px 16px -6px rgba(201, 123, 61, 0.65) !important;
+  background: linear-gradient(135deg, rgba(217, 186, 133, 0.24) 0%, rgba(217, 186, 133, 0.08) 100%) !important;
+  border: 1px solid rgba(217, 186, 133, 0.38) !important;
+  box-shadow: 0 4px 14px -3px rgba(217, 186, 133, 0.25) !important;
 }
 .kfs-nav-btn.active svg,
 .nav-btn.active svg {
@@ -655,8 +723,8 @@ header#kofee-topbar {
   font-weight: 800 !important;
   padding: 2px 7px !important;
   border-radius: 999px !important;
-  background: var(--caramel-light, #E6A25C) !important;
-  color: var(--espresso-deep, #181120) !important;
+  background: #D9BA85 !important;
+  color: #140C0E !important;
   line-height: 1 !important;
   flex-shrink: 0 !important;
 }
@@ -679,8 +747,8 @@ header#kofee-topbar {
   height: 34px !important;
   border-radius: 50% !important;
   flex-shrink: 0 !important;
-  background: linear-gradient(150deg, var(--caramel-light, #E6A25C), var(--caramel, #C97B3D)) !important;
-  color: var(--espresso-deep, #181120) !important;
+  background: linear-gradient(150deg, #D9BA85, #B89760) !important;
+  color: #140C0E !important;
   font-weight: 800 !important;
   font-size: 12px !important;
   display: flex !important;

@@ -65,7 +65,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderOrder();
 });
 
-let currentCat  = "ice-coffee";
+let currentCat  = "all";
 let currentSize = "small";
 let orderItems  = [];
 let orderType   = "dine";
@@ -104,7 +104,7 @@ function renderGrid() {
 
     // Searching looks across every category so staff can find a drink
     // without first guessing which tab it lives under.
-    const pool = searchTerm
+    const pool = (currentCat === 'all' || searchTerm)
         ? Object.values(menuData).flat()
         : (menuData[currentCat] || []);
 
@@ -126,19 +126,45 @@ function renderGrid() {
     }
 
     grid.innerHTML = items.map(item => {
-        const price   = currentSize === 'small' ? item.priceSmall : item.priceLarge;
-        const soldOut = item.stock <= 0;
+        const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
+        const soldOut  = item.stock <= 0;
+        const sizeTag  = currentSize === 'small' ? '16oz Regular' : '22oz Up Size';
+        const badgeTag = soldOut ? 'Sold Out' : 'Signature Roast';
         return `
-        <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`}>
+        <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`} data-tilt>
+            <div class="card-gloss-sheen"></div>
+            <div class="card-badge${soldOut ? ' sold' : ''}">• ${escapeHtml(badgeTag)}</div>
             <div class="item-img">
                 <img src="${escapeHtml(item.imageSrc)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
             </div>
             <div class="item-name">${escapeHtml(item.name)}</div>
-            ${soldOut
-                ? `<div class="item-soldout">Sold out</div>`
-                : `<div class="item-price">₱${parseFloat(price).toFixed(2)}</div>`}
+            <div class="item-meta">${sizeTag} &bull; Handcrafted</div>
+            <div class="item-card-footer">
+                ${soldOut
+                    ? `<div class="item-soldout">Sold out</div>`
+                    : `<div class="item-price">₱${parseFloat(price).toFixed(2)}</div>
+                       <button type="button" class="add-cart-chip" onclick="event.stopPropagation(); addToOrder(${item.id})">
+                         + Add
+                       </button>`}
+            </div>
         </div>`;
     }).join('');
+
+    initTilt();
+}
+
+function initTilt() {
+    document.querySelectorAll('.menu-card:not(.sold-out)').forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width - 0.5;
+            const y = (e.clientY - rect.top) / rect.height - 0.5;
+            card.style.transform = `perspective(700px) rotateX(${(-y * 10).toFixed(2)}deg) rotateY(${(x * 10).toFixed(2)}deg) translateY(-8px)`;
+        });
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = '';
+        });
+    });
 }
 
 function escapeHtml(str) {
@@ -245,7 +271,7 @@ function renderOrder() {
             </div>
             <div class="oi-info">
                 <div class="oi-name">${escapeHtml(o.name)}</div>
-                <div class="oi-size">${o.size.charAt(0).toUpperCase() + o.size.slice(1)}</div>
+                <div class="oi-size">${o.size === 'small' ? '16oz Regular' : '22oz Up Size'}</div>
             </div>
             <div class="oi-controls">
                 <button class="qty-btn" onclick="changeQty(${i}, -1)">−</button>

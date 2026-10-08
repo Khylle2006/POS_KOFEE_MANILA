@@ -42,7 +42,7 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Careers at Kofee Manila — Brew Your Next Chapter</title>
+  <title>Careers at BrewVanti — Craft Your Next Chapter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -57,15 +57,9 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
         <!-- Logo -->
         <a href="index.html" class="km-brand">
           <div class="km-brand-logo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
-              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-              <line x1="6" y1="1" x2="6" y2="4"/>
-              <line x1="10" y1="1" x2="10" y2="4"/>
-              <line x1="14" y1="1" x2="14" y2="4"/>
-            </svg>
+            <img src="assets/brewvanti_logo.png" alt="BrewVanti Logo" onerror="this.src='assets/brewvanti_pos_logo.svg'">
           </div>
-          <span class="km-brand-name">Kofee Manila</span>
+          <span class="km-brand-name">BrewVanti</span>
         </a>
 
         <!-- Center Links -->
@@ -94,31 +88,15 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
   <section class="km-careers-hero">
     <div class="container" style="position:relative;">
 
-      <!-- Watermark Art: Coffee rings + Script -->
-      <div class="km-art-watermark" aria-hidden="true">
-        <svg class="km-coffee-rings" viewBox="0 0 200 200" fill="none">
-          <!-- Outer primary ring -->
-          <circle cx="105" cy="95" r="70" stroke="#9A6B46" stroke-width="6.5" stroke-dasharray="14 4 40 8 20 6" opacity="0.4" />
-          <circle cx="105" cy="95" r="76" stroke="#C4936B" stroke-width="2" opacity="0.25" />
-          <circle cx="103" cy="93" r="64" stroke="#7A4D2A" stroke-width="3" stroke-dasharray="8 6 24 5" opacity="0.3" />
-          <!-- Inner secondary interlocking ring -->
-          <circle cx="130" cy="115" r="48" stroke="#8E5D38" stroke-width="5" stroke-dasharray="12 4 30 6" opacity="0.35" />
-          <circle cx="130" cy="115" r="54" stroke="#B8855F" stroke-width="1.8" opacity="0.2" />
-          <!-- Watercolor droplets -->
-          <circle cx="48" cy="72" r="3.5" fill="#A3724C" opacity="0.45" />
-          <circle cx="56" cy="62" r="2" fill="#A3724C" opacity="0.35" />
-          <circle cx="68" cy="96" r="2.5" fill="#8E5D38" opacity="0.4" />
-        </svg>
-        <div class="km-script-text">
-          Good People
-          <span>Better Coffee</span>
-        </div>
+      <!-- Watermark Art: BrewVanti Emblem Stamp -->
+      <div class="km-art-watermark" aria-hidden="true" style="opacity: 0.18; filter: drop-shadow(0 0 20px rgba(217,186,133,0.3)); display: flex; align-items: center; justify-content: center;">
+        <img src="assets/brewvanti_logo.png" style="width: 140px; height: 140px; object-fit: contain;" alt="">
       </div>
 
       <!-- Hero Titles -->
-      <span class="km-hero-eyebrow">CAREERS AT KOFEE MANILA</span>
-      <h1 class="km-hero-title">Brew your next chapter.</h1>
-      <p class="km-hero-subtitle">Find your place in a team that brings great coffee and warm service to every community.</p>
+      <span class="km-hero-eyebrow">✦ CAREERS AT BREWVANTI</span>
+      <h1 class="km-hero-title">Craft your next <em style="font-style: italic; color: var(--km-caramel); font-family: inherit;">chapter.</em></h1>
+      <p class="km-hero-subtitle">Find your place in an artisan team that celebrates precision coffee, craftsmanship, and warm hospitality.</p>
 
       <!-- Search & Filter Bar -->
       <form action="careers.php" method="GET" class="km-search-box" id="jobFilterForm">
@@ -247,17 +225,17 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
     </div>
   </section>
 
-  <!-- WHY JOIN KOFEE MANILA SECTION -->
+  <!-- WHY JOIN BREWVANTI SECTION -->
   <section class="km-why-section">
     <div class="container">
       <div class="km-why-card">
         <div class="km-why-intro">
-          <h3 class="km-why-title">Why join Kofee Manila?</h3>
-          <p class="km-why-subtitle">More than a job. A place to belong.</p>
+          <h3 class="km-why-title">Why join BrewVanti?</h3>
+          <p class="km-why-subtitle">More than a job. A craft to master.</p>
         </div>
 
         <div class="km-why-pillars">
-          <!-- Pillar 1: Grow your skills -->
+          <!-- Pillar 1: Grow your craft -->
           <div class="km-pillar">
             <div class="km-pillar-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -265,12 +243,12 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
               </svg>
             </div>
             <div>
-              <h4>Grow your skills</h4>
-              <p>Learn, improve, and build a brighter future.</p>
+              <h4>Grow your craft</h4>
+              <p>Learn specialty extraction, palate profiling, and master barista techniques.</p>
             </div>
           </div>
 
-          <!-- Pillar 2: Work with a team -->
+          <!-- Pillar 2: Artisan culture -->
           <div class="km-pillar">
             <div class="km-pillar-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -281,12 +259,12 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
               </svg>
             </div>
             <div>
-              <h4>Work with a team</h4>
-              <p>Be part of a supportive and passionate community.</p>
+              <h4>Artisan culture</h4>
+              <p>Be part of a collaborative, high-standard, and passionate community.</p>
             </div>
           </div>
 
-          <!-- Pillar 3: Make every cup count -->
+          <!-- Pillar 3: Make every sip count -->
           <div class="km-pillar">
             <div class="km-pillar-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -298,8 +276,8 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
               </svg>
             </div>
             <div>
-              <h4>Make every cup count</h4>
-              <p>Bring good coffee and positive moments to people's days.</p>
+              <h4>Make every sip count</h4>
+              <p>Elevate everyday rituals with intentional, beautiful coffee experiences.</p>
             </div>
           </div>
         </div>
@@ -312,7 +290,7 @@ $departments = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
     <div class="container">
       <div class="km-footer-inner">
         <div class="km-footer-brand">
-          Kofee Manila &nbsp;·&nbsp; Careers
+          BrewVanti &nbsp;·&nbsp; Artisan Careers
         </div>
         <div class="km-footer-links">
           <a href="javascript:void(0)" onclick="openPrivacyModal()">Privacy policy</a>

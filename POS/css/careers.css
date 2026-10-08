@@ -4,26 +4,26 @@
    ───────────────────────────────────────────────────────────── */
 
 :root {
-  --km-header-bg: #221528;
-  --km-header-dark: #190F1E;
-  --km-page-bg: #FBF8F3;
+  --km-header-bg: #1E1517;
+  --km-header-dark: #120C0D;
+  --km-page-bg: #FAF7F2;
   --km-card-bg: #FFFFFF;
-  --km-border: #E8DFD5;
-  --km-border-light: #F0EAE2;
-  --km-border-focus: #C97B3D;
-  --km-caramel: #C97B3D;
-  --km-caramel-light: #E8A366;
-  --km-caramel-dark: #9E5B25;
-  --km-latte: #EFE0CC;
-  --km-text-dark: #201426;
+  --km-border: rgba(104, 88, 75, 0.18);
+  --km-border-light: rgba(104, 88, 75, 0.1);
+  --km-border-focus: #D9BA85;
+  --km-caramel: #D9BA85;
+  --km-caramel-light: #ECC98F;
+  --km-caramel-dark: #B89968;
+  --km-latte: #E8DFD5;
+  --km-text-dark: #1E1517;
   --km-text-body: #3E3040;
-  --km-text-muted: #786A77;
-  --km-text-faint: #9E909D;
-  --km-btn-primary: #2F1E38;
-  --km-btn-primary-hover: #452C52;
-  --km-btn-primary-active: #221528;
-  --km-badge-bg: #F0EAE1;
-  --km-badge-text: #534551;
+  --km-text-muted: #68584B;
+  --km-text-faint: #8E7F8C;
+  --km-btn-primary: #1E1517;
+  --km-btn-primary-hover: #D9BA85;
+  --km-btn-primary-active: #140E0F;
+  --km-badge-bg: rgba(217, 186, 133, 0.14);
+  --km-badge-text: #1E1517;
   --km-accent-red: #D23F3A;
   --km-dropzone-bg: #FAF7F2;
   --km-font-serif: 'Playfair Display', Georgia, serif;
@@ -95,29 +95,29 @@ button, input, select, textarea {
 }
 
 .km-brand-logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #B9763E 0%, #8A4F1D 100%);
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: radial-gradient(circle, rgba(217, 186, 133, 0.25), transparent 70%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(185, 118, 62, 0.35);
+  filter: drop-shadow(0 0 10px rgba(217, 186, 133, 0.5));
   flex-shrink: 0;
 }
 
-.km-brand-logo svg {
-  width: 20px;
-  height: 20px;
-  color: #FFFFFF;
+.km-brand-logo img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
 }
 
 .km-brand-name {
   font-family: var(--km-font-serif);
-  font-size: 19px;
+  font-size: 21px;
   font-weight: 700;
-  color: #FAF5EE;
-  letter-spacing: -0.01em;
+  color: #FAF7F2;
+  letter-spacing: 0.5px;
 }
 
 .km-nav-links {
@@ -128,20 +128,21 @@ button, input, select, textarea {
 
 .km-nav-link {
   font-size: 14px;
-  font-weight: 500;
-  color: rgba(251, 245, 238, 0.75);
+  font-weight: 600;
+  color: rgba(250, 247, 242, 0.72);
   padding: 6px 2px;
   position: relative;
   transition: color 0.18s ease;
+  letter-spacing: 0.5px;
 }
 
 .km-nav-link:hover {
-  color: #FFFFFF;
+  color: var(--km-caramel);
 }
 
 .km-nav-link.active {
-  color: #FFFFFF;
-  font-weight: 600;
+  color: var(--km-caramel);
+  font-weight: 700;
 }
 
 .km-nav-link.active::after {
@@ -153,27 +154,32 @@ button, input, select, textarea {
   height: 2px;
   background: var(--km-caramel);
   border-radius: 999px;
+  box-shadow: 0 0 8px var(--km-caramel);
 }
 
 .km-track-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(251, 245, 238, 0.35);
-  background: transparent;
-  color: #FFFFFF;
-  font-size: 13.5px;
-  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(217, 186, 133, 0.4);
+  background: rgba(250, 247, 242, 0.06);
+  color: var(--km-caramel);
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.18s ease;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
 }
 
 .km-track-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.6);
-  transform: translateY(-1px);
+  background: var(--km-caramel);
+  color: #120C0D;
+  border-color: var(--km-caramel);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(217, 186, 133, 0.4);
 }
 
 .km-track-btn svg {
@@ -267,15 +273,21 @@ button, input, select, textarea {
    ───────────────────────────────────────────────────────────── */
 .km-search-box {
   background: #FFFFFF;
-  border: 1px solid var(--km-border);
-  border-radius: 12px;
+  border: 1.5px solid var(--km-border);
+  border-radius: 16px;
   padding: 8px 10px 8px 18px;
   display: flex;
   align-items: center;
   gap: 14px;
-  box-shadow: 0 6px 20px -6px rgba(32, 20, 38, 0.05);
+  box-shadow: 0 12px 32px -8px rgba(30, 21, 23, 0.08);
   position: relative;
   z-index: 5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.km-search-box:focus-within {
+  border-color: var(--km-caramel);
+  box-shadow: 0 14px 36px -8px rgba(217, 186, 133, 0.25);
 }
 
 .km-search-field {
@@ -352,23 +364,23 @@ button, input, select, textarea {
 }
 
 .km-search-btn {
-  background-color: var(--km-btn-primary);
-  color: #FFFFFF;
+  background: linear-gradient(135deg, #E6CA9A 0%, #D9BA85 50%, #B89968 100%);
+  color: #120C0D;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 12px 28px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.2s ease;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(47, 30, 56, 0.2);
+  box-shadow: 0 4px 16px rgba(217, 186, 133, 0.4);
 }
 
 .km-search-btn:hover {
-  background-color: var(--km-btn-primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(47, 30, 56, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(217, 186, 133, 0.6);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -411,19 +423,20 @@ button, input, select, textarea {
 
 .km-job-card {
   background: var(--km-card-bg);
-  border: 1px solid var(--km-border);
-  border-radius: 14px;
+  border: 1.5px solid rgba(104, 88, 75, 0.12);
+  border-radius: 20px;
   padding: 24px 22px 20px;
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
   position: relative;
+  box-shadow: 0 10px 25px -8px rgba(30, 21, 23, 0.05);
 }
 
 .km-job-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 28px -10px rgba(32, 20, 38, 0.08);
-  border-color: #D8CEBF;
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px -10px rgba(104, 88, 75, 0.2);
+  border-color: var(--km-caramel);
 }
 
 .km-job-header {
@@ -434,12 +447,12 @@ button, input, select, textarea {
 }
 
 .km-briefcase-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 9px;
-  border: 1px solid #D7C6B6;
-  background: #FCF8F2;
-  color: #A36939;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(217, 186, 133, 0.35);
+  background: rgba(217, 186, 133, 0.12);
+  color: var(--km-caramel);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -514,19 +527,20 @@ button, input, select, textarea {
   align-items: center;
   justify-content: center;
   background: #FFFFFF;
-  border: 1.5px solid #D6CBC1;
-  color: var(--km-btn-primary);
-  border-radius: 8px;
-  padding: 9px 12px;
+  border: 1.5px solid rgba(104, 88, 75, 0.22);
+  color: var(--km-text-dark);
+  border-radius: 10px;
+  padding: 10px 14px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: all 0.2s ease;
   text-align: center;
 }
 
 .km-btn-outline:hover {
-  border-color: var(--km-btn-primary);
+  border-color: var(--km-caramel);
+  color: var(--km-caramel);
   background: #FAF7F2;
 }
 
@@ -534,23 +548,26 @@ button, input, select, textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--km-btn-primary);
-  border: 1.5px solid var(--km-btn-primary);
-  color: #FFFFFF;
-  border-radius: 8px;
-  padding: 9px 12px;
+  background: var(--km-text-dark);
+  border: 1.5px solid var(--km-text-dark);
+  color: var(--km-caramel);
+  border-radius: 10px;
+  padding: 10px 14px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: all 0.2s ease;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(47, 30, 56, 0.18);
+  box-shadow: 0 4px 14px rgba(30, 21, 23, 0.2);
 }
 
 .km-btn-filled:hover {
-  background: var(--km-btn-primary-hover);
-  border-color: var(--km-btn-primary-hover);
-  transform: translateY(-1px);
+  background: var(--km-caramel);
+  border-color: var(--km-caramel);
+  color: #120C0D;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(217, 186, 133, 0.5);
 }
 
 /* ─────────────────────────────────────────────────────────────

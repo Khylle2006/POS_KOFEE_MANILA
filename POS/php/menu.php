@@ -11,7 +11,10 @@ require_permission('orders.new');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>POS System</title>
+  <title>Point of Sale — BrewVanti POS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/style.css?v=<?= filemtime(__DIR__.'/../css/style.css') ?>">
   <link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__.'/../css/sidebar.css') ?>">
   <link rel="stylesheet" href="../css/menu.css?v=<?= filemtime(__DIR__.'/../css/menu.css') ?>">
@@ -24,6 +27,21 @@ require_permission('orders.new');
 
 <div id="page-menu" class="page active">
 
+    <!-- Ambient Dark Luxury Glow & Floating 2.5D Beans -->
+    <div class="pos-ambient-bg"></div>
+    <svg class="floating-bean bean-1" viewBox="0 0 50 70" fill="none">
+      <ellipse cx="25" cy="35" rx="20" ry="30" fill="#38251C" stroke="#D9BA85" stroke-width="1.5"/>
+      <path d="M25,8 Q33,35 25,62" stroke="#D9BA85" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <svg class="floating-bean bean-2" viewBox="0 0 50 70" fill="none">
+      <ellipse cx="25" cy="35" rx="20" ry="30" fill="#281A14" stroke="#D9BA85" stroke-width="1.2"/>
+      <path d="M25,10 Q18,35 25,60" stroke="#D9BA85" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    <svg class="floating-bean bean-3" viewBox="0 0 50 70" fill="none">
+      <ellipse cx="25" cy="35" rx="22" ry="32" fill="#1C120D" stroke="#D9BA85" stroke-width="1"/>
+      <path d="M25,7 Q32,35 25,63" stroke="#D9BA85" stroke-width="2"/>
+    </svg>
+
     <!-- Mobile Drawer Backdrop for phone / tablet -->
     <div class="mobile-cart-backdrop" id="mobile-cart-backdrop" onclick="closeMobileCart()"></div>
 
@@ -31,16 +49,8 @@ require_permission('orders.new');
       <!-- Executive POS Header matching reference design -->
       <div class="pos-page-head">
         <div class="pos-head-title-wrap">
-          <h1 class="pos-title">Point of Sale</h1>
-          <div class="pos-breadcrumbs">
-            <span class="p-crumb active">Catalog</span>
-            <span class="p-sep">&rarr;</span>
-            <span class="p-crumb">Size &amp; Add-ons</span>
-            <span class="p-sep">&rarr;</span>
-            <span class="p-crumb">Order Receipt</span>
-            <span class="p-sep">&rarr;</span>
-            <span class="p-crumb">Checkout &amp; Receipt</span>
-          </div>
+          <div class="hero-badge-chip">✦ Fresh Brew, Warm Moments</div>
+          <h1 class="pos-title">Point of Sale <span class="gold-script">Terminal</span></h1>
         </div>
 
         <div class="pos-head-actions">
@@ -59,7 +69,11 @@ require_permission('orders.new');
 
       <div class="catalog-controls-bar">
         <div class="category-tabs">
-          <button type="button" class="cat-tab active" onclick="switchCat(this,'ice-coffee')">
+          <button type="button" class="cat-tab active" onclick="switchCat(this,'all')">
+            <?= icon('dashboard', 14) ?>
+            <span>All Drinks</span>
+          </button>
+          <button type="button" class="cat-tab" onclick="switchCat(this,'ice-coffee')">
             <?= icon('ice-coffee', 14) ?>
             <span>Ice Coffee</span>
           </button>
