@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/private_storage.php';
 // ─────────────────────────────────────────────────────────────
 //  includes/procurement_helpers.php
 //  Shared plumbing for the Procurement Module: audit logging,
@@ -53,7 +54,7 @@ function audit_log(string $entity_type, int $entity_id, string $action, ?string 
             ':d' => $details,
         ]);
     } catch (Throwable $e) {
-        error_log('audit_log failed: ' . $e->getMessage());
+        error_log('audit_log failed: ' . 'Service temporarily unavailable.');
     }
 }
 
@@ -86,7 +87,7 @@ function notify_user(int $user_id, string $type, string $title, ?string $message
             ':u' => $user_id, ':t' => $type, ':ti' => $title, ':m' => $message, ':l' => $link_url,
         ]);
     } catch (Throwable $e) {
-        error_log('notify_user failed: ' . $e->getMessage());
+        error_log('notify_user failed: ' . 'Service temporarily unavailable.');
     }
 }
 
@@ -117,7 +118,7 @@ function notify_role_by_permission(string $perm_key, string $type, string $title
             notify_user((int)$uid, $type, $title, $message, $link_url);
         }
     } catch (Throwable $e) {
-        error_log('notify_role_by_permission failed: ' . $e->getMessage());
+        error_log('notify_role_by_permission failed: ' . 'Service temporarily unavailable.');
     }
 }
 
@@ -279,42 +280,7 @@ function status_badge(string $status): string {
  * Ensures the procurement_letters table and requisition foreign reference exist.
  */
 function ensure_procurement_letters_table(): void {
-    static $ensured = false;
-    if ($ensured) return;
-    $pdo = get_db();
-    try {
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS procurement_letters (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                letter_ref VARCHAR(50) NOT NULL UNIQUE,
-                requisition_id INT NOT NULL,
-                supplier_id INT NOT NULL,
-                approver_id INT NOT NULL,
-                approver_name VARCHAR(150) NOT NULL,
-                approver_title VARCHAR(100) NOT NULL,
-                approver_signature LONGTEXT NOT NULL,
-                subject VARCHAR(255) NOT NULL,
-                delivery_terms VARCHAR(255) NULL,
-                payment_terms VARCHAR(255) NULL,
-                special_instructions TEXT NULL,
-                status ENUM('sent', 'acknowledged') DEFAULT 'sent',
-                sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                acknowledged_at DATETIME NULL,
-                acknowledgement_notes TEXT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX (requisition_id),
-                INDEX (supplier_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-
-        $cols = $pdo->query("SHOW COLUMNS FROM purchase_requisitions LIKE 'supplier_id'")->fetchAll();
-        if (empty($cols)) {
-            $pdo->exec("ALTER TABLE purchase_requisitions ADD COLUMN supplier_id INT NULL AFTER reviewed_by");
-        }
-        $ensured = true;
-    } catch (Throwable $e) {
-        error_log('ensure_procurement_letters_table failed: ' . $e->getMessage());
-    }
+    require_runtime_schema(get_db());
 }
 
 // Ensure schema is active on include
@@ -414,8 +380,8 @@ function create_procurement_letter(
         return ['ok' => true, 'letter_id' => $letter_id, 'letter_ref' => $letter_ref];
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        error_log('create_procurement_letter error: ' . $e->getMessage());
-        return ['ok' => false, 'error' => $e->getMessage()];
+        error_log('create_procurement_letter error: ' . 'Service temporarily unavailable.');
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 
@@ -501,8 +467,8 @@ function acknowledge_procurement_letter(int $letter_id, int $supplier_id, ?strin
 
         return ['ok' => true, 'message' => 'Procurement letter successfully acknowledged!'];
     } catch (Throwable $e) {
-        error_log('acknowledge_procurement_letter error: ' . $e->getMessage());
-        return ['ok' => false, 'error' => $e->getMessage()];
+        error_log('acknowledge_procurement_letter error: ' . 'Service temporarily unavailable.');
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 
@@ -528,7 +494,7 @@ function get_procurement_setting(string $key, $default = null) {
             return $val;
         }
     } catch (Throwable $e) {
-        error_log('get_procurement_setting error: ' . $e->getMessage());
+        error_log('get_procurement_setting error: ' . 'Service temporarily unavailable.');
     }
     return $default;
 }
@@ -552,7 +518,7 @@ function set_procurement_setting(string $key, $value, ?string $description = nul
             ':d2' => $description
         ]);
     } catch (Throwable $e) {
-        error_log('set_procurement_setting error: ' . $e->getMessage());
+        error_log('set_procurement_setting error: ' . 'Service temporarily unavailable.');
         return false;
     }
 }
@@ -561,259 +527,35 @@ function set_procurement_setting(string $key, $value, ?string $description = nul
  * Ensures all procurement tables, indexes, and columns exist across the database.
  */
 function ensure_procurement_tables(?PDO $pdo = null): void {
-    static $done = false;
-    if ($done) return;
-    $pdo = $pdo ?? get_db();
-
+    $db = $pdo ?? get_db();
+    require_runtime_schema($db);
     try {
-        // 1. procurement_settings table
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS procurement_settings (
-                setting_key VARCHAR(60) PRIMARY KEY,
-                setting_value TEXT NOT NULL,
-                description VARCHAR(255) NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-
-        // Seed default settings if not exist
-        $defaults = [
-            ['finance_approval_threshold', '10000.00', 'Financial threshold above which management selections require Finance review.'],
-            ['three_way_match_price_tolerance_pct', '3.0', 'Percentage price variance tolerance allowed in 3-way matching.'],
-            ['three_way_match_qty_tolerance_units', '0.0', 'Quantity tolerance units allowed for goods receipt vs invoice.'],
-        ];
-        $ins = $pdo->prepare("INSERT IGNORE INTO procurement_settings (setting_key, setting_value, description) VALUES (?, ?, ?)");
-        foreach ($defaults as $d) {
-            $ins->execute($d);
-        }
-
-        // Ensure procurement.finance.review permission and role grants exist
-        try {
-            $pdo->prepare("
-                INSERT INTO permissions (perm_key, label, category, description) 
-                VALUES ('procurement.finance.review', 'Finance Review of Quotes', 'Procurement', 'Review and authorize or reject high-value purchase quotations exceeding the finance threshold')
-                ON DUPLICATE KEY UPDATE label=VALUES(label), category=VALUES(category), description=VALUES(description)
-            ")->execute();
-            $grant_stmt = $pdo->prepare("INSERT IGNORE INTO role_permissions (role, perm_key) VALUES (?, 'procurement.finance.review')");
-            foreach (['admin'] as $r) {
-                $grant_stmt->execute([$r]);
-            }
-        } catch (Throwable $pe) {
-            // Non-fatal if permissions table is not active yet
-        }
-
-        // 2. Add columns if missing on existing tables
-        $rfq_cols = $pdo->query("SHOW COLUMNS FROM rfqs")->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('rfq_ref', $rfq_cols)) {
-            $pdo->exec("ALTER TABLE rfqs ADD COLUMN rfq_ref VARCHAR(60) NULL AFTER id");
-        }
-        if (!in_array('invitation_letter', $rfq_cols)) {
-            $pdo->exec("ALTER TABLE rfqs ADD COLUMN invitation_letter TEXT NULL AFTER title");
-        }
-        if (!in_array('buyer_signature', $rfq_cols)) {
-            $pdo->exec("ALTER TABLE rfqs ADD COLUMN buyer_signature LONGTEXT NULL AFTER invitation_letter");
-        }
-        if (!in_array('buyer_signed_by', $rfq_cols)) {
-            $pdo->exec("ALTER TABLE rfqs ADD COLUMN buyer_signed_by INT NULL AFTER buyer_signature");
-        }
-        if (!in_array('buyer_signed_at', $rfq_cols)) {
-            $pdo->exec("ALTER TABLE rfqs ADD COLUMN buyer_signed_at DATETIME NULL AFTER buyer_signed_by");
-        }
-        if (!in_array('terms_and_conditions', $rfq_cols)) {
-            $pdo->exec("ALTER TABLE rfqs ADD COLUMN terms_and_conditions TEXT NULL AFTER buyer_signed_at");
-        }
-
-        $po_cols = $pdo->query("SHOW COLUMNS FROM purchase_orders")->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('paid_at', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN paid_at DATETIME NULL AFTER delivered_at");
-        }
-        if (!in_array('contract_id', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN contract_id INT NULL AFTER requisition_id");
-        }
-        try {
-            $pdo->exec("ALTER TABLE purchase_orders MODIFY COLUMN rfq_id INT NULL");
-        } catch (Throwable $e) {
-            // Ignore if already nullable or constrained
-        }
-        if (!in_array('issue_status', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN issue_status ENUM('none','open','resolved') DEFAULT 'none' AFTER contract_id");
-        }
-        if (!in_array('issue_notes', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN issue_notes TEXT NULL AFTER issue_status");
-        }
-        if (!in_array('issue_raised_at', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN issue_raised_at DATETIME NULL AFTER issue_notes");
-        }
-        if (!in_array('issue_resolved_at', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN issue_resolved_at DATETIME NULL AFTER issue_raised_at");
-        }
-        if (!in_array('issue_resolution_notes', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN issue_resolution_notes TEXT NULL AFTER issue_resolved_at");
-        }
-        if (!in_array('issue_resolved_by', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN issue_resolved_by INT NULL AFTER issue_resolution_notes");
-        }
-        if (!in_array('fulfillment_status', $po_cols)) {
-            $pdo->exec("ALTER TABLE purchase_orders ADD COLUMN fulfillment_status ENUM('preparing','partially_shipped','shipped','delivered') DEFAULT NULL AFTER issue_resolved_by");
-        }
-
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS delivery_notices (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                notice_ref VARCHAR(50) NOT NULL UNIQUE,
-                po_id INT NOT NULL,
-                supplier_id INT NOT NULL,
-                carrier_name VARCHAR(100) NULL,
-                tracking_number VARCHAR(100) NULL,
-                shipped_date DATE NOT NULL,
-                expected_arrival_date DATE NULL,
-                fulfillment_status ENUM('preparing','partially_shipped','shipped','delivered') DEFAULT 'shipped',
-                notes TEXT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                KEY (po_id),
-                KEY (supplier_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS delivery_notice_items (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                delivery_notice_id INT NOT NULL,
-                requisition_item_id INT NULL,
-                item_name VARCHAR(150) NOT NULL,
-                shipped_qty DECIMAL(10,2) NOT NULL,
-                unit VARCHAR(20) DEFAULT 'pcs',
-                KEY (delivery_notice_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-
-        $bid_cols = $pdo->query("SHOW COLUMNS FROM bids")->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('finance_status', $bid_cols)) {
-            $pdo->exec("ALTER TABLE bids ADD COLUMN finance_status ENUM('pending', 'approved', 'rejected', 'not_required') DEFAULT 'pending' AFTER status");
-        }
-        if (!in_array('finance_reviewed_by', $bid_cols)) {
-            $pdo->exec("ALTER TABLE bids ADD COLUMN finance_reviewed_by INT NULL AFTER finance_status");
-        }
-        if (!in_array('finance_reviewed_at', $bid_cols)) {
-            $pdo->exec("ALTER TABLE bids ADD COLUMN finance_reviewed_at DATETIME NULL AFTER finance_reviewed_by");
-        }
-        if (!in_array('finance_review_notes', $bid_cols)) {
-            $pdo->exec("ALTER TABLE bids ADD COLUMN finance_review_notes TEXT NULL AFTER finance_reviewed_at");
-        }
-
-        $gr_cols = $pdo->query("SHOW COLUMNS FROM goods_receipts")->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('delivery_notice_id', $gr_cols)) {
-            $pdo->exec("ALTER TABLE goods_receipts ADD COLUMN delivery_notice_id INT NULL AFTER po_id");
-        }
-
-        $inv_cols = $pdo->query("SHOW COLUMNS FROM invoices")->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('correction_notes', $inv_cols)) {
-            $pdo->exec("ALTER TABLE invoices ADD COLUMN correction_notes TEXT NULL AFTER match_notes");
-        }
-        if (!in_array('contract_id', $inv_cols)) {
-            $pdo->exec("ALTER TABLE invoices ADD COLUMN contract_id INT NULL AFTER po_id");
-        }
-        if (!in_array('attachment_path', $inv_cols)) {
-            $pdo->exec("ALTER TABLE invoices ADD COLUMN attachment_path VARCHAR(255) NULL AFTER match_notes");
-        }
-        if (!in_array('version', $inv_cols)) {
-            $pdo->exec("ALTER TABLE invoices ADD COLUMN version INT DEFAULT 1 AFTER attachment_path");
-        }
-        if (!in_array('parent_invoice_id', $inv_cols)) {
-            $pdo->exec("ALTER TABLE invoices ADD COLUMN parent_invoice_id INT NULL AFTER version");
-        }
-        if (!in_array('paymongo_session_id', $inv_cols)) {
-            $pdo->exec("ALTER TABLE invoices ADD COLUMN paymongo_session_id VARCHAR(100) NULL AFTER parent_invoice_id");
-        }
-
-        // Supplier payout receiving account columns
-        $sup_cols = $pdo->query("SHOW COLUMNS FROM suppliers")->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('payout_type', $sup_cols)) {
-            $pdo->exec("ALTER TABLE suppliers ADD COLUMN payout_type ENUM('bank','ewallet') DEFAULT 'bank' AFTER address");
-        }
-        if (!in_array('bank_name', $sup_cols)) {
-            $pdo->exec("ALTER TABLE suppliers ADD COLUMN bank_name VARCHAR(100) NULL AFTER payout_type");
-        }
-        if (!in_array('bank_code', $sup_cols)) {
-            $pdo->exec("ALTER TABLE suppliers ADD COLUMN bank_code VARCHAR(50) NULL AFTER bank_name");
-        }
-        if (!in_array('account_name', $sup_cols)) {
-            $pdo->exec("ALTER TABLE suppliers ADD COLUMN account_name VARCHAR(150) NULL AFTER bank_code");
-        }
-        if (!in_array('account_number', $sup_cols)) {
-            $pdo->exec("ALTER TABLE suppliers ADD COLUMN account_number VARCHAR(50) NULL AFTER account_name");
-        }
-        if (!in_array('ewallet_provider', $sup_cols)) {
-            $pdo->exec("ALTER TABLE suppliers ADD COLUMN ewallet_provider VARCHAR(50) NULL AFTER account_number");
-        }
-        if (!in_array('ewallet_account_name', $sup_cols)) {
-            $pdo->exec("ALTER TABLE suppliers ADD COLUMN ewallet_account_name VARCHAR(150) NULL AFTER ewallet_provider");
-        }
-        if (!in_array('ewallet_mobile_number', $sup_cols)) {
-            $pdo->exec("ALTER TABLE suppliers ADD COLUMN ewallet_mobile_number VARCHAR(20) NULL AFTER ewallet_account_name");
-        }
-
-        // Payments PayMongo transaction columns
-        $pay_cols = $pdo->query("SHOW COLUMNS FROM payments")->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('paymongo_payout_id', $pay_cols)) {
-            $pdo->exec("ALTER TABLE payments ADD COLUMN paymongo_payout_id VARCHAR(100) NULL AFTER reference_no");
-        }
-        if (!in_array('paymongo_checkout_id', $pay_cols)) {
-            $pdo->exec("ALTER TABLE payments ADD COLUMN paymongo_checkout_id VARCHAR(100) NULL AFTER paymongo_payout_id");
-        }
-        if (!in_array('paymongo_payment_id', $pay_cols)) {
-            $pdo->exec("ALTER TABLE payments ADD COLUMN paymongo_payment_id VARCHAR(100) NULL AFTER paymongo_checkout_id");
-        }
-        // Supplier applications table
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS supplier_applications (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                application_code VARCHAR(50) NOT NULL UNIQUE,
-                company_name VARCHAR(150) NOT NULL,
-                contact_person VARCHAR(120) NOT NULL,
-                email VARCHAR(150) NOT NULL,
-                phone VARCHAR(50) NOT NULL,
-                address TEXT NOT NULL,
-                tax_id VARCHAR(50) NULL,
-                product_type ENUM('existing_ingredient', 'custom_product') NOT NULL DEFAULT 'existing_ingredient',
-                ingredient_id INT NULL,
-                product_name VARCHAR(150) NOT NULL,
-                product_category VARCHAR(100) NULL,
-                product_description TEXT NULL,
-                proposed_price DECIMAL(10,2) NULL,
-                price_unit VARCHAR(30) NULL DEFAULT 'per kg',
-                supply_capacity VARCHAR(100) NULL,
-                business_permit_filename VARCHAR(255) NOT NULL,
-                business_permit_path VARCHAR(255) NOT NULL,
-                authenticity_cert_filename VARCHAR(255) NOT NULL,
-                authenticity_cert_path VARCHAR(255) NOT NULL,
-                additional_documents_filename VARCHAR(255) NULL,
-                additional_documents_path VARCHAR(255) NULL,
-                company_profile_notes TEXT NULL,
-                status ENUM('review', 'under_review', 'approved', 'rejected') NOT NULL DEFAULT 'review',
-                reviewer_notes TEXT NULL,
-                rejection_reason TEXT NULL,
-                reviewed_by INT NULL,
-                reviewed_at DATETIME NULL,
-                supplier_id INT NULL,
-                created_user_id INT NULL,
-                ip_address VARCHAR(45) NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_supapp_code (application_code),
-                INDEX idx_supapp_email (email),
-                INDEX idx_supapp_status (status)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-
-        $done = true;
-    } catch (Throwable $e) {
-        error_log('ensure_procurement_tables error: ' . $e->getMessage());
-    }
+        $db->exec("CREATE TABLE IF NOT EXISTS `supplier_application_attachments` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `application_id` INT NOT NULL,
+            `filename` VARCHAR(255) NOT NULL,
+            `file_path` VARCHAR(255) NOT NULL,
+            `file_size` INT NOT NULL DEFAULT 0,
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX `idx_sup_att_app` (`application_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (Throwable $e) {}
 }
 
 // ═══════════════════════════════════════════════
 //  RFQ INVITATION LETTER & BIDDING HELPERS
 // ═══════════════════════════════════════════════
+
+/** @param list<array{original_name:string,stored_path:string,file_size:int}> $files */
+function save_supplier_application_attachments(PDO $pdo, int $applicationId, array $files): void {
+    if (!$pdo->inTransaction()) throw new LogicException('Supplier attachments require an application transaction.');
+    if (!$files) return;
+    // Schema creation would implicitly commit the application before its documents are saved.
+    $stmt = $pdo->prepare('INSERT INTO supplier_application_attachments (application_id, filename, file_path, file_size, created_at) VALUES (?, ?, ?, ?, NOW())');
+    foreach ($files as $file) {
+        $stmt->execute([$applicationId, $file['original_name'], $file['stored_path'], $file['file_size']]);
+    }
+}
 
 /**
  * Creates and dispatches an official RFQ with Buyer e-signature and formal invitation letter.
@@ -915,8 +657,8 @@ function create_rfq_invitation(
         return ['ok' => true, 'rfq_id' => $rfq_id, 'rfq_ref' => $rfq_ref];
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        error_log('create_rfq_invitation error: ' . $e->getMessage());
-        return ['ok' => false, 'error' => $e->getMessage()];
+        error_log('create_rfq_invitation error: ' . 'Service temporarily unavailable.');
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 
@@ -998,8 +740,8 @@ function withdraw_supplier_bid(int $bid_id, ?int $supplier_id = null): array {
 
         return ['ok' => true, 'message' => 'Quotation has been successfully withdrawn.'];
     } catch (Throwable $e) {
-        error_log('withdraw_supplier_bid error: ' . $e->getMessage());
-        return ['ok' => false, 'error' => $e->getMessage()];
+        error_log('withdraw_supplier_bid error: ' . 'Service temporarily unavailable.');
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 
@@ -1137,40 +879,10 @@ if (!function_exists('run_three_way_match')) {
  * Retrieve PayMongo API credentials and configuration for Procurement.
  */
 function get_procurement_paymongo_config(PDO $pdo): array {
-    $mode = 'sandbox';
-    $secret_key = '';
-    $public_key = '';
-    $webhook_secret = '';
-    $enabled = true;
-
-    try {
-        $stmt = $pdo->query("SELECT setting_key, setting_value FROM payroll_settings WHERE setting_key LIKE 'paymongo_%'");
-        $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-        $mode = $settings['paymongo_mode'] ?? 'sandbox';
-        $secret_key = trim($settings['paymongo_secret_key'] ?? '');
-        $public_key = trim($settings['paymongo_public_key'] ?? '');
-        $webhook_secret = trim($settings['paymongo_webhook_secret'] ?? '');
-        $enabled = ($settings['paymongo_disbursement_enabled'] ?? '1') === '1';
-    } catch (Throwable $e) {}
-
-    // Fallbacks from config.local.php constants
-    if (empty($secret_key) && defined('PAYMONGO_SECRET_KEY')) {
-        $secret_key = PAYMONGO_SECRET_KEY;
-    }
-    if (empty($public_key) && defined('PAYMONGO_PUBLIC_KEY')) {
-        $public_key = PAYMONGO_PUBLIC_KEY;
-    }
-    if (empty($webhook_secret) && defined('PAYMONGO_WEBHOOK_SECRET')) {
-        $webhook_secret = PAYMONGO_WEBHOOK_SECRET;
-    }
-
-    return [
-        'mode'           => $mode,
-        'secret_key'     => $secret_key,
-        'public_key'     => $public_key,
-        'webhook_secret' => $webhook_secret,
-        'enabled'        => $enabled,
-    ];
+    return ['mode' => payment_mode() === 'demo' ? 'sandbox' : payment_mode(),
+        'secret_key' => app_setting('PAYMONGO_DISBURSEMENT_SECRET_KEY', app_setting('PAYMONGO_SECRET_KEY')),
+        'public_key' => app_setting('PAYMONGO_PUBLIC_KEY'), 'webhook_secret' => app_setting('PAYMONGO_WEBHOOK_SECRET'),
+        'enabled' => payment_mode() !== 'disabled'];
 }
 
 /**
@@ -1192,7 +904,7 @@ function generate_paymongo_procurement_voucher(
     $display_date = date('F d, Y \a\t g:i A', strtotime($time_str));
     $amount_fmt = '₱' . number_format($amount, 2);
 
-    $upload_dir = __DIR__ . '/../uploads/receipts';
+    $upload_dir = private_upload_directory('receipts');
     if (!is_dir($upload_dir)) {
         @mkdir($upload_dir, 0755, true);
     }
@@ -1373,7 +1085,7 @@ function generate_paymongo_procurement_voucher(
 </body>
 </html>';
 
-    file_put_contents($filepath, $html);
+    private_write_file($filepath, $html, true);
 
     return [
         'ok'   => true,
@@ -1387,592 +1099,59 @@ function generate_paymongo_procurement_voucher(
 /**
  * Execute automated PayMongo disbursement to supplier for an approved invoice.
  */
-function process_supplier_paymongo_disbursement(
-    PDO $pdo,
-    int $invoice_id,
-    float $amount,
-    array $payout_params,
-    int $user_id,
-    string $notes = ''
-): array {
-    // 1. Fetch invoice, supplier, and PO details
-    $stmt = $pdo->prepare('
-        SELECT i.*, s.name AS supplier_name, s.user_id AS supplier_user_id,
-               po.id AS po_id, po.po_number,
-               u.firstname AS auth_fname, u.lastname AS auth_lname
-        FROM invoices i
-        JOIN suppliers s ON s.id = i.supplier_id
-        JOIN purchase_orders po ON po.id = i.po_id
-        LEFT JOIN users u ON u.id = :uid
-        WHERE i.id = :id
-    ');
-    $stmt->execute([':id' => $invoice_id, ':uid' => $user_id]);
-    $invoice = $stmt->fetch();
-
-    if (!$invoice) {
-        return ['ok' => false, 'error' => 'Invoice record not found.'];
-    }
-
-    if (!in_array($invoice['status'], ['approved', 'matched', 'partially_paid'], true)) {
-        return ['ok' => false, 'error' => 'Only approved or partially paid invoices can receive payments. Current status: ' . $invoice['status']];
-    }
-
-    // Unpaid balance check
-    $paid_stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = :id AND status = 'completed'");
-    $paid_stmt->execute([':id' => $invoice_id]);
-    $already_paid = (float)$paid_stmt->fetchColumn();
-    $unpaid_balance = max(0, round((float)$invoice['total_amount'] - $already_paid, 2));
-
-    if ($amount <= 0) {
-        return ['ok' => false, 'error' => 'Payment amount must be greater than zero.'];
-    }
-    if ($amount > $unpaid_balance + 0.001) {
-        return ['ok' => false, 'error' => "Payment amount (₱" . number_format($amount, 2) . ") exceeds unpaid invoice balance of ₱" . number_format($unpaid_balance, 2) . "."];
-    }
-
-    // 2. Validate payout parameters
-    $payout_type = in_array($payout_params['payout_type'] ?? '', ['bank', 'ewallet'], true) ? $payout_params['payout_type'] : 'bank';
-    $channel_label = '';
-    $account_dest = '';
-    $bank_name = trim($payout_params['bank_name'] ?? '');
-    $bank_code = trim($payout_params['bank_code'] ?? '');
-    $account_name = trim($payout_params['account_name'] ?? '');
-    $account_number = trim($payout_params['account_number'] ?? '');
-    $ewallet_provider = strtolower(trim($payout_params['ewallet_provider'] ?? ''));
-    $ewallet_account_name = trim($payout_params['ewallet_account_name'] ?? '');
-    $ewallet_mobile_number = preg_replace('/\D/', '', $payout_params['ewallet_mobile_number'] ?? '');
-
-    if ($payout_type === 'bank') {
-        if (empty($bank_name)) {
-            return ['ok' => false, 'error' => 'Bank name is required for bank transfer disbursement.'];
-        }
-        if (empty($account_name)) {
-            return ['ok' => false, 'error' => 'Account holder name is required.'];
-        }
-        if (empty($account_number)) {
-            return ['ok' => false, 'error' => 'Account number is required.'];
-        }
-        $account_dest = $bank_name . ' •••• ' . substr($account_number, -4);
-        $channel_label = "PayMongo Instant Bank Transfer ({$bank_name})";
-    } else {
-        if (empty($ewallet_provider)) {
-            return ['ok' => false, 'error' => 'E-Wallet provider (GCash / Maya) is required.'];
-        }
-        if (empty($ewallet_account_name)) {
-            return ['ok' => false, 'error' => 'E-Wallet account name is required.'];
-        }
-        if (strlen($ewallet_mobile_number) !== 11 || !str_starts_with($ewallet_mobile_number, '09')) {
-            return ['ok' => false, 'error' => 'E-Wallet mobile number must be an 11-digit Philippine mobile (09XXXXXXXXX).'];
-        }
-        $masked_mobile = substr($ewallet_mobile_number, 0, 4) . ' ••• ' . substr($ewallet_mobile_number, -4);
-        $account_dest = strtoupper($ewallet_provider) . ' ' . $masked_mobile;
-        $channel_label = "PayMongo Automated E-Wallet Payout (" . strtoupper($ewallet_provider) . ")";
-    }
-
-    // 3. PayMongo Disbursement Execution
-    $cfg = get_procurement_paymongo_config($pdo);
-    $idempotency_key = 'pm_disb_inv_' . $invoice_id . '_' . ((int)round($amount * 100)) . '_' . time();
-    $transfer_id = '';
-
-    if ($cfg['mode'] === 'sandbox' && (str_contains($cfg['secret_key'], 'demo') || empty($cfg['secret_key']) || !str_starts_with($cfg['secret_key'], 'sk_'))) {
-        // High fidelity sandbox simulation
-        $transfer_id = 'tr_sbx_prc_' . substr(hash('sha256', $idempotency_key), 0, 16);
-    } else {
-        // Live / Real Sandbox PayMongo Disbursements API call
-        $endpoint = 'https://api.paymongo.com/v1/disbursements';
-        $payload = [
-            'data' => [
-                'attributes' => [
-                    'amount'      => (int)round($amount * 100),
-                    'currency'    => 'PHP',
-                    'description' => "Kofee Manila Procurement Payment - Invoice {$invoice['invoice_number']}",
-                    'recipient'   => [
-                        'name'        => ($payout_type === 'bank' ? $account_name : $ewallet_account_name),
-                        'type'        => $payout_type,
-                        'bank_code'   => $bank_code ?: strtoupper(substr($bank_name, 0, 4)),
-                        'account_num' => $account_number,
-                        'mobile_num'  => $ewallet_mobile_number,
-                    ],
-                    'idempotency_key' => $idempotency_key,
-                ]
-            ]
-        ];
-
-        $ch = curl_init($endpoint);
-        $curl_opts = [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => json_encode($payload),
-            CURLOPT_HTTPHEADER     => [
-                'Content-Type: application/json',
-                'Authorization: Basic ' . base64_encode($cfg['secret_key'] . ':'),
-                'Idempotency-Key: ' . $idempotency_key,
-            ],
-            CURLOPT_TIMEOUT        => 30,
-        ];
-        $caBundle = getenv('CURL_CA_BUNDLE') ?: 'C:/xampp/apache/bin/curl-ca-bundle.crt';
-        if (is_file($caBundle)) {
-            $curl_opts[CURLOPT_CAINFO] = $caBundle;
-        } else {
-            $curl_opts[CURLOPT_SSL_VERIFYPEER] = false;
-        }
-        curl_setopt_array($ch, $curl_opts);
-        $resp = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curl_err = curl_error($ch);
-        curl_close($ch);
-
-        if ($resp === false || $curl_err) {
-            return ['ok' => false, 'error' => 'PayMongo connection failed: ' . ($curl_err ?: 'Gateway timeout.')];
-        }
-
-        $decoded = json_decode($resp, true);
-        if ($http_code < 200 || $http_code >= 300) {
-            $err_msg = $decoded['errors'][0]['detail'] ?? ($decoded['errors'][0]['code'] ?? 'PayMongo transfer rejected.');
-            return ['ok' => false, 'error' => 'PayMongo Error: ' . $err_msg];
-        }
-        $transfer_id = $decoded['data']['id'] ?? ('tr_' . bin2hex(random_bytes(8)));
-    }
-
-    // 4. Generate Official Electronic Voucher
-    $auth_name = trim(($invoice['auth_fname'] ?? '') . ' ' . ($invoice['auth_lname'] ?? ''));
-    if (!$auth_name) $auth_name = 'Finance Officer (ID #' . $user_id . ')';
-    $po_num = $invoice['po_number'] ?: ('KM-PO-' . str_pad($invoice['po_id'], 5, '0', STR_PAD_LEFT));
-
-    $voucher = generate_paymongo_procurement_voucher(
-        invoice_id: $invoice_id,
-        inv_number: $invoice['invoice_number'],
-        po_number: $po_num,
-        supplier_name: $invoice['supplier_name'],
-        amount: $amount,
-        channel_label: $channel_label,
-        recipient_account_info: $account_dest,
-        reference_no: $transfer_id,
-        authorized_by_name: $auth_name
-    );
-
-    // 5. Database persistence
-    $own_trans = false;
+function process_supplier_paymongo_disbursement(PDO $pdo, int $invoice_id, float $amount, array $payout_params, int $user_id, string $notes = ''): array {
+    require_once __DIR__ . '/paymongo_disbursement_helpers.php';
+    $key = $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? $_POST['idempotency_key'] ?? '';
+    if (!is_string($key) || !preg_match('/^[A-Za-z0-9_-]{16,100}$/D', $key)) throw new SecurityFault('IDEMPOTENCY_KEY_REQUIRED', 'A payout operation key is required.', 400);
+    $key = 'invoice-transfer-' . hash('sha256', $user_id . ':' . $key);
+    $type = $payout_params['payout_type'] ?? '';
+    if (!in_array($type, ['bank', 'ewallet'], true)) throw new SecurityFault('PAYOUT_DESTINATION_INVALID', 'Select a valid payout destination.');
+    $account = (string)($payout_params['account_number'] ?? '');
+    $mobile = (string)($payout_params['ewallet_mobile_number'] ?? '');
+    $name = trim((string)($payout_params[$type === 'bank' ? 'account_name' : 'ewallet_account_name'] ?? ''));
+    if ($name === '' || ($type === 'bank' && !preg_match('/^[0-9]{8,20}$/D', $account)) || ($type === 'ewallet' && !preg_match('/^09[0-9]{9}$/D', $mobile))) throw new SecurityFault('PAYOUT_DESTINATION_INVALID', 'Complete valid account details.');
+    $cents = money_centavos(number_format($amount, 2, '.', ''));
+    if ($cents <= 0) throw new SecurityFault('PAYOUT_AMOUNT_INVALID', 'Payment must be positive.');
+    $payload = ['amount_centavos' => $cents, 'recipient_name' => $name, 'type' => $type, 'account' => $account, 'mobile' => $mobile, 'bank_code' => $payout_params['bank_code'] ?? ''];
+    $previous = claim_transfer($pdo, $key, 'invoice', $invoice_id, $payload);
+    if ($previous !== null) return $previous;
+    $result = perform_paymongo_transfer_call(get_procurement_paymongo_config($pdo), ['amount' => money_decimal($cents), 'recipient_name' => $name, 'payout_destination' => $type, 'bank_code' => $payload['bank_code'], 'account_number' => $account, 'ewallet_mobile_number' => $mobile, 'idempotency_key' => $key]);
+    if (empty($result['ok'])) { record_transfer_result($pdo, $key, $result); return $result; }
+    $paid = in_array($result['status'] ?? '', ['paid', 'succeeded'], true);
+    $pdo->beginTransaction();
     try {
-        if (!$pdo->inTransaction()) {
-            $pdo->beginTransaction();
-            $own_trans = true;
-        }
-
-        $pay_method = ($payout_type === 'ewallet') ? 'ewallet' : 'bank_transfer';
-        $paying_account = 'PayMongo Disbursement (' . ($payout_type === 'ewallet' ? strtoupper($ewallet_provider) : $bank_name) . ')';
-
-        $ins = $pdo->prepare('
-            INSERT INTO payments (
-                invoice_id, po_id, amount, payment_date, payment_method, paying_account,
-                reference_no, paymongo_payout_id, paymongo_channel,
-                receipt_attachment_path, receipt_file_name, receipt_file_size, receipt_file_type,
-                notes, paid_by, status, supplier_confirmation_status, scheduled_at, completed_at
-            ) VALUES (
-                :inv, :po, :amt, :pdate, :m, :acct,
-                :ref, :pid, :chan,
-                :rpath, :rname, :rsize, :rtype,
-                :n, :u, "completed", "awaiting_confirmation", NOW(), NOW()
-            )
-        ');
-        $ins->execute([
-            ':inv'   => $invoice_id,
-            ':po'    => $invoice['po_id'],
-            ':amt'   => $amount,
-            ':pdate' => date('Y-m-d'),
-            ':m'     => $pay_method,
-            ':acct'  => $paying_account,
-            ':ref'   => $transfer_id,
-            ':pid'   => $transfer_id,
-            ':chan'  => ($payout_type === 'ewallet' ? 'disbursement_ewallet' : 'disbursement_bank'),
-            ':rpath' => $voucher['path'],
-            ':rname' => $voucher['name'],
-            ':rsize' => $voucher['size'],
-            ':rtype' => $voucher['type'],
-            ':n'     => $notes ? "PayMongo Disbursement: {$notes}" : "PayMongo automated payout to {$account_dest}",
-            ':u'     => $user_id,
-        ]);
+        $stmt = $pdo->prepare('SELECT po_id, total_amount FROM invoices WHERE id = ? FOR UPDATE'); $stmt->execute([$invoice_id]); $invoice = $stmt->fetch();
+        $pdo->prepare('INSERT INTO payments (invoice_id, po_id, amount, payment_date, payment_method, paying_account, reference_no, paymongo_payout_id, paymongo_channel, notes, paid_by, status, supplier_confirmation_status, scheduled_at, completed_at) VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)')->execute([$invoice_id, $invoice['po_id'], money_decimal($cents), $type === 'bank' ? 'bank_transfer' : 'ewallet', 'PayMongo', $result['transfer_id'], $result['transfer_id'], 'disbursement_' . $type, $notes, $user_id, $paid ? 'completed' : 'scheduled', 'awaiting_confirmation', $paid ? date('Y-m-d H:i:s') : null]);
         $payment_id = (int)$pdo->lastInsertId();
-
-        // Synchronize invoice status
-        $new_total_paid = $already_paid + $amount;
-        $inv_status = ($new_total_paid >= (float)$invoice['total_amount'] - 0.009) ? 'paid' : 'partially_paid';
-        $pdo->prepare("UPDATE invoices SET status = :st WHERE id = :id")->execute([':st' => $inv_status, ':id' => $invoice_id]);
-
-        // Check PO paid status
-        $unpaid_chk = $pdo->prepare("SELECT COUNT(*) FROM invoices WHERE po_id = :po AND status != 'paid' AND status != 'cancelled'");
-        $unpaid_chk->execute([':po' => $invoice['po_id']]);
-        if (((int)$unpaid_chk->fetchColumn()) === 0) {
-            $pdo->prepare("UPDATE purchase_orders SET paid_at = NOW() WHERE id = :po AND paid_at IS NULL")
-                ->execute([':po' => $invoice['po_id']]);
+        if ($paid) {
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = ? AND status = 'completed'"); $stmt->execute([$invoice_id]);
+            $pdo->prepare('UPDATE invoices SET status = ? WHERE id = ?')->execute([money_centavos($stmt->fetchColumn()) >= money_centavos($invoice['total_amount']) ? 'paid' : 'partially_paid', $invoice_id]);
         }
-
-        if ($own_trans && $pdo->inTransaction()) {
-            $pdo->commit();
-        }
-
-        audit_log('payment', $payment_id, 'completed', "PayMongo Disbursement of " . php_currency($amount) . " sent to {$account_dest}. Ref: {$transfer_id}");
-        log_operations_activity(
-            $pdo,
-            module: 'finance',
-            action: 'supplier_paymongo_disbursed',
-            record_ref: "INV-{$invoice['invoice_number']}",
-            status: 'success',
-            user_id: $user_id,
-            details: "PayMongo disbursement of ₱" . number_format($amount, 2) . " sent to {$invoice['supplier_name']} ({$account_dest}). Ref: {$transfer_id}"
-        );
-
-        if (!empty($invoice['supplier_user_id'])) {
-            notify_user(
-                (int)$invoice['supplier_user_id'],
-                'payment_advice',
-                'Payment Disbursed via PayMongo',
-                'A payment of ' . php_currency($amount) . ' for Invoice ' . $invoice['invoice_number'] . ' was disbursed to your ' . $account_dest . ' via PayMongo. Ref: ' . $transfer_id,
-                'supplier_portal.php?tab=invoices'
-            );
-        }
-
-        return [
-            'ok'          => true,
-            'payment_id'  => $payment_id,
-            'transfer_id' => $transfer_id,
-            'amount'      => $amount,
-            'voucher_path'=> $voucher['path'],
-            'message'     => 'PayMongo automated disbursement completed successfully! Official voucher generated.',
-        ];
-
-    } catch (Exception $e) {
-        if ($own_trans && $pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        return ['ok' => false, 'error' => $e->getMessage()];
-    }
+        $response = ['ok' => true, 'payment_id' => $payment_id, 'transfer_id' => $result['transfer_id'], 'amount' => $amount, 'status' => $paid ? 'paid' : 'processing', 'message' => $paid ? 'Payment confirmed.' : 'Transfer submitted; payment confirmation is pending.'];
+        record_transfer_result($pdo, $key, $response);
+        $pdo->commit();
+        return $response;
+    } catch (Throwable $exception) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $exception; }
 }
 
 /**
  * Create a PayMongo Online Checkout Session for a supplier invoice.
  */
-function create_supplier_invoice_paymongo_checkout(
-    PDO $pdo,
-    int $invoice_id,
-    float $amount,
-    int $user_id,
-    string $success_url,
-    string $cancel_url
-): array {
-    $stmt = $pdo->prepare('
-        SELECT i.*, s.name AS supplier_name, s.email AS supplier_email, s.phone AS supplier_phone, po.id AS po_id
-        FROM invoices i
-        JOIN suppliers s ON s.id = i.supplier_id
-        JOIN purchase_orders po ON po.id = i.po_id
-        WHERE i.id = :id
-    ');
-    $stmt->execute([':id' => $invoice_id]);
-    $invoice = $stmt->fetch();
-
-    if (!$invoice) {
-        return ['ok' => false, 'error' => 'Invoice not found.'];
-    }
-
-    $cfg = get_procurement_paymongo_config($pdo);
-    $amount_cents = (int)round($amount * 100);
-
-    // If sandbox / demo mode:
-    if ($cfg['mode'] === 'sandbox' && (str_contains($cfg['secret_key'], 'demo') || empty($cfg['secret_key']) || !str_starts_with($cfg['secret_key'], 'sk_'))) {
-        $demo_session_id = 'cs_demo_prc_' . bin2hex(random_bytes(6)) . '_' . $amount_cents;
-        $checkout_url = 'payments.php?paymongo_return=1&session_id=' . $demo_session_id . '&invoice_id=' . $invoice_id . '&demo=1';
-
-        $pdo->prepare("UPDATE invoices SET paymongo_session_id = :sid WHERE id = :id")->execute([':sid' => $demo_session_id, ':id' => $invoice_id]);
-
-        return [
-            'ok'           => true,
-            'session_id'   => $demo_session_id,
-            'checkout_url' => $checkout_url,
-            'is_demo'      => true,
-        ];
-    }
-
-    // Call live/sandbox PayMongo Checkout Sessions API
-    $endpoint = 'https://api.paymongo.com/v1/checkout_sessions';
-    $payload = [
-        'data' => [
-            'attributes' => [
-                'billing' => [
-                    'name'  => $invoice['supplier_name'],
-                    'email' => $invoice['supplier_email'] ?: 'billing@kofeemanila.com',
-                    'phone' => $invoice['supplier_phone'] ?: '09170000000',
-                ],
-                'send_email_receipt' => true,
-                'show_description'   => true,
-                'show_line_items'    => true,
-                'description'        => "Kofee Manila Supplier Invoice #{$invoice['invoice_number']}",
-                'line_items'         => [
-                    [
-                        'name'     => "Invoice #{$invoice['invoice_number']} Payment",
-                        'amount'   => $amount_cents,
-                        'currency' => 'PHP',
-                        'quantity' => 1,
-                    ]
-                ],
-                'payment_method_types' => ['gcash', 'paymaya', 'card', 'qrph', 'grab_pay', 'dob'],
-                'success_url'          => $success_url,
-                'cancel_url'           => $cancel_url,
-            ]
-        ]
-    ];
-
-    $ch = curl_init($endpoint);
-    $curl_opts = [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => json_encode($payload),
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-            'Authorization: Basic ' . base64_encode($cfg['secret_key'] . ':'),
-        ],
-        CURLOPT_TIMEOUT        => 30,
-    ];
-    $caBundle = getenv('CURL_CA_BUNDLE') ?: 'C:/xampp/apache/bin/curl-ca-bundle.crt';
-    if (is_file($caBundle)) {
-        $curl_opts[CURLOPT_CAINFO] = $caBundle;
-    } else {
-        $curl_opts[CURLOPT_SSL_VERIFYPEER] = false;
-    }
-    curl_setopt_array($ch, $curl_opts);
-    $resp = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curl_err = curl_error($ch);
-    curl_close($ch);
-
-    if ($resp === false || $curl_err) {
-        return ['ok' => false, 'error' => 'PayMongo connection error: ' . ($curl_err ?: 'Unknown error')];
-    }
-
-    $decoded = json_decode($resp, true);
-    if ($http_code < 200 || $http_code >= 300) {
-        $err = $decoded['errors'][0]['detail'] ?? 'PayMongo checkout creation failed.';
-        return ['ok' => false, 'error' => $err];
-    }
-
-    $session_data = $decoded['data'] ?? [];
-    $session_id = $session_data['id'] ?? '';
-    $checkout_url = $session_data['attributes']['checkout_url'] ?? '';
-
-    $pdo->prepare("UPDATE invoices SET paymongo_session_id = :sid WHERE id = :id")->execute([':sid' => $session_id, ':id' => $invoice_id]);
-
-    return [
-        'ok'           => true,
-        'session_id'   => $session_id,
-        'checkout_url' => $checkout_url,
-        'is_demo'      => false,
-    ];
+function create_supplier_invoice_paymongo_checkout(PDO $pdo, int $invoice_id, float $amount, int $user_id, string $success_url, string $cancel_url): array {
+    require_once __DIR__ . '/invoice_payment_service.php';
+    return submit_invoice_checkout($pdo, $invoice_id, $amount, $user_id);
 }
 
 /**
  * Verify and complete a PayMongo Checkout Session for procurement.
  */
 function verify_and_complete_paymongo_procurement_checkout(PDO $pdo, string $session_id, ?int $user_id = null): array {
-    $inv_stmt = $pdo->prepare('
-        SELECT i.*, s.name AS supplier_name, s.user_id AS supplier_user_id, po.id AS po_id, po.po_number
-        FROM invoices i
-        JOIN suppliers s ON s.id = i.supplier_id
-        JOIN purchase_orders po ON po.id = i.po_id
-        WHERE i.paymongo_session_id = :sid
-    ');
-    $inv_stmt->execute([':sid' => $session_id]);
-    $invoice = $inv_stmt->fetch();
-
-    if (!$invoice) {
-        return ['ok' => false, 'error' => 'No invoice found matching PayMongo session ID.'];
-    }
-
-    $effective_user_id = ($user_id !== null && $user_id > 0) ? $user_id : (int)($invoice['uploaded_by'] ?? 1);
-    try {
-        $u_stmt = $pdo->prepare('SELECT firstname, lastname FROM users WHERE id = :uid');
-        $u_stmt->execute([':uid' => $effective_user_id]);
-        $u_row = $u_stmt->fetch();
-        $invoice['auth_fname'] = $u_row['firstname'] ?? '';
-        $invoice['auth_lname'] = $u_row['lastname'] ?? '';
-    } catch (Throwable) {
-        $invoice['auth_fname'] = '';
-        $invoice['auth_lname'] = '';
-    }
-
-    // Check if this session was already recorded
-    $existing = $pdo->prepare("SELECT id FROM payments WHERE paymongo_checkout_id = :sid");
-    $existing->execute([':sid' => $session_id]);
-    $existing_id = $existing->fetchColumn();
-    if ($existing_id) {
-        return ['ok' => true, 'payment_id' => (int)$existing_id, 'already_completed' => true];
-    }
-
-    $cfg = get_procurement_paymongo_config($pdo);
-    $amount = 0.0;
-    $ref_no = $session_id;
-    $payment_method_used = 'online';
-
+    require_once __DIR__ . '/invoice_payment_service.php';
     if (str_starts_with($session_id, 'cs_demo_')) {
-        // Check if amount is encoded in demo session id: cs_demo_prc_{hex}_{cents}
-        $parts = explode('_', $session_id);
-        $encoded_cents = end($parts);
-        if (is_numeric($encoded_cents) && (float)$encoded_cents > 0) {
-            $amount = round(((float)$encoded_cents) / 100, 2);
-        } else {
-            // Demo sandbox checkout: unpaid invoice balance fallback
-            $paid_stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = :id AND status = 'completed'");
-            $paid_stmt->execute([':id' => $invoice['id']]);
-            $already_paid = (float)$paid_stmt->fetchColumn();
-            $amount = max(0, round((float)$invoice['total_amount'] - $already_paid, 2));
-        }
-        $payment_method_used = 'online';
-        $ref_no = 'pm_cs_sbx_' . substr(hash('sha256', $session_id), 0, 16);
-    } else {
-        // Query PayMongo Checkout Session API
-        $endpoint = 'https://api.paymongo.com/v1/checkout_sessions/' . urlencode($session_id);
-        $ch = curl_init($endpoint);
-        $curl_opts = [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER     => [
-                'Authorization: Basic ' . base64_encode($cfg['secret_key'] . ':'),
-            ],
-            CURLOPT_TIMEOUT        => 30,
-        ];
-        $caBundle = getenv('CURL_CA_BUNDLE') ?: 'C:/xampp/apache/bin/curl-ca-bundle.crt';
-        if (is_file($caBundle)) {
-            $curl_opts[CURLOPT_CAINFO] = $caBundle;
-        } else {
-            $curl_opts[CURLOPT_SSL_VERIFYPEER] = false;
-        }
-        curl_setopt_array($ch, $curl_opts);
-        $resp = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $decoded = json_decode($resp, true);
-        $attrs = $decoded['data']['attributes'] ?? [];
-        $status = $attrs['status'] ?? '';
-
-        $payments_arr = $attrs['payments'] ?? [];
-        if (!empty($payments_arr)) {
-            $first_payment = $payments_arr[0];
-            $amount = ((float)($first_payment['attributes']['amount'] ?? 0)) / 100;
-            $ref_no = $first_payment['id'] ?? $session_id;
-            $source_type = $first_payment['attributes']['source']['type'] ?? ($attrs['payment_method_used'] ?? 'online');
-            $payment_method_used = in_array($source_type, ['gcash', 'paymaya', 'grab_pay'], true) ? 'ewallet' : 'online';
-        } else {
-            // Unpaid balance fallback
-            $paid_stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = :id AND status = 'completed'");
-            $paid_stmt->execute([':id' => $invoice['id']]);
-            $already_paid = (float)$paid_stmt->fetchColumn();
-            $amount = max(0, round((float)$invoice['total_amount'] - $already_paid, 2));
-        }
+        require_demo_payment();
+        return ['ok' => false, 'error' => 'Demo invoice payments require explicit test reconciliation.'];
     }
-
-    if ($amount <= 0) {
-        return ['ok' => false, 'error' => 'Zero payment amount recorded in checkout session.'];
-    }
-
-    // Generate electronic voucher
-    $auth_name = trim(($invoice['auth_fname'] ?? '') . ' ' . ($invoice['auth_lname'] ?? ''));
-    if (!$auth_name) $auth_name = 'PayMongo Verified Gateway';
-    $po_num = $invoice['po_number'] ?: ('KM-PO-' . str_pad($invoice['po_id'], 5, '0', STR_PAD_LEFT));
-
-    $voucher = generate_paymongo_procurement_voucher(
-        invoice_id: (int)$invoice['id'],
-        inv_number: $invoice['invoice_number'],
-        po_number: $po_num,
-        supplier_name: $invoice['supplier_name'],
-        amount: $amount,
-        channel_label: 'PayMongo Online Checkout (QR Ph / E-Wallet / Card)',
-        recipient_account_info: 'Verified PayMongo Checkout Merchant Gateway',
-        reference_no: $ref_no,
-        authorized_by_name: $auth_name
-    );
-
-    // Save payment
-    $own_trans = false;
-    try {
-        if (!$pdo->inTransaction()) {
-            $pdo->beginTransaction();
-            $own_trans = true;
-        }
-
-        $ins = $pdo->prepare('
-            INSERT INTO payments (
-                invoice_id, po_id, amount, payment_date, payment_method, paying_account,
-                reference_no, paymongo_checkout_id, paymongo_channel,
-                receipt_attachment_path, receipt_file_name, receipt_file_size, receipt_file_type,
-                notes, paid_by, status, supplier_confirmation_status, scheduled_at, completed_at
-            ) VALUES (
-                :inv, :po, :amt, :pdate, :m, "PayMongo Online Checkout Gateway",
-                :ref, :csid, "checkout_session",
-                :rpath, :rname, :rsize, :rtype,
-                "Paid via PayMongo Online Checkout Session", :u, "completed", "awaiting_confirmation", NOW(), NOW()
-            )
-        ');
-        $ins->execute([
-            ':inv'   => $invoice['id'],
-            ':po'    => $invoice['po_id'],
-            ':amt'   => $amount,
-            ':pdate' => date('Y-m-d'),
-            ':m'     => $payment_method_used,
-            ':ref'   => $ref_no,
-            ':csid'  => $session_id,
-            ':rpath' => $voucher['path'],
-            ':rname' => $voucher['name'],
-            ':rsize' => $voucher['size'],
-            ':rtype' => $voucher['type'],
-            ':u'     => $effective_user_id,
-        ]);
-        $payment_id = (int)$pdo->lastInsertId();
-
-        // Update invoice status
-        $paid_tot_stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = :id AND status = 'completed'");
-        $paid_tot_stmt->execute([':id' => $invoice['id']]);
-        $new_total_paid = (float)$paid_tot_stmt->fetchColumn();
-        $inv_status = ($new_total_paid >= (float)$invoice['total_amount'] - 0.009) ? 'paid' : 'partially_paid';
-        $pdo->prepare("UPDATE invoices SET status = :st WHERE id = :id")->execute([':st' => $inv_status, ':id' => $invoice['id']]);
-
-        // Check PO
-        $unpaid_chk = $pdo->prepare("SELECT COUNT(*) FROM invoices WHERE po_id = :po AND status != 'paid' AND status != 'cancelled'");
-        $unpaid_chk->execute([':po' => $invoice['po_id']]);
-        if (((int)$unpaid_chk->fetchColumn()) === 0) {
-            $pdo->prepare("UPDATE purchase_orders SET paid_at = NOW() WHERE id = :po AND paid_at IS NULL")
-                ->execute([':po' => $invoice['po_id']]);
-        }
-
-        if ($own_trans && $pdo->inTransaction()) {
-            $pdo->commit();
-        }
-
-        audit_log('payment', $payment_id, 'completed', "PayMongo Checkout payment of " . php_currency($amount) . " confirmed. Ref: {$ref_no}", $effective_user_id);
-        log_operations_activity(
-            $pdo,
-            module: 'finance',
-            action: 'supplier_paymongo_checkout_completed',
-            record_ref: "INV-{$invoice['invoice_number']}",
-            status: 'success',
-            user_id: $effective_user_id,
-            details: "PayMongo Checkout payment of ₱" . number_format($amount, 2) . " completed for Invoice #{$invoice['invoice_number']}."
-        );
-
-        if (!empty($invoice['supplier_user_id'])) {
-            notify_user(
-                (int)$invoice['supplier_user_id'],
-                'payment_advice',
-                'Payment Received via PayMongo Online Checkout',
-                'Payment of ' . php_currency($amount) . ' for Invoice ' . $invoice['invoice_number'] . ' was settled via PayMongo online checkout. Ref: ' . $ref_no,
-                'supplier_portal.php?tab=invoices'
-            );
-        }
-
-        return ['ok' => true, 'payment_id' => $payment_id, 'amount' => $amount, 'message' => 'Online payment verified successfully!'];
-
-    } catch (Exception $e) {
-        if ($own_trans && $pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        return ['ok' => false, 'error' => $e->getMessage()];
-    }
+    $result = paymongo_request('checkout_sessions/' . rawurlencode($session_id));
+    if (empty($result['success'])) throw new SecurityFault('PROVIDER_UNAVAILABLE', 'Provider verification is unavailable.', 503);
+    return reconcile_invoice_checkout($pdo, $result['data']);
 }
-

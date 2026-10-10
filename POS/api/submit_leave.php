@@ -44,7 +44,7 @@ try {
 
     echo json_encode(['ok'=>true]);
 } catch (PDOException $e) {
-    error_log('submit_leave error: ' . $e->getMessage());
+    error_log('submit_leave error: ' . 'Service temporarily unavailable.');
     http_response_code(500);
     echo json_encode(['ok'=>false, 'error'=>'Database error.']);
 }

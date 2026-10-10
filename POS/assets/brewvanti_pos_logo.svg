@@ -1,0 +1,230 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 900" width="100%" height="100%">
+  <defs>
+    <!-- Background -->
+    <radialGradient id="bgGrad" cx="50%" cy="45%" r="70%">
+      <stop offset="0%" stop-color="#2a1f22"/>
+      <stop offset="100%" stop-color="#110c0e"/>
+    </radialGradient>
+
+    <!-- Glowing Gold Gradients -->
+    <linearGradient id="goldBright" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF2D8"/>
+      <stop offset="50%" stop-color="#FFD68A"/>
+      <stop offset="100%" stop-color="#CFA04E"/>
+    </linearGradient>
+    
+    <linearGradient id="goldDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#CFA04E"/>
+      <stop offset="50%" stop-color="#8E6327"/>
+      <stop offset="100%" stop-color="#4A3111"/>
+    </linearGradient>
+
+    <!-- Glassmorphic Fills -->
+    <linearGradient id="glassTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD68A" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#FFD68A" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#CFA04E" stop-opacity="0.0"/>
+    </linearGradient>
+
+    <linearGradient id="glassBottom" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4A3111" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#110c0e" stop-opacity="0.8"/>
+    </linearGradient>
+
+    <!-- Diagonal Sheen for Glass effect -->
+    <linearGradient id="sheen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="35%" stop-color="#FFFFFF" stop-opacity="0.0"/>
+    </linearGradient>
+    <linearGradient id="sheenBottom" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.15"/>
+      <stop offset="35%" stop-color="#FFFFFF" stop-opacity="0.0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark Canvas -->
+  <rect width="100%" height="100%" fill="url(#bgGrad)"/>
+
+  <!-- ============================================== -->
+  <!-- MAIN LOGO GROUP -->
+  <!-- ============================================== -->
+  <g transform="translate(400, 390)">
+    
+    <!-- Top Droplet Accent -->
+    <g transform="translate(0, -260)">
+      <path d="M0,0 C3,-8 8,-15 8,-20 C8,-25 4,-28 0,-28 C-4,-28 -8,-25 -8,-20 C-8,-15 -3,-8 0,0 Z" fill="url(#goldBright)"/>
+      <line x1="-35" y1="-10" x2="-20" y2="-22" stroke="url(#goldBright)" stroke-width="3" stroke-linecap="round"/>
+      <line x1="35" y1="-10" x2="20" y2="-22" stroke="url(#goldBright)" stroke-width="3" stroke-linecap="round"/>
+    </g>
+
+    <!-- Bottom Droplet Accent -->
+    <g transform="translate(0, 240)">
+      <path d="M0,0 C3,8 8,15 8,20 C8,25 4,28 0,28 C-4,28 -8,25 -8,20 C-8,15 -3,8 0,0 Z" fill="url(#goldBright)"/>
+      <line x1="-35" y1="10" x2="-20" y2="22" stroke="url(#goldBright)" stroke-width="3" stroke-linecap="round"/>
+      <line x1="35" y1="10" x2="20" y2="22" stroke="url(#goldBright)" stroke-width="3" stroke-linecap="round"/>
+    </g>
+
+    <!-- Interlocking Hourglass -->
+    <g>
+      
+      <!-- ============================================== -->
+      <!-- TOP TRIANGLE (Gold Glow & Clock) -->
+      <!-- ============================================== -->
+      <g id="TopTriangle">
+        <!-- Background Outer Glowing Frame Simulator -->
+        <polygon points="-160,-210 160,-210 0,60" fill="none" stroke="url(#goldDark)" stroke-width="12" opacity="0.3"/>
+        <polygon points="-160,-210 160,-210 0,60" fill="none" stroke="url(#goldBright)" stroke-width="3"/>
+        
+        <!-- Acrylic Glass Fill & Sheen -->
+        <polygon points="-148,-200 148,-200 0,50" fill="url(#glassTop)"/>
+        <polygon points="-148,-200 148,-200 0,50" fill="url(#sheen)"/>
+
+        <!-- Inner Neon Bright Frame -->
+        <polygon points="-120,-180 120,-180 0,20" fill="none" stroke="url(#goldBright)" stroke-width="4"/>
+        <polygon points="-120,-180 120,-180 0,20" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+
+        <!-- Clock Face -->
+        <g transform="translate(0, -110)">
+          <circle cx="0" cy="0" r="50" fill="#1A1316" stroke="url(#goldBright)" stroke-width="3"/>
+          <circle cx="0" cy="0" r="50" fill="none" stroke="#FFFFFF" stroke-width="1"/>
+          
+          <!-- Clock Ticks -->
+          <line x1="0" y1="-42" x2="0" y2="-35" stroke="url(#goldBright)" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="0" y1="42" x2="0" y2="35" stroke="url(#goldBright)" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="-42" y1="0" x2="-35" y2="0" stroke="url(#goldBright)" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="42" y1="0" x2="35" y2="0" stroke="url(#goldBright)" stroke-width="2.5" stroke-linecap="round"/>
+          
+          <circle cx="21" cy="-36" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="36" cy="-21" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="36" cy="21" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="21" cy="36" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="-21" cy="36" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="-36" cy="21" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="-36" cy="-21" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="-21" cy="-36" r="1.5" fill="url(#goldBright)"/>
+
+          <!-- Hands (10:10 position) -->
+          <line x1="0" y1="0" x2="-22" y2="-18" stroke="url(#goldBright)" stroke-width="3" stroke-linecap="round"/>
+          <line x1="0" y1="0" x2="28" y2="-20" stroke="url(#goldBright)" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="0" cy="0" r="4.5" fill="url(#goldBright)"/>
+          <circle cx="0" cy="0" r="2" fill="#1A1316"/>
+          
+          <!-- Mini Coffee Cup at 6 o'clock -->
+          <g transform="translate(0, 20) scale(0.65)">
+             <path d="M-8,0 L8,0 C8,4 5,8 0,8 C-5,8 -8,4 -8,0 Z" fill="none" stroke="url(#goldBright)" stroke-width="2.5"/>
+             <line x1="-10" y1="12" x2="10" y2="12" stroke="url(#goldBright)" stroke-width="2.5" stroke-linecap="round"/>
+             <!-- Steam lines -->
+             <path d="M-3,-4 Q-1,-8 -3,-12" fill="none" stroke="url(#goldBright)" stroke-width="2"/>
+             <path d="M3,-3 Q5,-7 3,-11" fill="none" stroke="url(#goldBright)" stroke-width="2"/>
+          </g>
+        </g>
+      </g>
+
+      <!-- ============================================== -->
+      <!-- BOTTOM TRIANGLE (Espresso & Night Motif) -->
+      <!-- ============================================== -->
+      <g id="BottomTriangle">
+        <!-- Outer Frame -->
+        <polygon points="-160,210 160,210 0,-60" fill="none" stroke="#2a1f22" stroke-width="12"/>
+        <polygon points="-160,210 160,210 0,-60" fill="none" stroke="url(#goldDark)" stroke-width="2"/>
+        <line x1="-160" y1="210" x2="160" y2="210" stroke="#543E33" stroke-width="3"/> <!-- Subtle base highlight -->
+        
+        <!-- Acrylic Dark Fill & Sheen -->
+        <polygon points="-148,200 148,200 0,-50" fill="url(#glassBottom)"/>
+        <polygon points="-148,200 148,200 0,-50" fill="url(#sheenBottom)"/>
+
+        <!-- Inner Frame -->
+        <polygon points="-120,180 120,180 0,-20" fill="none" stroke="url(#goldDark)" stroke-width="2"/>
+
+        <!-- Stylized Coffee Beans, Moon & Stars -->
+        <g transform="translate(0, 110)">
+          <!-- Top Center Bean -->
+          <g transform="translate(0, -35) rotate(15)">
+            <ellipse cx="0" cy="0" r="14" ry="9" fill="none" stroke="url(#goldBright)" stroke-width="2.5"/>
+            <path d="M-10,-2 Q0,4 10,-2" fill="none" stroke="url(#goldBright)" stroke-width="2.5" stroke-linecap="round"/>
+          </g>
+          
+          <!-- Left Bean -->
+          <g transform="translate(-45, 10) rotate(-35)">
+            <ellipse cx="0" cy="0" r="12" ry="7" fill="none" stroke="url(#goldBright)" stroke-width="2"/>
+            <path d="M-8,-1 Q0,3 8,-1" fill="none" stroke="url(#goldBright)" stroke-width="2" stroke-linecap="round"/>
+          </g>
+          
+          <!-- Right Bean -->
+          <g transform="translate(45, 10) rotate(45)">
+            <ellipse cx="0" cy="0" r="12" ry="7" fill="none" stroke="url(#goldBright)" stroke-width="2"/>
+            <path d="M-8,-1 Q0,3 8,-1" fill="none" stroke="url(#goldBright)" stroke-width="2" stroke-linecap="round"/>
+          </g>
+          
+          <!-- Central Crescent Moon -->
+          <path d="M-12,18 A13,13 0 0,0 12,18 A15,15 0 0,1 -12,18 Z" fill="url(#goldBright)"/>
+          
+          <!-- Inner Stars -->
+          <g transform="translate(-20, -10) scale(0.6)">
+             <polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="url(#goldBright)"/>
+          </g>
+          <g transform="translate(20, 0) scale(0.5)">
+             <polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="url(#goldBright)"/>
+          </g>
+          <!-- Additional Dust/Sparkles -->
+          <circle cx="-42" cy="-15" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="36" cy="-26" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="-65" cy="30" r="1.5" fill="url(#goldBright)"/>
+          <circle cx="65" cy="30" r="1.5" fill="url(#goldBright)"/>
+        </g>
+      </g>
+
+      <!-- ============================================== -->
+      <!-- CENTER INTERLOCKING DIAMOND / APEX -->
+      <!-- ============================================== -->
+      <g id="CenterConnection">
+        <!-- Outer Diamond Bridge -->
+        <polygon points="0,-40 30,0 0,40 -30,0" fill="#1A1316" stroke="url(#goldBright)" stroke-width="3.5"/>
+        <polygon points="0,-40 30,0 0,40 -30,0" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+        
+        <!-- Glowing Inner Starburst -->
+        <polygon points="0,-20 4,-5 20,0 4,5 0,20 -4,5 -20,0 -4,-5" fill="url(#goldBright)"/>
+        
+        <!-- Center Micro Droplet -->
+        <path d="M0,-28 C1,-24 3,-20 3,-18 C3,-16 1.5,-15 0,-15 C-1.5,-15 -3,-16 -3,-18 C-3,-20 -1,-24 0,-28 Z" fill="url(#goldBright)"/>
+      </g>
+
+      <!-- Flanking Sparkles & Droplets (Middle sides) -->
+      <g>
+         <!-- Left Side -->
+         <path d="M-65,20 C-62,25 -58,30 -58,33 C-58,35 -60,37 -65,37 C-70,37 -72,35 -72,33 C-72,30 -68,25 -65,20 Z" fill="url(#goldBright)"/>
+         <polygon points="-70,-5 -68,0 -62,2 -68,4 -70,9 -72,4 -78,2 -72,0" fill="url(#goldBright)"/>
+         
+         <!-- Right Side -->
+         <path d="M65,20 C62,25 58,30 58,33 C58,35 60,37 65,37 C70,37 72,35 72,33 C72,30 68,25 65,20 Z" fill="url(#goldBright)"/>
+         <polygon points="70,-5 68,0 62,2 68,4 70,9 72,4 78,2 72,0" fill="url(#goldBright)"/>
+      </g>
+
+    </g>
+  </g>
+
+  <!-- ============================================== -->
+  <!-- TYPOGRAPHY -->
+  <!-- ============================================== -->
+  <g transform="translate(400, 720)" text-anchor="middle">
+    <!-- Brand Title: BrewVanti -->
+    <text x="0" y="0"
+          font-family="'Playfair Display', 'Cinzel', 'Didot', 'Georgia', serif"
+          font-size="82"
+          font-weight="700"
+          letter-spacing="2"
+          fill="url(#goldBright)">
+      BrewVanti
+    </text>
+    
+    <!-- Subtitle: ARTISAN COFFEE & BREW -->
+    <text x="0" y="45"
+          font-family="'Montserrat', 'Inter', 'Helvetica Neue', sans-serif"
+          font-size="15"
+          font-weight="600"
+          letter-spacing="7"
+          fill="#CFA04E">
+      ARTISAN COFFEE &amp; BREW
+    </text>
+  </g>
+</svg>

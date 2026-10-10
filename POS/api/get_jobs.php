@@ -48,7 +48,7 @@ try {
     ]);
 
 } catch (Throwable $e) {
-    error_log('Get jobs error: ' . $e->getMessage());
+    error_log('Get jobs error: ' . 'Service temporarily unavailable.');
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'Unable to load positions.']);
 }

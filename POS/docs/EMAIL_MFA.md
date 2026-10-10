@@ -1,0 +1,11 @@
+Email MFA is optional for each user and starts off. Open Profile → Personal Details → Email MFA. Enter the current password, enable MFA, then enter the emailed code to confirm enrollment. A delivery failure leaves MFA off. Disabling MFA requires the current password.
+
+For users who enable it, password login sends a six-digit email code before creating a session or requesting HR device approval. Codes expire after ten minutes, are bound to the browser session and account, and can be used once. Five failed attempts invalidate a challenge; database rate limits also apply across browser sessions. Resends are limited to one per minute and three per ten minutes. Changing the password, email, or account status invalidates an outstanding code.
+
+SMTP credentials must be configured using the existing private configuration or environment variables. Codes are sent immediately through the existing SMTP mailer and are never displayed in the browser or logged. Turn MFA off before editing your profile email, then enable it again after verifying the new address.
+
+Deployment: back up the database outside the web root, then run tools/migrate.php with the explicit migration database credentials described in SECURITY_IMPLEMENTATION.md. The 20261010_email_mfa_v1 migration only adds user_email_mfa; missing settings rows mean off. Existing users and business tables are unchanged. Before deployment, the profile indicates that the migration is pending and the previous login flow remains available.
+
+Rollback: disable opted-in accounts before deploying code that does not enforce MFA. The additive table can remain in place; removing it while the new code is deployed causes a service error. Do not remove the migration marker independently. Database removal requires a separately reviewed migration.
+
+Verification: EmailMfaTest uses SQLite and a fake sender to cover default-off settings, email-confirmed enrollment, password-confirmed disabling, delivery failure, expiry, retry limits, account binding, and replay rejection. It does not deliver real email. Verify SMTP delivery by enabling MFA through your own profile and completing a login; HR approval is still required when the existing device policy requires it.

@@ -55,14 +55,14 @@
 .kfs-workspace #sidebar-collapse-btn { width: 36px; height: 36px; padding: 8px !important; }
 .kfs-workspace #sidebar-collapse-btn span { display: none; }
 .kfs-workspace header#kofee-topbar {
-  background: #fff !important; color: var(--espresso) !important;
-  border-bottom: 1px solid var(--border) !important; box-shadow: none !important;
+  background: linear-gradient(90deg, #181013, #0e0709) !important; color: var(--cream) !important;
+  border-bottom: 1px solid rgb(217 186 133 / 22%) !important; box-shadow: none !important;
 }
 .kfs-workspace #sidebar-menu-btn {
   min-height: 40px; border-radius: 10px !important;
-  background: #f7f5f2 !important; color: var(--espresso) !important; border-color: var(--border) !important;
+  background: rgb(217 186 133 / 8%) !important; color: var(--cream) !important; border-color: rgb(217 186 133 / 22%) !important;
 }
-.kfs-workspace #notification-btn { color: var(--espresso) !important; width: 44px !important; height: 44px !important; }
+.kfs-workspace #notification-btn { color: var(--cream) !important; width: 44px !important; height: 44px !important; }
 .kfs-workspace #notification-btn:hover { background: var(--accent-lt) !important; }
 .kfs-workspace #main-sidebar { background: var(--espresso) !important; box-shadow: none !important; }
 .kfs-workspace :is(.kfs-cat-header, .kfs-cat-item) { min-height: 42px; }
@@ -79,10 +79,10 @@
 .kfs-workspace .kfs-loader-sub { color: var(--text-muted); }
 
 /* The counter gives the catalog and current order distinct, readable surfaces. */
-.kfs-workspace #page-menu { background: var(--bg); height: calc(100dvh - 56px); min-height: 0; }
+.kfs-workspace #page-menu { background: #140c0e; height: calc(100dvh - 56px); min-height: 0; }
 .kfs-workspace .menu-left { padding: 28px; gap: 22px; }
 .kfs-workspace .pos-page-head { align-items: flex-start; }
-.pos-description { font-size: 14px; color: var(--text-muted); margin-top: 6px; }
+.pos-description { font-size: 14px; color: #c4b5a5; margin-top: 6px; }
 .kfs-workspace .menu-search { border-radius: 10px; min-width: 220px; padding: 0 12px; }
 .kfs-workspace .menu-search input { min-height: 44px; }
 .kfs-workspace .pos-shift-badge { color: var(--green, #1b5e20); background: #edf5ed; border-color: #d8e8d8; box-shadow: none; }
@@ -93,8 +93,8 @@
 .kfs-workspace .size-bar { border-radius: 12px; box-shadow: none; }
 .kfs-workspace .size-btn { border-radius: 8px; }
 .pos-catalog-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.pos-catalog-summary p { color: var(--text-muted); font-size: 13px; }
-.pos-reset-search { border: 0; background: none; color: var(--caramel); font-size: 13px; font-weight: 600; padding: 8px; }
+.pos-catalog-summary p { color: #c4b5a5; font-size: 13px; }
+.pos-reset-search { border: 0; background: none; color: var(--gold-bright); font-size: 13px; font-weight: 600; padding: 8px; }
 .pos-reset-search[hidden] { display: none; }
 .kfs-workspace .menu-grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 16px; }
 .kfs-workspace .menu-card { text-align: left; align-items: stretch; box-shadow: none; padding: 10px; }
@@ -102,13 +102,13 @@
 .kfs-workspace .menu-card:disabled { opacity: 0.65; }
 .kfs-workspace .item-img { aspect-ratio: 4 / 3; border: 0; }
 .kfs-workspace .item-name { text-align: left; font-size: 14px; padding: 0 4px; }
-.kfs-workspace .item-price { color: var(--caramel); text-align: left; padding: 4px; font-size: 15px; }
+.kfs-workspace .item-price { color: var(--gold-bright); text-align: left; padding: 4px; font-size: 15px; }
 .kfs-workspace .empty-cat { grid-column: 1 / -1; padding: 40px 20px; }
 .kfs-workspace .order-panel { width: 340px; border-left: 1px solid var(--border); box-shadow: none; }
 .order-panel-heading { padding: 22px 20px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.order-panel-heading h2 { font-size: 18px; }
-.order-panel-heading span { color: var(--text-muted); font-size: 13px; }
-.kfs-workspace .order-type-bar { background: white; border-bottom: 1px solid var(--border); }
+.order-panel-heading h2 { font-size: 18px; color: var(--cream); }
+.order-panel-heading span { color: #c4b5a5; font-size: 13px; }
+.kfs-workspace .order-type-bar { background: rgb(38 26 29 / 50%); border-bottom: 1px solid rgb(217 186 133 / 20%); }
 .kfs-workspace .qty-btn { min-width: 36px; min-height: 36px; }
 .kfs-workspace .order-item-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px 10px; }
 .kfs-workspace .oi-thumb { grid-row: 1 / 3; }
@@ -120,6 +120,20 @@
 .kfs-workspace .checkout-btn { min-height: 48px; }
 .kfs-workspace .mobile-cart-bar { bottom: max(14px, env(safe-area-inset-bottom)); }
 .kfs-workspace .mcb-btn { box-shadow: none; }
+
+/* Keep the imported dark catalog readable after shared light-screen tokens load. */
+.kfs-workspace #page-menu {
+  --text-muted: #c4b5a5;
+  --border: rgb(217 186 133 / 35%);
+  --card-bg: linear-gradient(160deg, #2a1c20, #120c0e);
+}
+.kfs-workspace #page-menu .menu-card { color: var(--cream); font: inherit; }
+.kfs-workspace #page-menu .menu-card :is(.item-meta, .item-card-footer, .card-badge) { display: flex; }
+.kfs-workspace #page-menu .item-card-footer { align-items: center; justify-content: space-between; gap: 8px; }
+.kfs-workspace #page-menu .checkout-btn { background: linear-gradient(135deg, #ecc98f, #d9ba85); color: #140c0e; }
+.kfs-workspace #page-menu .checkout-btn:hover { background: #ecc98f; }
+.kfs-workspace #page-home .page-header h1 { font-family: var(--font-brand) !important; }
+.kfs-workspace #kofee-topbar :is(a, button):focus-visible { outline-color: var(--gold-bright) !important; }
 
 @media (max-width: 1199px) and (min-width: 1024px) {
   .kfs-workspace .menu-left { padding: 20px; }

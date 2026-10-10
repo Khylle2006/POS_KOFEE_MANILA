@@ -44,7 +44,10 @@ $user = current_user();
   <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap">
     <button class="btn-logout" style="background:#8b7c88" onclick="history.back()">Go Back</button>
     <button class="btn-logout" onclick="window.location.href='<?= htmlspecialchars(get_dashboard_url()) ?>'">Home / Dashboard</button>
-    <button class="btn-logout" style="background:#555" onclick="window.location.href='../auth/logout.php'">Log Out</button>
+    <form method="post" action="../auth/logout.php">
+      <?= csrf_field() ?>
+      <button type="submit" class="btn-logout" style="background:#555">Log Out</button>
+    </form>
   </div>
 </body>
 </html>

@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/../includes/request_security.php';
+secure_session_start();
+send_security_headers();
+start_browser_security_output();
 // ─────────────────────────────────────────────────────────────
 //  auth/reset_password.php
 //  Validates reset token and sets new user password
@@ -29,16 +33,16 @@ if ($token !== '') {
             SELECT pr.*, u.username, u.firstname, u.lastname, u.email 
             FROM password_resets pr
             JOIN users u ON u.id = pr.user_id
-            WHERE (pr.token = :htoken OR pr.token = :rtoken)
+            WHERE pr.token = :htoken
               AND pr.used_at IS NULL 
               AND pr.expires_at > NOW()
             LIMIT 1
         ");
-        $stmt->execute([':htoken' => $hashed_token, ':rtoken' => $token]);
+        $stmt->execute([':htoken' => $hashed_token]);
         $reset_entry = $stmt->fetch();
         $valid = (bool)$reset_entry;
     } catch (Throwable $e) {
-        error_log('Token lookup error: ' . $e->getMessage());
+        error_log('Token lookup error: ' . 'Service temporarily unavailable.');
         $error = 'A database error occurred while verifying the reset token.';
     }
 }
@@ -51,22 +55,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $valid) {
         $new_pass  = $_POST['new_password'] ?? '';
         $conf_pass = $_POST['confirm_password'] ?? '';
 
-        if (strlen($new_pass) < 6) {
-            $error = 'Password must be at least 6 characters in length.';
+        if (($passwordError = new_password_error($new_pass)) !== null) {
+            $error = $passwordError;
         } elseif ($new_pass !== $conf_pass) {
             $error = 'Passwords do not match. Please verify and retype.';
         } else {
             try {
-                $hash = password_hash($new_pass, PASSWORD_BCRYPT, ['cost' => 12]);
-                $user_id = (int)$reset_entry['user_id'];
-
-                // Update user password
-                $upd = $pdo->prepare('UPDATE users SET password = :p, updated_at = NOW() WHERE id = :uid');
-                $upd->execute([':p' => $hash, ':uid' => $user_id]);
-
-                // Invalidate this token and any other active tokens for this user
-                $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE user_id = :uid AND used_at IS NULL')
-                    ->execute([':uid' => $user_id]);
+                consume_password_reset($pdo, $token, $new_pass);
 
                 // Clear any leftover throttle locks for this username
                 if (function_exists('clear_login_lockout')) {
@@ -77,7 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $valid) {
                 header('Location: login.php?reason=password_reset_success');
                 exit;
             } catch (Throwable $e) {
-                error_log('Password update failed: ' . $e->getMessage());
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                error_log('Password update failed: ' . 'Service temporarily unavailable.');
                 $error = 'Failed to update password. Please try again.';
             }
         }
@@ -217,14 +213,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $valid) {
 
           <div class="field">
             <label for="new_password" class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">New Password</label>
-            <input type="password" name="new_password" id="new_password" autocomplete="new-password" placeholder="Minimum 6 characters" minlength="6" required autofocus
+            <input type="password" name="new_password" id="new_password" autocomplete="new-password" placeholder="Minimum 15 characters" minlength="15" required autofocus
               class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
               style="color:var(--espresso)">
           </div>
 
           <div class="field">
             <label for="confirm_password" class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Confirm Password</label>
-            <input type="password" name="confirm_password" id="confirm_password" autocomplete="new-password" placeholder="Re-type new password" minlength="6" required
+            <input type="password" name="confirm_password" id="confirm_password" autocomplete="new-password" placeholder="Re-type new password" minlength="15" required
               class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
               style="color:var(--espresso)">
           </div>

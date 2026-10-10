@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/private_storage.php';
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
@@ -67,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $attachment_path = null;
                 if (!empty($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                    $upload_dir = __DIR__ . '/../uploads/invoices';
+                    $upload_dir = private_upload_directory('invoices');
                     if (!is_dir($upload_dir)) {
                         @mkdir($upload_dir, 0755, true);
                     }
@@ -81,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (isset($mime_map[$mime])) {
                         $ext = $mime_map[$mime];
                         $fname = 'inv_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-                        if (move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
+                        if (private_move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
                             $attachment_path = 'uploads/invoices/' . $fname;
                         }
                     }
@@ -123,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = $e->getMessage(); $toast_type = 'error';
+                $toast = 'Service temporarily unavailable.'; $toast_type = 'error';
             }
         }
     }

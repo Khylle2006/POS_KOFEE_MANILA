@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $closed_successfully = true;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = $e->getMessage(); $toast_type = 'error';
+                $toast = 'Service temporarily unavailable.'; $toast_type = 'error';
             }
         }
     }

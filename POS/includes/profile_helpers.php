@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/private_storage.php';
+require_once __DIR__ . '/private_credentials.php';
 // ==============================================================================
 // FILE: includes/profile_helpers.php
 // User Profile Management & Salary Payment Details (with HR Approval Gate)
@@ -7,6 +9,7 @@
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/store_helpers.php';
+require_once __DIR__ . '/email_mfa.php';
 
 /**
  * Mask an account number, preserving only the last 4 digits.
@@ -69,6 +72,9 @@ function update_user_profile(PDO $pdo, int $user_id, array $data, ?array $avatar
     if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return ['ok' => false, 'error' => 'Please provide a valid email address.'];
     }
+    if ($email !== $user['email'] && email_mfa_enabled($pdo, $user_id)) {
+        return ['ok' => false, 'error' => 'Disable email MFA before changing your email, then verify your new email to enable it again.'];
+    }
 
     // Avatar upload handling
     $avatar_path = $user['avatar_path'];
@@ -76,7 +82,7 @@ function update_user_profile(PDO $pdo, int $user_id, array $data, ?array $avatar
         $avatar_path = null;
     }
     if ($avatar_file && !empty($avatar_file['tmp_name']) && $avatar_file['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = __DIR__ . '/../uploads/avatars';
+        $upload_dir = private_upload_directory('avatars');
         if (!is_dir($upload_dir)) {
             @mkdir($upload_dir, 0755, true);
         }
@@ -92,13 +98,29 @@ function update_user_profile(PDO $pdo, int $user_id, array $data, ?array $avatar
         }
 
         $fname = 'avatar_' . $user_id . '_' . time() . '.' . $ext;
-        if (move_uploaded_file($avatar_file['tmp_name'], $upload_dir . '/' . $fname)) {
-            $avatar_path = 'uploads/avatars/' . $fname;
+        try {
+            if (private_move_uploaded_file($avatar_file['tmp_name'], $upload_dir . '/' . $fname)) {
+                $avatar_path = 'uploads/avatars/' . $fname;
+            }
+        } catch (SecurityFault $sf) {
+            $msg = $sf->getMessage();
+            if ($sf->errorCode === 'IMAGE_INVALID') {
+                $msg = 'Image dimensions exceed the allowed limit (max 4096×4096 px). Please use a photo within this limit.';
+            }
+            return ['ok' => false, 'error' => $msg];
+        } catch (Throwable $e) {
+            return ['ok' => false, 'error' => 'Failed to process avatar image. Please try again.'];
         }
     }
 
     try {
         $pdo->beginTransaction();
+
+        $lockedUser = email_mfa_user($pdo, $user_id, true);
+        if ($email !== $lockedUser['email'] && email_mfa_enabled($pdo, $user_id)) {
+            $pdo->rollBack();
+            return ['ok' => false, 'error' => 'Disable email MFA before changing your email, then verify your new email to enable it again.'];
+        }
 
         $u_stmt = $pdo->prepare("
             UPDATE `users`
@@ -151,7 +173,7 @@ function update_user_profile(PDO $pdo, int $user_id, array $data, ?array $avatar
         return ['ok' => true, 'avatar_path' => $avatar_path];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        return ['ok' => false, 'error' => $e->getMessage()];
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 
@@ -205,7 +227,7 @@ function submit_payment_change_request(PDO $pdo, int $employee_id, int $user_id,
 
         if (!$bank_name) return ['ok' => false, 'error' => 'Please select your bank.'];
         if (!$account_name) return ['ok' => false, 'error' => 'Please enter the bank account holder name.'];
-        if (strlen($account_number) < 8 || strlen($account_number) > 20) {
+        if (!preg_match('/^[0-9]{8,20}$/D', $account_number)) {
             return ['ok' => false, 'error' => 'Please enter a valid bank account number (8–20 digits).'];
         }
         $last4 = substr($account_number, -4);
@@ -249,7 +271,7 @@ function submit_payment_change_request(PDO $pdo, int $employee_id, int $user_id,
             ':bc'  => $bank_code,
             ':bn'  => $bank_name,
             ':an'  => $account_name,
-            ':enc' => $account_number ? base64_encode($account_number) : null,
+            ':enc' => $account_number ? encrypt_private_value($account_number) : null,
             ':l4'  => $last4,
             ':ep'  => $ewallet_provider,
             ':ean' => $ewallet_account_name,
@@ -274,7 +296,7 @@ function submit_payment_change_request(PDO $pdo, int $employee_id, int $user_id,
 
         return ['ok' => true, 'request_id' => $req_id, 'masked' => $masked_desc];
     } catch (Exception $e) {
-        return ['ok' => false, 'error' => $e->getMessage()];
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 
@@ -362,6 +384,6 @@ function review_payment_change_request(PDO $pdo, int $request_id, int $reviewer_
         return ['ok' => true, 'status' => $is_approved ? 'approved' : 'rejected'];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        return ['ok' => false, 'error' => $e->getMessage()];
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }

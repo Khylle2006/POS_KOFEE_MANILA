@@ -303,5 +303,5 @@ try {
         if (is_file($targetFile)) @unlink($targetFile);
     }
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Database transaction failed: ' . $e->getMessage()]);
+    echo json_encode(['ok' => false, 'error' => 'Database transaction failed: ' . 'Service temporarily unavailable.']);
 }

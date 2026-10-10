@@ -29,3 +29,9 @@ uploads/invoices/*
 !uploads/invoices/.gitkeep
 uploads/avatars/*
 !uploads/avatars/.gitkeep
+
+/vendor/
+/.phpunit.cache/
+/.phpstan.cache/
+/dist/
+/.test-mysql/

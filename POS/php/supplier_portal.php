@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/private_storage.php';
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
@@ -16,12 +17,7 @@ ensure_procurement_tables($pdo);
 
 // Check if user is an administrator or procurement manager (who can view & preview any supplier profile)
 $roles = $_SESSION['roles'] ?? (isset($_SESSION['role']) ? [$_SESSION['role']] : (isset($user['role']) ? [$user['role']] : []));
-$is_admin_mode = in_array('admin', $roles, true)
-    || in_array('procurement', $roles, true)
-    || in_array('manager', $roles, true)
-    || has_permission('procurement.suppliers.manage')
-    || has_permission('procurement.manage')
-    || has_permission('*');
+$is_admin_mode = has_permission('procurement.suppliers.manage');
 
 if (!$is_admin_mode && !has_permission('procurement.supplier.portal')) {
     require_permission('procurement.supplier.portal');
@@ -189,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                     header('Location: supplier_portal.php?tab=contracts' . $admin_sup_qs . '&toast=' . urlencode($toast));
                     exit;
                 } catch (Exception $e) {
-                    $toast = 'Error signing contract: ' . $e->getMessage();
+                    $toast = 'Error signing contract: ' . 'Service temporarily unavailable.';
                     $toast_type = 'error';
                 }
             }
@@ -376,7 +372,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 exit;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = 'Error confirming payment: ' . $e->getMessage();
+                $toast = 'Error confirming payment: ' . 'Service temporarily unavailable.';
                 $toast_type = 'error';
             }
         }
@@ -418,10 +414,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                     ];
                     if (isset($mime_map[$mime])) {
                         $ext = $mime_map[$mime];
-                        $upload_dir = __DIR__ . '/../uploads/receipts';
+                        $upload_dir = private_upload_directory('receipts');
                         if (!is_dir($upload_dir)) @mkdir($upload_dir, 0755, true);
                         $fname = 'dispute_' . date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-                        if (move_uploaded_file($_FILES['dispute_attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
+                        if (private_move_uploaded_file($_FILES['dispute_attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
                             $dispute_attachment_path = 'uploads/receipts/' . $fname;
                         }
                     }
@@ -459,7 +455,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 header('Location: supplier_portal.php?tab=invoices' . $admin_sup_qs . '&toast=' . urlencode($toast) . '&type=error');
                 exit;
             } catch (Exception $e) {
-                $toast = 'Error filing dispute: ' . $e->getMessage();
+                $toast = 'Error filing dispute: ' . 'Service temporarily unavailable.';
                 $toast_type = 'error';
             }
         }
@@ -518,7 +514,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 header('Location: supplier_portal.php?tab=invoices' . $admin_sup_qs . '&toast=' . urlencode($toast));
                 exit;
             } catch (Exception $e) {
-                $toast = 'Error updating payout details: ' . $e->getMessage();
+                $toast = 'Error updating payout details: ' . 'Service temporarily unavailable.';
                 $toast_type = 'error';
             }
         }
@@ -647,7 +643,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 exit;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = 'Error submitting Delivery Notice: ' . $e->getMessage();
+                $toast = 'Error submitting Delivery Notice: ' . 'Service temporarily unavailable.';
                 $toast_type = 'error';
             }
         }
@@ -710,7 +706,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 // Attachment handling
                 $attachment_path = null;
                 if (!empty($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                    $upload_dir = __DIR__ . '/../uploads/invoices';
+                    $upload_dir = private_upload_directory('invoices');
                     if (!is_dir($upload_dir)) {
                         @mkdir($upload_dir, 0755, true);
                     }
@@ -723,7 +719,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                     if (isset($mime_map[$mime])) {
                         $ext = $mime_map[$mime];
                         $fname = 'inv_sup_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-                        if (move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
+                        if (private_move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_dir . '/' . $fname)) {
                             $attachment_path = 'uploads/invoices/' . $fname;
                         }
                     }
@@ -891,7 +887,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supplier) {
                 }
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = $e->getMessage(); $toast_type = 'error';
+                $toast = 'Service temporarily unavailable.'; $toast_type = 'error';
             }
         }
     }

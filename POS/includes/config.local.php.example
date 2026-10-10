@@ -12,8 +12,8 @@ define('DB_PASS', '');
 define('APP_ENV', 'development'); // Set to 'production' on live deployment
 
 // ── PayMongo Payment Gateway Configuration ────────────────────
-define('PAYMONGO_SECRET_KEY', 'demo');
-define('PAYMONGO_PUBLIC_KEY', 'demo');
+define('PAYMONGO_SECRET_KEY', '');
+define('PAYMONGO_PUBLIC_KEY', '');
 define('PAYMONGO_WEBHOOK_SECRET', '');
 
 // ── SMTP Email Configuration (PHPMailer) ──────────────────────
@@ -24,3 +24,16 @@ define('SMTP_PASS', ''); // Your 16-character App Password
 define('SMTP_SECURE', 'tls');
 define('SMTP_FROM_EMAIL', '');
 define('SMTP_FROM_NAME', 'Kofee Manila');
+
+// Production must use HTTPS and an external directory owned by the PHP account.
+define('APP_URL', 'http://localhost/POS_KOFEE_MANILA/POS');
+define('PAYMENT_MODE', 'disabled'); // disabled, demo, test, live; production permits disabled/live only
+define('PRIVATE_STORAGE_ROOT', 'C:/kofee-private');
+define('TRUSTED_PROXIES', ''); // Explicit proxy IPs only
+define('CSP_ENFORCE', ''); // Set after report-only staging verification
+
+// Set independent 32-byte base64 keys through environment variables. Back them up securely.
+define('JOB_ENCRYPTION_KEY', '');
+define('PRIVATE_DATA_KEY', '');
+define('PAYMONGO_DISBURSEMENT_SECRET_KEY', '');
+define('PAYMONGO_DISBURSEMENT_WEBHOOK_SECRET', '');

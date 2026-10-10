@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/private_storage.php';
 // ─────────────────────────────────────────────────────────────
 //  api/submit_application.php — Process Job Applications
 // ─────────────────────────────────────────────────────────────
@@ -11,6 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/application_tracking.php';
+public_submission_guard('job-submission');
 
 try {
     $pdo = get_db();
@@ -138,7 +141,7 @@ try {
     // ── Handle Resume Upload Storage ──
     // 0755, not 0777. Files here are never web-readable
     // (see uploads/.htaccess); php/download_file.php serves them.
-    $uploadDir = __DIR__ . '/../uploads/resumes';
+    $uploadDir = private_upload_directory('resumes');
     if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Storage unavailable. Please try again.']);
@@ -150,12 +153,12 @@ try {
     $targetPath     = $uploadDir . '/' . $uniqueFilename;
     $relativeDbPath = 'uploads/resumes/' . $uniqueFilename;
 
-    if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+    if (!private_move_uploaded_file($file['tmp_name'], $targetPath)) {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Failed to save resume file. Please try again.']);
         exit;
     }
-    @chmod($targetPath, 0644);
+    chmod($targetPath, 0600);
 
     // ── Insert into Database ──
     $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -169,6 +172,7 @@ try {
         1, "review", :ip, NOW()
     )';
 
+    $pdo->beginTransaction();
     $stmt = $pdo->prepare($insertSql);
     $stmt->execute([
         ':code'        => $trackingCode,
@@ -187,44 +191,9 @@ try {
     ]);
 
     $appId = (int)$pdo->lastInsertId();
-
-    // Use a server-configured public URL when available; otherwise derive the local app URL safely.
-    $baseUrl = trim((string)(defined('APP_BASE_URL') ? APP_BASE_URL : (getenv('APP_BASE_URL') ?: '')));
-    $baseParts = $baseUrl !== '' ? parse_url($baseUrl) : false;
-    if (!$baseParts || empty($baseParts['scheme']) || empty($baseParts['host'])
-        || !in_array(strtolower($baseParts['scheme']), ['http', 'https'], true)
-        || isset($baseParts['user']) || isset($baseParts['pass'])) {
-        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
-        if (!preg_match('/^(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::\d{1,5})?$/i', $host)) {
-            $host = 'localhost';
-        }
-        $isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
-        $appPath = str_replace('\\', '/', dirname(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/api/submit_application.php'))));
-        $appPath = ($appPath === '/' || $appPath === '.') ? '' : '/' . trim($appPath, '/');
-        $baseUrl = ($isHttps ? 'https' : 'http') . '://' . $host . $appPath;
-    } else {
-        $baseUrl = rtrim($baseUrl, '/');
-    }
-    $trackingUrl = $baseUrl . '/careers.php?track=' . rawurlencode($trackingCode);
-
-    // Application persistence succeeds independently of email delivery.
+    issue_application_tracking($pdo, 'job', $appId, $email);
+    $pdo->commit();
     $emailSent = false;
-    try {
-        require_once __DIR__ . '/../includes/mailer.php';
-        $mailResult = send_application_confirmation_email(
-            $email,
-            trim($first_name . ' ' . $last_name),
-            (string)$jobRow['title'],
-            $trackingCode,
-            $trackingUrl
-        );
-        $emailSent = !empty($mailResult['sent']);
-        if (!$emailSent) {
-            error_log('Recruitment confirmation email was not delivered for application #' . $appId . '.');
-        }
-    } catch (Throwable $mailError) {
-        error_log('Recruitment confirmation email error for application #' . $appId . ': ' . $mailError->getMessage());
-    }
 
     echo json_encode([
         'success'         => true,
@@ -234,11 +203,13 @@ try {
         'job_title'       => $jobRow['title'],
         'candidate_name'  => $first_name . ' ' . $last_name,
         'email'           => $email,
-        'email_sent'      => $emailSent,
+        'email_queued'      => true,
     ]);
 
 } catch (Throwable $e) {
-    error_log('Application submission error: ' . $e->getMessage());
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    if ($e instanceof SecurityFault) safe_exception($e);
+    error_log('Application submission error: ' . 'Service temporarily unavailable.');
     http_response_code(500);
     echo json_encode([
         'success' => false,

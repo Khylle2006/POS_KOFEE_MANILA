@@ -8,8 +8,10 @@
     "@tailwindcss/cli": "^4.3.3"
   },
   "scripts": {
-    "test": "node --test tests/ui.test.cjs",
+    "test": "node tools/check.mjs test",
     "build": "tailwindcss -i ./src/input.css -o ./css/index.css --minify",
-    "watch": "tailwindcss -i ./src/input.css -o ./css/index.css --watch"
+    "watch": "tailwindcss -i ./src/input.css -o ./css/index.css --watch",
+    "lint": "node tools/check.mjs lint",
+    "typecheck": "node tools/check.mjs typecheck"
   }
 }

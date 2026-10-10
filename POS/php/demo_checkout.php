@@ -5,7 +5,9 @@
 // Provides a real customer checkout screen for demo & local sandbox sessions.
 // ==============================================================================
 
-require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_demo_payment();
+require_permission('orders.new');
 require_once __DIR__ . '/../includes/paymongo.php';
 require_once __DIR__ . '/../includes/ingredient_deduction.php';
 
@@ -28,6 +30,10 @@ if (!$order && $order_id > 0) {
     $order = $st->fetch(PDO::FETCH_ASSOC);
 }
 
+if ($order && ((int)$order['user_id'] !== (int)$_SESSION['user_id'] || !str_starts_with((string)$order['paymongo_session_id'], 'cs_demo_'))) {
+    throw new SecurityFault('PERMISSION_DENIED', 'Permission denied.', 403);
+}
+
 // ── Handle AJAX Payment Authorization ───────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'authorize_payment') {
     if (!headers_sent()) {
@@ -44,20 +50,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     try {
         $pdo->beginTransaction();
+        $lock = $pdo->prepare('SELECT status, payment_status FROM orders WHERE id = ? FOR UPDATE');
+        $lock->execute([$order['id']]);
+        $locked = $lock->fetch();
+        if ($locked['status'] === 'cancelled') throw new SecurityFault('ORDER_CANCELLED', 'Order is cancelled.', 409);
 
         $payment_id = 'pay_demo_' . bin2hex(random_bytes(6));
         $ref_number = 'PM-' . date('Ymd') . '-' . strtoupper(substr(hash('sha256', ($session_id ?: (string)$order['id']) . microtime()), 0, 8));
 
         $upd = $pdo->prepare("
             UPDATE orders
-            SET status = 'completed',
-                payment_status = 'paid',
+            SET payment_status = 'paid',
+                status = 'pending',
                 payment_method = 'paymongo',
                 amount_tendered = total_amount,
                 change_amount = 0.00,
                 paymongo_payment_id = :pid,
                 payment_reference = :ref
-            WHERE id = :id
+            WHERE id = :id AND payment_status = 'pending'
         ");
         $upd->execute([
             ':pid' => $payment_id,
@@ -65,12 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             ':id'  => $order['id'],
         ]);
 
-        // Deduct inventory ingredients if not yet deducted
-        try {
-            deduct_order_ingredients($pdo, (int)$order['id'], (int)($order['user_id'] ?? 1));
-        } catch (Throwable $de) {
-            error_log('demo_checkout inventory deduction note: ' . $de->getMessage());
-        }
+        security_audit($pdo, 'demo_payment', 'order', (int)$order['id']);
 
         $pdo->commit();
 
@@ -86,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        echo json_encode(['success' => false, 'error' => 'Service temporarily unavailable.']);
         exit;
     }
 }

@@ -68,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Privilege Escalation Guard: Only existing admins can assign the admin role
         if (in_array('admin', $roles_selected, true) && !is_admin()) {
+            http_response_code(403);
             $toast = 'Forbidden: Only system administrators can assign the Admin role.';
             $toast_type = 'error';
         } elseif (!$firstname || !$lastname) {
@@ -83,11 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Protect existing admin accounts from modification by non-admins
                 if ($existing_user_id && !is_admin()) {
-                    $chkAdm = $pdo->prepare("SELECT 1 FROM users WHERE id = :id AND role = 'admin' UNION SELECT 1 FROM user_roles WHERE user_id = :id AND role = 'admin'");
-                    $chkAdm->execute([':id' => $existing_user_id]);
-                    if ($chkAdm->fetchColumn()) {
-                        throw new Exception('Forbidden: Only system administrators can modify administrator accounts.');
-                    }
+                    require_admin_account_management($pdo, $existing_user_id, false);
                 }
 
                 // ── Account side ──
@@ -96,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Update existing account
                         if ($password !== '') {
                             if ($password !== $confirm) throw new Exception('Passwords do not match.');
-                            if (strlen($password) < 6) throw new Exception('Password must be at least 6 characters.');
+                            if (($passwordError = new_password_error($password)) !== null) throw new SecurityFault('PASSWORD_INVALID', $passwordError);
                             $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
                             $pdo->prepare('UPDATE users SET username=:u, firstname=:f, lastname=:l, email=:e, role=:r, password=:p, updated_at=NOW() WHERE id=:id')
                                 ->execute([':u'=>$username, ':f'=>$firstname, ':l'=>$lastname, ':e'=>$email, ':r'=>$primary_role, ':p'=>$hash, ':id'=>$existing_user_id]);
@@ -105,10 +102,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 ->execute([':u'=>$username, ':f'=>$firstname, ':l'=>$lastname, ':e'=>$email, ':r'=>$primary_role, ':id'=>$existing_user_id]);
                         }
                         $user_id = $existing_user_id;
+                        if ($password !== '') revoke_user_sessions($pdo, (int)$user_id);
                     } else {
                         // Create new account
                         if (!$username || !$password) throw new Exception('Username and password are required to create a login account.');
-                        if (strlen($password) < 6)     throw new Exception('Password must be at least 6 characters.');
+                        if (($passwordError = new_password_error($password)) !== null) throw new SecurityFault('PASSWORD_INVALID', $passwordError);
                         if ($password !== $confirm)    throw new Exception('Passwords do not match.');
 
                         $chk = $pdo->prepare('SELECT id FROM users WHERE username=:u LIMIT 1');
@@ -164,7 +162,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $toast = '"' . htmlspecialchars($firstname . ' ' . $lastname) . '" saved successfully!';
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $msg = str_contains($e->getMessage(), 'Duplicate') ? 'That employee code already exists.' : $e->getMessage();
+                if ($e instanceof SecurityFault) http_response_code($e->status);
+                $msg = $e instanceof SecurityFault ? $e->getMessage() : 'Service temporarily unavailable.';
                 $toast = $msg; $toast_type = 'error';
             }
         }
@@ -189,16 +188,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status = $_POST['status'] ?? '';
         if ($id && in_array($status, ['active','blocked','on_hold'], true)) {
             // Protect admin accounts from being modified by non-admins
-            $chkAdm = $pdo->prepare("SELECT 1 FROM users WHERE id = :id AND role = 'admin' UNION SELECT 1 FROM user_roles WHERE user_id = :id AND role = 'admin'");
-            $chkAdm->execute([':id' => $id]);
-            if ($chkAdm->fetchColumn() && !is_admin()) {
-                $toast = 'Forbidden: Only administrators can modify administrator status.';
-                $toast_type = 'error';
-            } else {
-                $pdo->prepare('UPDATE users SET status=:s, updated_at=NOW() WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
-                $labels = ['active'=>'Activated','blocked'=>'Blocked','on_hold'=>'Put on Hold'];
-                $toast  = 'Account ' . $labels[$status] . '.';
-            }
+            require_admin_account_management($pdo, $id, is_admin());
+            $pdo->beginTransaction();
+            $pdo->prepare('SELECT id FROM users WHERE id = ? FOR UPDATE')->execute([$id]);
+            $pdo->prepare('UPDATE users SET status=:s, updated_at=NOW() WHERE id=:id')->execute([':s'=>$status, ':id'=>$id]);
+            if ($status !== 'active') revoke_user_sessions($pdo, $id);
+            security_audit($pdo, 'account_status_changed', 'user', $id, ['status' => $status]);
+            $pdo->commit();
+            $labels = ['active'=>'Activated','blocked'=>'Blocked','on_hold'=>'Put on Hold'];
+            $toast  = 'Account ' . $labels[$status] . '.';
         }
     }
 

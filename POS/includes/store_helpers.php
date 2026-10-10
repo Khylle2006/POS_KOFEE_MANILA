@@ -352,7 +352,7 @@ function update_branch_store_hours(PDO $pdo, int $branch_id, array $days_data, i
         return ['ok' => true, 'changes_count' => $changes_count];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        return ['ok' => false, 'error' => $e->getMessage()];
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 

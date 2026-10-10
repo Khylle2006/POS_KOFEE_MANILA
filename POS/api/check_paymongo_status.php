@@ -11,7 +11,7 @@ if (empty($_SESSION['logged_in'])) {
 }
 
 $orderId = (int)($_GET['order_id'] ?? 0);
-$simulate = isset($_GET['simulate']) && ($_GET['simulate'] === '1' || $_GET['simulate'] === 'true');
+if (isset($_GET['simulate'])) throw new SecurityFault('SIMULATION_DISABLED', 'Payment simulation is unavailable.', 403);
 
 if ($orderId <= 0) {
     echo json_encode(['success' => false, 'error' => 'Invalid order ID']);
@@ -30,57 +30,10 @@ try {
         throw new RuntimeException('Order #' . $orderId . ' not found.');
     }
 
-    $isAlreadyPaid = ($order['payment_status'] === 'paid' || $order['status'] === 'completed');
-
-    if (!$isAlreadyPaid) {
-        $sessionId = $order['paymongo_session_id'] ?? '';
-        $paid = false;
-        $paymentId = null;
-
-        if ($simulate) {
-            $paid = true;
-            $paymentId = 'pay_sim_' . bin2hex(random_bytes(6));
-        } elseif (!empty($sessionId)) {
-            $result = paymongo_request('checkout_sessions/' . rawurlencode($sessionId));
-            if ($result['success'] && !empty($result['data']['attributes'])) {
-                $attrs = $result['data']['attributes'];
-                if (($attrs['status'] ?? '') === 'paid') {
-                    $paid = true;
-                }
-                foreach (($attrs['payments'] ?? []) as $payment) {
-                    if (($payment['attributes']['status'] ?? '') === 'paid') {
-                        $paid = true;
-                        $paymentId = $payment['id'] ?? null;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if ($paid) {
-            $pdo->beginTransaction();
-            $upd = $pdo->prepare("
-                UPDATE orders
-                SET status = 'completed',
-                    payment_status = 'paid',
-                    paymongo_payment_id = :payment_id,
-                    payment_reference = COALESCE(:ref, payment_reference, paymongo_session_id)
-                WHERE id = :id
-            ");
-            $upd->execute([
-                ':payment_id' => $paymentId,
-                ':ref'        => $paymentId ?: $sessionId,
-                ':id'         => $orderId
-            ]);
-            $pdo->commit();
-
-            $order['status'] = 'completed';
-            $order['payment_status'] = 'paid';
-            $order['payment_reference'] = $paymentId ?: $sessionId;
-        }
+    if ((int)$order['user_id'] !== (int)$_SESSION['user_id'] && !has_permission('orders.history')) {
+        throw new SecurityFault('PERMISSION_DENIED', 'Permission denied.', 403);
     }
-
-    $isFinalPaid = ($order['payment_status'] === 'paid' || $order['status'] === 'completed');
+    $isFinalPaid = $order['payment_status'] === 'paid';
 
     // Fetch full order items for receipt
     $itemsStmt = $pdo->prepare("
@@ -124,9 +77,5 @@ try {
     ]);
 
 } catch (Throwable $e) {
-    if (isset($pdo) && $pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-    error_log('check_paymongo_status error: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    safe_exception($e);
 }

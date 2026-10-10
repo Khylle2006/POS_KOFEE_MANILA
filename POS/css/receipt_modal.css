@@ -36,7 +36,7 @@
   transform: translateY(-100%);
 }
 
-.receipt-meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
+.receipt-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
 .receipt-items { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; margin-bottom: 4px; }
 .receipt-item { display: flex; align-items: center; gap: 10px; }
 .ri-thumb {

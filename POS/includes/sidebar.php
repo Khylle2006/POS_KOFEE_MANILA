@@ -111,25 +111,23 @@ $cached_badges = cache_remember($cache_key_badges, 15, function() use ($access) 
         }
         if ($access['hr_requests'] || $access['hr_leave']) {
             $c = 0;
-            try { $c += (int)$pdo->query("SELECT COUNT(*) FROM hr_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
-            try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
+            try { $c += (int)$pdo->query("SELECT COUNT(*) FROM hr_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
+            try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
             $counts['requests'] = $c;
         }
         if ($access['payroll']) {
-            try { $counts['loans'] = (int)$pdo->query("SELECT COUNT(*) FROM employee_loans WHERE status = 'pending_approval'")->fetchColumn(); } catch (Throwable $e) {}
+            try { $counts['loans'] = (int)$pdo->query("SELECT COUNT(*) FROM employee_loans WHERE status = 'pending_approval'")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
         }
         if ($access['procurement_finance_review']) {
-            try { $counts['finance_approvals'] = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
+            try { $counts['finance_approvals'] = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
         }
         if ($access['procurement_suppliers']) {
-            try { $counts['supplier_apps'] = (int)$pdo->query("SELECT COUNT(*) FROM supplier_applications WHERE status IN ('review', 'under_review')")->fetchColumn(); } catch (Throwable $e) {}
+            try { $counts['supplier_apps'] = (int)$pdo->query("SELECT COUNT(*) FROM supplier_applications WHERE status IN ('review', 'under_review')")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
         }
         if ($access['login_approvals']) {
-            try { $counts['pending_logins'] = count_pending_login_authorizations($pdo); } catch (Throwable $e) {}
+            try { $counts['pending_logins'] = count_pending_login_authorizations($pdo); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
         }
-    } catch (Throwable $e) {
-        // DB not reachable — sidebar still renders, just without counts.
-    }
+    } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
     return $counts;
 });
 
@@ -153,7 +151,7 @@ if (!empty($user['id']) && empty($user['avatar_path'])) {
             $user['avatar_path'] = $dbAv;
             $_SESSION['avatar_path'] = $dbAv;
         }
-    } catch (Throwable $e) {}
+    } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 }
 $notification_count = 0;
 $notifications = [];
@@ -161,7 +159,7 @@ try {
     $notification_count = unread_notification_count((int)$user['id']);
     $notifications = recent_notifications_detailed((int)$user['id'], 15);
 } catch (Throwable $e) {
-    error_log('sidebar notifications failed: ' . $e->getMessage());
+    error_log('sidebar notifications failed: ' . 'Service temporarily unavailable.');
 }
 
 // ── Tailwind class helpers ────────────────────────────────────
@@ -350,8 +348,8 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
       </svg>
     </div>
     <div class="kfs-loader-brand">
-      <span class="kfs-loader-title">Kofee Manila</span>
-      <span class="kfs-loader-sub">Brewing workspace…</span>
+      <span class="kfs-loader-title">BrewVanti</span>
+      <span class="kfs-loader-sub">Artisan Coffee Workspace…</span>
     </div>
     <div class="kfs-loader-bar">
       <div class="kfs-loader-bar-fill"></div>
@@ -361,11 +359,13 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 
 <!-- ── Top bar: always visible, holds the Menu toggle ── -->
 <header id="kofee-topbar" class="kfs-topbar fixed top-0 inset-x-0 h-14 z-[200] flex items-center gap-3 px-4
-               bg-[var(--espresso,#2c1a0e)] text-[var(--cream,#fbf3e9)] shadow-md">
+               bg-[linear-gradient(90deg,#181013_0%,#120A0D_50%,#0E0709_100%)]
+               border-b border-[rgba(217,186,133,0.22)]
+               text-[#FAF7F2] shadow-md">
 
     <button id="sidebar-menu-btn" onclick="toggleSidebarOrMinimize()"
         class="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-semibold
-               bg-[rgba(251,243,233,0.08)] hover:bg-[rgba(251,243,233,0.16)] transition-colors duration-150"
+               bg-[rgba(217,186,133,0.08)] hover:bg-[rgba(217,186,133,0.18)] border border-[rgba(217,186,133,0.22)] hover:border-[rgba(217,186,133,0.5)] transition-colors duration-150"
         aria-expanded="false" aria-controls="main-sidebar">
         <svg id="menu-icon-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
@@ -373,16 +373,8 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     </button>
 
     <div class="flex items-center gap-2.5 min-w-0">
-        <div class="w-8 h-8 rounded-[9px] flex items-center justify-center flex-shrink-0
-                    bg-[linear-gradient(150deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_140%)]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cream,#fbf3e9)"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z"/>
-                <path d="M17 10.5c2.5 0 2.5 4 0 4"/>
-                <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2"/>
-            </svg>
-        </div>
-        <span class="font-['Playfair_Display',serif] font-bold text-[15px] truncate">Kofee Manila</span>
+        <img src="../assets/brewvanti_logo.png" alt="BrewVanti Logo" class="kfs-topbar-logo h-8 w-auto object-contain filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] flex-shrink-0" style="height: 30px; max-height: 30px; width: auto; object-fit: contain;" onerror="this.src='../assets/brewvanti_pos_logo.svg'">
+        <span class="font-['Playfair_Display',serif] font-bold text-[16px] tracking-wide truncate text-[#FAF7F2]">BrewVanti</span>
     </div>
 
     <div class="flex-1"></div>
@@ -586,39 +578,30 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 
 <!-- ── Sidebar popover panel ── -->
 <nav id="main-sidebar" aria-label="Main navigation"
-     class="fixed top-0 left-0 h-full w-[256px] z-[230] flex flex-col
-            px-3.5 pt-4 pb-4 overflow-y-auto
-            bg-[linear-gradient(165deg,var(--espresso,#2c1a0e)_0%,var(--espresso-deep,#1c1108)_115%)]
-            text-[var(--cream,#fbf3e9)]
+     class="fixed top-0 left-0 h-full w-[280px] z-[230] flex flex-col
+            px-4 pt-4 pb-4 overflow-y-auto
+            bg-[linear-gradient(165deg,#1C1215_0%,#0E0709_115%)]
+            border-r border-[rgba(217,186,133,0.18)]
+            text-[#FAF7F2]
             transition-transform duration-300 ease-out">
 
-    <div class="kfs-sidebar-header flex items-center justify-between pb-3.5 mb-2 border-b border-[rgba(251,243,233,0.10)]">
-        <div class="flex items-center gap-2.5 min-w-0 kfs-brand-block cursor-pointer"
-             onclick="if (window.innerWidth >= 1024 && document.documentElement.classList.contains('sidebar-minimized')) toggleSidebarMinimize();">
-            <div class="w-9 h-9 rounded-[11px] flex items-center justify-center flex-shrink-0
-                        bg-[linear-gradient(150deg,var(--caramel,#c47d3e)_0%,var(--espresso-deep,#1c1108)_140%)]
-                        shadow-[0_6px_14px_-4px_rgba(201,123,61,0.6)]"
-                 title="Kofee Manila">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cream,#fbf3e9)"
-                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9z"/>
-                    <path d="M17 10.5c2.5 0 2.5 4 0 4"/>
-                    <path d="M7 3.5c-.6.8-.6 1.4 0 2.2M11 3.5c-.6.8-.6 1.4 0 2.2"/>
-                </svg>
-            </div>
-            <div class="kfs-brand-text">
-                <div class="kfs-brand-name">Kofee Manila</div>
-                <div class="kfs-brand-caption">Staff workspace</div>
-            </div>
+    <div class="kfs-sidebar-header flex items-center justify-between pb-3.5 mb-2.5 border-b border-[rgba(217,186,133,0.15)]">
+        <div class="flex items-center kfs-brand-block cursor-pointer"
+             onclick="if (window.innerWidth >= 1024 && document.documentElement.classList.contains('sidebar-minimized')) toggleSidebarMinimize();"
+             title="BrewVanti">
+            <img src="../assets/brewvanti_logo.png" alt="BrewVanti Logo"
+                 class="kfs-sidebar-logo"
+                 style="height: 38px; max-height: 38px; width: auto; object-fit: contain;"
+                 onerror="this.src='../assets/brewvanti_pos_logo.svg'">
         </div>
 
         <!-- Inner Sidebar Collapse Button (Visible when expanded, Gone when collapsed) -->
         <button type="button" id="sidebar-collapse-btn" onclick="toggleSidebarOrMinimize()"
             aria-label="Collapse sidebar" title="Collapse sidebar"
-            class="kfs-inner-collapse-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold
-                   bg-[rgba(251,243,233,0.08)] hover:bg-[rgba(251,243,233,0.16)] border border-[rgba(251,243,233,0.14)]
-                   hover:border-[rgba(230,162,92,0.4)] text-[var(--cream,#fbf3e9)] transition-all flex-shrink-0 cursor-pointer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            class="kfs-inner-collapse-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold
+                   bg-[rgba(217,186,133,0.08)] hover:bg-[rgba(217,186,133,0.18)] border border-[rgba(217,186,133,0.22)]
+                   hover:border-[rgba(217,186,133,0.5)] text-[#FAF7F2] transition-all flex-shrink-0 cursor-pointer">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M3 6h18M3 12h18M3 18h18"/>
             </svg>
             <span>Collapse</span>
@@ -996,12 +979,14 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         </div>
     </a>
 
-    <button class="kfs-logout-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
+    <form method="post" action="../auth/logout.php">
+    <?= csrf_field() ?>
+    <button type="submit" class="kfs-logout-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
                    bg-[rgba(198,40,40,0.14)] text-[#f2a9a9] hover:bg-[rgba(198,40,40,0.24)] transition-colors duration-150"
-        title="Logout"
-        onclick="window.location.href='../auth/logout.php'">
+        title="Logout">
         <?= icon('logout') ?><span>Logout</span>
     </button>
+    </form>
 </nav>
 
 <script>

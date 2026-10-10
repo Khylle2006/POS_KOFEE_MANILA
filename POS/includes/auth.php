@@ -9,6 +9,8 @@ require_once __DIR__ . '/security.php';
 secure_session_start();
 
 require_once __DIR__ . '/permissions.php';
+require_once __DIR__ . '/request_security.php';
+start_browser_security_output();
 
 // ═══════════════════════════════════════════════
 //  LOGIN FUNCTION - THIS WAS MISSING!
@@ -26,6 +28,9 @@ require_once __DIR__ . '/permissions.php';
  * Logout user - clear session
  */
 function logout_user(): void {
+    if (!empty($_SESSION['auth_handle'])) {
+        get_db()->prepare('UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = ?')->execute([hash('sha256', (string)$_SESSION['auth_handle'])]);
+    }
     $_SESSION = array();
     
     if (ini_get("session.use_cookies")) {
@@ -44,27 +49,12 @@ function logout_user(): void {
 // ═══════════════════════════════════════════════
 
 function require_login(): void {
-    if (empty($_SESSION['user_id'])) {
-        header('Location: ../auth/login.php?reason=unauthenticated');
-        exit;
-    }
-
-    try {
-        $pdo = get_db();
-        $stmt = $pdo->prepare("SELECT status FROM users WHERE id = :id");
-        $stmt->execute(['id' => $_SESSION['user_id']]);
-        $status = $stmt->fetchColumn();
-
-        if ($status === 'terminated') {
-            session_destroy();
-            header('Location: ../auth/login.php?reason=terminated');
-            exit;
-        }
-    } catch (Exception $e) {
-        session_destroy();
-        header('Location: ../auth/login.php?reason=error');
-        exit;
-    }
+    if (PHP_SAPI === 'cli') return;
+    static $validated = false;
+    if ($validated) return;
+    require_runtime_schema(get_db());
+    validate_auth_session(get_db());
+    $validated = true;
 }
 
 /**
@@ -120,7 +110,7 @@ function get_or_create_user_employee(PDO $pdo, int $userId): ?array {
         $st->execute([':id' => $newId]);
         return $st->fetch() ?: null;
     } catch (Throwable $e) {
-        error_log('get_or_create_user_employee failed: ' . $e->getMessage());
+        error_log('get_or_create_user_employee failed: ' . 'Service temporarily unavailable.');
         return null;
     }
 }
@@ -157,7 +147,7 @@ function user_is_clocked_in(): bool {
         $attendance->execute([':employee_id' => $employeeId]);
         return (bool)$attendance->fetchColumn();
     } catch (Throwable $e) {
-        error_log('Clock-in check failed: ' . $e->getMessage());
+        error_log('Clock-in check failed: ' . 'Service temporarily unavailable.');
         return false;
     }
 }
@@ -226,7 +216,7 @@ function current_user(): array {
             if ($dbAvatar) {
                 $_SESSION['avatar_path'] = $dbAvatar;
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
     }
 
     return [
@@ -330,8 +320,7 @@ function refresh_session(): void {
             }
             clear_permission_cache();
         }
-    } catch (Exception $e) {
-        // Silent fail
-    }
+    } catch (Exception $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 }
-?>
+// Every authenticated entry point passes the same boundary before handler code.
+guard_authenticated_request();

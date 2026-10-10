@@ -7,13 +7,14 @@
 Options -Indexes
 
 # 2. BLOCK DIRECT ACCESS TO SYSTEM, DEPENDENCIES & METADATA
-RedirectMatch 404 /\.git
-RedirectMatch 404 /node_modules
-RedirectMatch 404 /(package|package-lock)\.json$
-RedirectMatch 404 /vite\.config\.js$
+RedirectMatch 404 (?i)/\.git
+RedirectMatch 404 (?i)/node_modules
+RedirectMatch 404 (?i)/(package|package-lock)\.json$
+RedirectMatch 404 (?i)/vite\.config\.js$
+RedirectMatch 404 (?i)/(composer\.json|phpunit\.xml|phpcs\.xml|phpstan\.neon)$
 
 # 3. BLOCK ACCESS TO SENSITIVE EXTENSIONS
-<FilesMatch "\.(sql|env|log|md|lock|example|bak|backup)$">
+<FilesMatch "(?i)\.(sql|env|log|md|lock|example|bak|backup)$">
   Require all denied
 </FilesMatch>
 
@@ -22,5 +23,18 @@ RedirectMatch 404 /vite\.config\.js$
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "geolocation=(self), microphone=(), camera=(self)"
   Header always unset X-Powered-By
 </IfModule>
+
+# Backups and development tools are never deployment endpoints.
+RedirectMatch 404 (?i)/(scratch|tests|tools|vendor|database|dist|\.test-mysql|\.phpunit\.cache|\.phpstan\.cache)(/|$)
+<FilesMatch "(?i)\.(zip|gz|tar|7z|phar|env|ini|bak|backup)$">
+  Require all denied
+</FilesMatch>
+
+RedirectMatch 404 (?i)/\.test-[^/]*(/|$)
+
+<Files "hash.php">
+  Require all denied
+</Files>

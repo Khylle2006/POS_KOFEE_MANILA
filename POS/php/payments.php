@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/private_storage.php';
 require_once '../includes/auth.php';
 require_once '../includes/permissions.php';
 require_once '../includes/procurement_helpers.php';
@@ -47,7 +48,7 @@ function handle_payment_receipt_upload(?array $file, bool $required = true): arr
         return ['ok' => false, 'error' => 'Uploaded file mime type (' . htmlspecialchars($mime) . ') is not an allowed receipt format.'];
     }
 
-    $upload_dir = __DIR__ . '/../uploads/receipts';
+    $upload_dir = private_upload_directory('receipts');
     if (!is_dir($upload_dir)) {
         @mkdir($upload_dir, 0755, true);
     }
@@ -55,7 +56,7 @@ function handle_payment_receipt_upload(?array $file, bool $required = true): arr
     $fname = 'receipt_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
     $target = $upload_dir . '/' . $fname;
 
-    if (!move_uploaded_file($file['tmp_name'], $target)) {
+    if (!private_move_uploaded_file($file['tmp_name'], $target)) {
         return ['ok' => false, 'error' => 'Failed to save receipt file to storage.'];
     }
 
@@ -71,6 +72,12 @@ function handle_payment_receipt_upload(?array $file, bool $required = true): arr
 // ── POST actions ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+    if (in_array($action, ['complete', 'fail', 'cancel'], true)) {
+        $gateway = $pdo->prepare('SELECT paymongo_payout_id, paymongo_checkout_id FROM payments WHERE id = ?');
+        $gateway->execute([(int)($_POST['payment_id'] ?? $_POST['id'] ?? 0)]);
+        $row = $gateway->fetch();
+        if ($row && (!empty($row['paymongo_payout_id']) || !empty($row['paymongo_checkout_id']))) throw new SecurityFault('GATEWAY_RECONCILIATION_REQUIRED', 'Gateway payments require provider confirmation or reconciliation.', 409);
+    }
 
     // Action: Automated PayMongo Disbursement Payout to Supplier
     if ($action === 'paymongo_disburse') {
@@ -139,9 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $invoice_id = (int)($_POST['invoice_id'] ?? 0);
         $amount     = (float)($_POST['amount'] ?? 0);
 
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $base_url = $protocol . $host . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+        $base_url = app_url() . '/php';
         $success_url = $base_url . '/payments.php?paymongo_return=1&session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice_id;
         $cancel_url  = $base_url . '/payments.php?new_for_invoice=' . $invoice_id . '&toast=' . urlencode('Checkout session cancelled.');
 
@@ -287,7 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             exit;
                         } catch (Exception $e) {
                             if ($pdo->inTransaction()) $pdo->rollBack();
-                            $toast = $e->getMessage();
+                            $toast = 'Service temporarily unavailable.';
                             $toast_type = 'error';
                         }
                     }
@@ -428,7 +433,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $toast = 'Payment marked completed with proof of payment attached.';
                         } catch (Exception $e) {
                             if ($pdo->inTransaction()) $pdo->rollBack();
-                            $toast = $e->getMessage();
+                            $toast = 'Service temporarily unavailable.';
                             $toast_type = 'error';
                         }
                     }
@@ -467,20 +472,7 @@ if (isset($_GET['toast'])) {
     $toast_type = $_GET['type'] ?? 'success';
 }
 
-// ── PayMongo Checkout Session Return Callback ─────────────────
-if (isset($_GET['paymongo_return']) && !empty($_GET['session_id'])) {
-    require_permission('procurement.payment.process');
-    $session_id = trim($_GET['session_id']);
-    $res = verify_and_complete_paymongo_procurement_checkout($pdo, $session_id, (int)$user['id']);
-    if ($res['ok']) {
-        $toast = 'PayMongo online payment verified successfully! Proof voucher generated.';
-        header('Location: payments.php?id=' . $res['payment_id'] . '&toast=' . urlencode($toast) . '&type=success');
-        exit;
-    } else {
-        $toast = 'Failed to verify PayMongo payment: ' . ($res['error'] ?? 'Unknown error');
-        $toast_type = 'error';
-    }
-}
+if (isset($_GET['paymongo_return'])) $toast = 'Payment confirmation is pending. Refresh after the gateway callback is processed.';
 
 // ── "New payment" context ──────────────────────────────
 $new_invoice_id = (int)($_GET['new_for_invoice'] ?? 0);

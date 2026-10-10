@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#241B1E"/>
+      <stop offset="100%" stop-color="#120D10"/>
+    </radialGradient>
+
+    <!-- Champagne Gold Gradient (Top Triangle & Accents) -->
+    <linearGradient id="goldTopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCEFD5"/>
+      <stop offset="30%" stop-color="#E5C795"/>
+      <stop offset="70%" stop-color="#C79F62"/>
+      <stop offset="100%" stop-color="#9C7338"/>
+    </linearGradient>
+
+    <!-- Warm Inner Cream Gradient -->
+    <linearGradient id="creamInnerGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FCEBD2"/>
+      <stop offset="100%" stop-color="#E8CCA0"/>
+    </linearGradient>
+
+    <!-- Rich Bronze / Deep Espresso Gradient (Bottom Triangle) -->
+    <linearGradient id="bronzeBottomGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#543E33"/>
+      <stop offset="40%" stop-color="#3A2922"/>
+      <stop offset="100%" stop-color="#211612"/>
+    </linearGradient>
+
+    <!-- Drop Shadows and Glows -->
+    <filter id="luxuryShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+    <filter id="subtleGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#E5C795" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Dark Matte Background -->
+  <rect id="Background" width="800" height="800" fill="url(#bgGrad)"/>
+
+  <!-- ============================================== -->
+  <!-- LOGO EMBLEM GROUP (Geometric Hourglass / Dripper) -->
+  <!-- ============================================== -->
+  <g id="Emblem" filter="url(#luxuryShadow)">
+    
+    <!-- Top Micro Droplet Accent -->
+    <path id="TopDroplet" d="M400,105 C397,113 392,122 392,127 C392,131.4 395.6,135 400,135 C404.4,135 408,131.4 408,127 C408,122 403,113 400,105 Z" fill="url(#goldTopGrad)" filter="url(#subtleGlow)"/>
+    
+    <!-- Top Radiating Accents -->
+    <line id="TopRayLeft" x1="365" y1="122" x2="373" y2="134" stroke="url(#goldTopGrad)" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    <line id="TopRayRight" x1="435" y1="122" x2="427" y2="134" stroke="url(#goldTopGrad)" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+
+    <!-- BOTTOM TRIANGLE (Espresso & Craft Base) -->
+    <g id="BottomTriangleGroup">
+      <!-- Outer Base Triangle -->
+      <polygon id="BottomBase" points="400,325 540,490 260,490" fill="url(#bronzeBottomGrad)" stroke="#664C3E" stroke-width="2"/>
+      
+      <!-- Inner Inset Frame -->
+      <polygon id="BottomInnerFrame" points="400,345 520,480 280,480" fill="#1C1410" stroke="#3D2B22" stroke-width="3"/>
+
+      <!-- Coffee Beans & Craft Motif Inlay inside bottom triangle -->
+      <g id="BeanCenter" transform="translate(378, 415) rotate(-25)">
+        <ellipse cx="20" cy="12" rx="18" ry="11" fill="#422E24" stroke="url(#goldTopGrad)" stroke-width="1.8"/>
+        <path d="M4,12 Q20,17 36,12" fill="none" stroke="url(#goldTopGrad)" stroke-width="1.8" stroke-linecap="round"/>
+      </g>
+      <g id="BeanLeft" transform="translate(325, 435) rotate(35)">
+        <ellipse cx="16" cy="10" rx="15" ry="9" fill="#38251C" stroke="url(#goldTopGrad)" stroke-width="1.5" opacity="0.85"/>
+        <path d="M3,10 Q16,14 29,10" fill="none" stroke="url(#goldTopGrad)" stroke-width="1.5" stroke-linecap="round"/>
+      </g>
+      <g id="BeanRight" transform="translate(432, 442) rotate(-40)">
+        <ellipse cx="16" cy="10" rx="15" ry="9" fill="#38251C" stroke="url(#goldTopGrad)" stroke-width="1.5" opacity="0.85"/>
+        <path d="M3,10 Q16,14 29,10" fill="none" stroke="url(#goldTopGrad)" stroke-width="1.5" stroke-linecap="round"/>
+      </g>
+    </g>
+
+    <!-- TOP TRIANGLE (Champagne Gold Filter / Pour) -->
+    <g id="TopTriangleGroup" filter="url(#subtleGlow)">
+      <!-- Outer Solid Bevel Frame -->
+      <polygon id="TopOuterFrame" points="260,150 540,150 400,395" fill="url(#goldTopGrad)"/>
+      
+      <!-- Stepped Inner Recess -->
+      <polygon id="TopInnerRecess" points="282,165 518,165 400,370" fill="#241B1E"/>
+      
+      <!-- Core Warm Cream Inverted Triangle -->
+      <polygon id="TopCreamCore" points="305,182 495,182 400,348" fill="url(#creamInnerGrad)"/>
+
+      <!-- Intersecting Chevron Peak (Connecting both triangles) -->
+      <polygon id="InterlockingPeak" points="400,285 435,355 400,332 365,355" fill="#3A2820" stroke="url(#goldTopGrad)" stroke-width="2"/>
+    </g>
+
+    <!-- Bottom Droplet Accent -->
+    <path id="BottomDroplet" d="M400,530 C403,522 408,513 408,508 C408,503.6 404.4,500 400,500 C395.6,500 392,503.6 392,508 C392,513 397,522 400,530 Z" fill="url(#goldTopGrad)" filter="url(#subtleGlow)"/>
+    <line id="BottomRayLeft" x1="365" y1="513" x2="373" y2="501" stroke="url(#goldTopGrad)" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    <line id="BottomRayRight" x1="435" y1="513" x2="427" y2="501" stroke="url(#goldTopGrad)" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+  </g>
+
+  <!-- ============================================== -->
+  <!-- TYPOGRAPHY (Separate text nodes in Figma)       -->
+  <!-- ============================================== -->
+  <g id="BrandWordmark" text-anchor="middle">
+    <!-- Brand Title: BrewVanti -->
+    <text id="Title-BrewVanti" x="400" y="630"
+          font-family="'Playfair Display', 'Cinzel', 'Didot', 'Georgia', serif"
+          font-size="68"
+          font-weight="700"
+          letter-spacing="1.5"
+          fill="url(#goldTopGrad)"
+          filter="url(#subtleGlow)">
+      BrewVanti
+    </text>
+
+    <!-- Subtitle: ARTISAN COFFEE & BREW -->
+    <text id="Subtitle" x="400" y="675"
+          font-family="'Montserrat', 'Inter', 'Helvetica Neue', sans-serif"
+          font-size="14.5"
+          font-weight="600"
+          letter-spacing="8"
+          fill="#E5C795"
+          opacity="0.9">
+      ARTISAN COFFEE &amp; BREW
+    </text>
+  </g>
+</svg>

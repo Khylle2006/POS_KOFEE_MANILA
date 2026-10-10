@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['ok' => true]);
         } catch (PDOException $e) {
             http_response_code(500);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+            echo json_encode(['ok' => false, 'error' => 'Service temporarily unavailable.']);
         }
         exit;
     }
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['ok'=>true]);
         } catch (PDOException $e) {
             http_response_code(500);
-            echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+            echo json_encode(['ok'=>false,'error'=>'Service temporarily unavailable.']);
         }
         exit;
     }
@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['ok'=>true,'available'=>$new_stock > 0]);
         } catch (PDOException $e) {
             http_response_code(500);
-            echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+            echo json_encode(['ok'=>false,'error'=>'Service temporarily unavailable.']);
         }
         exit;
     }
@@ -167,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'message'  => '"' . $row['name'] . '" archived. It no longer appears in the POS.',
             ]);
         } catch (Throwable $e) {
-            error_log('archive product failed: ' . $e->getMessage());
+            error_log('archive product failed: ' . 'Service temporarily unavailable.');
             http_response_code(500);
             echo json_encode(['ok' => false, 'error' => 'Could not archive this item.']);
         }

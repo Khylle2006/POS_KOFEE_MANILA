@@ -201,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = $e->getMessage(); $toast_type = 'error';
+                $toast = 'Service temporarily unavailable.'; $toast_type = 'error';
                 header('Location: rfq.php?id=' . $rfq_id . '&toast=' . urlencode($toast) . '&type=error');
                 exit;
             }

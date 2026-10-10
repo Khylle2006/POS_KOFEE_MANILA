@@ -1,23 +1,26 @@
 /* Shared brand tokens. Load after screen styles to keep every entry point aligned. */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,500&family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-brand: 'Playfair Display', Georgia, serif;
-  --espresso: #241a2e;
-  --espresso-deep: #181120;
-  --espresso-mid: #33263d;
-  --caramel: #8b4513;
-  --caramel-light: #e6a25c;
-  --latte: #e5ddd4;
-  --cream: #fbf8f3;
+  --espresso: #1e1517;
+  --espresso-deep: #0d0709;
+  --espresso-mid: #2a1f22;
+  /* Dark gold retains contrast for links and white button labels on light screens. */
+  --caramel: #886125;
+  --caramel-light: #ecc98f;
+  --gold: #d9ba85;
+  --gold-bright: #ecc98f;
+  --latte: #e8dfd5;
+  --cream: #faf7f2;
   --accent: var(--caramel);
   --accent-lt: #f6ece2;
-  --bg: #f7f5f2;
+  --bg: #faf7f2;
   --card-bg: #fff;
-  --border: #e5ddd4;
-  --text-main: #2b2130;
-  --text-muted: #6d626d;
+  --border: #e8dfd5;
+  --text-main: #1e1517;
+  --text-muted: #68584b;
   --radius-sm: 10px;
   --radius: 16px;
   --radius-lg: 20px;

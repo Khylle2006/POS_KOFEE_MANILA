@@ -30,15 +30,12 @@ $tip_mode      = $settings['tip_pool_mode'] ?? 'hours';
 $auto_attend   = (int)($settings['auto_approve_attendance'] ?? 0);
 
 // PayMongo Gateway Configuration
-$pm_mode       = $settings['paymongo_mode'] ?? 'sandbox';
-$pm_secret     = $settings['paymongo_secret_key'] ?? '';
-$pm_public     = $settings['paymongo_public_key'] ?? '';
-$pm_webhook    = $settings['paymongo_webhook_secret'] ?? '';
-$pm_enabled    = ($settings['paymongo_disbursement_enabled'] ?? '1') === '1';
-
-$protocol      = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host          = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$webhook_url   = $protocol . '://' . $host . '/POS/api/paymongo_webhook.php';
+$pm_mode = payment_mode();
+$pm_secret = '';
+$pm_public = '';
+$pm_webhook = '';
+$pm_enabled = $pm_mode !== 'disabled';
+$webhook_url = app_url() . '/api/paymongo_disbursement_webhook.php';
 
 // Fetch active employees for loan creation
 $employees = $pdo->query(

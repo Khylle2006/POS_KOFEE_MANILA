@@ -175,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $toast = "Order closed successfully with supplier rating skipped.";
                         } catch (Exception $e) {
                             if ($pdo->inTransaction()) $pdo->rollBack();
-                            $toast = $e->getMessage();
+                            $toast = 'Service temporarily unavailable.';
                             $toast_type = 'error';
                         }
                     }
@@ -245,7 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $toast = "Order closed successfully — supplier evaluated at {$overall}/5.0.";
                     } catch (Exception $e) {
                         if ($pdo->inTransaction()) $pdo->rollBack();
-                        $toast = $e->getMessage();
+                        $toast = 'Service temporarily unavailable.';
                         $toast_type = 'error';
                     }
                 }

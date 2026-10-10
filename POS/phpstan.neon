@@ -1,0 +1,19 @@
+parameters:
+    level: 3
+    paths:
+        - includes/runtime.php
+        - includes/account_security.php
+        - includes/email_mfa.php
+        - includes/login_flow.php
+        - includes/request_security.php
+        - includes/order_service.php
+        - includes/payment_events.php
+        - includes/payout_service.php
+        - includes/invoice_payment_service.php
+        - includes/private_storage.php
+        - includes/private_credentials.php
+        - includes/jobs.php
+        - includes/application_tracking.php
+    scanDirectories:
+        - includes
+    tmpDir: .phpstan.cache

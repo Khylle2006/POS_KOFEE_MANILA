@@ -12,14 +12,14 @@
 }
 
 :root {
-  /* Brand (matches login.php) */
-  --espresso:       #241A2E;
-  --espresso-deep:  #181120;
-  --espresso-mid:   #2f2238;
-  --caramel:        #8B4513;
-  --caramel-light:  #A85A1E;
-  --latte:          #D8C7B5;
-  --cream:          #FBF3E9;
+  /* Brand (matches BrewVanti Gold & Espresso Theme) */
+  --espresso:       #1A1316;
+  --espresso-deep:  #110c0e;
+  --espresso-mid:   #2a1f22;
+  --caramel:        #CFA04E;
+  --caramel-light:  #FFD68A;
+  --latte:          #705E52;
+  --cream:          #FDFBF7;
 
   /* Aliases used across the app */
   --accent:      var(--caramel);
@@ -29,7 +29,7 @@
   --border:      var(--latte);
   --text-main:   #1E1224;
   --text-muted:  #52434F;
-  --sidebar-w:   248px;
+  --sidebar-w:   280px;
 
   /* Semantic status colors */
   --green: #1b5e20; --green-lt: #e8f5e9;
@@ -1398,6 +1398,307 @@ tbody tr:hover td { background: #FEFAF4; }
 }
 .swal2-timer-progress-bar {
   background: var(--caramel, #8B5E3C) !important;
+}
+
+/* ============================================================
+   Confirm Password Security Dialog Styling
+   ============================================================ */
+.kfs-confirm-dialog,
+dialog:has(input[autocomplete="current-password"]),
+dialog:has(button[data-cancel]):has(button[type="submit"]) {
+  position: fixed !important;
+  inset: auto !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: min(440px, calc(100vw - 32px)) !important;
+  max-width: 440px !important;
+  border: 1px solid #E2D4C3 !important;
+  border-radius: 20px !important;
+  background: #FFFFFF !important;
+  color: #1F1626 !important;
+  box-shadow: 0 24px 64px rgba(31, 22, 38, 0.32) !important;
+  z-index: 10002 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+.kfs-confirm-dialog:not([open]),
+dialog:has(input[autocomplete="current-password"]):not([open]),
+dialog:has(button[data-cancel]):has(button[type="submit"]):not([open]) {
+  display: none !important;
+}
+.kfs-confirm-dialog[open],
+dialog:has(input[autocomplete="current-password"])[open],
+dialog:has(button[data-cancel]):has(button[type="submit"])[open] {
+  display: block !important;
+  animation: kfs-confirm-pop 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+@keyframes kfs-confirm-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+.kfs-confirm-dialog::backdrop,
+dialog:has(input[autocomplete="current-password"])::backdrop,
+dialog:has(button[data-cancel]):has(button[type="submit"])::backdrop {
+  background: rgba(31, 22, 38, 0.6) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* Fallback for unstyled native dialog structure */
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) {
+  padding: 24px 26px !important;
+}
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) form {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+}
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) h2 {
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #1F1626 !important;
+  font-family: 'Poppins', -apple-system, sans-serif !important;
+  border-bottom: 1px solid #F3EDE6 !important;
+  padding-bottom: 12px !important;
+}
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) label {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  color: #6B7280 !important;
+}
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) input[type="password"] {
+  width: 100% !important;
+  padding: 10px 14px !important;
+  border-radius: 10px !important;
+  border: 1px solid #D1D5DB !important;
+  font-size: 13.5px !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+}
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) input[type="password"]:focus {
+  border-color: #C97B3D !important;
+  box-shadow: 0 0 0 3px rgba(201, 123, 61, 0.18) !important;
+}
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) button {
+  padding: 10px 18px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+}
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) button[data-cancel] {
+  background: #F8F5EE !important;
+  border: 1px solid #E2D4C3 !important;
+  color: #1F1626 !important;
+  margin-right: 10px !important;
+}
+dialog:has(button[data-cancel]):not(:has(.kfs-confirm-dialog-card)) button[type="submit"] {
+  background: #1F1626 !important;
+  border: 1px solid #1F1626 !important;
+  color: #FFFFFF !important;
+}
+.kfs-confirm-dialog-card {
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: #FFFFFF;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.kfs-confirm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+  background: linear-gradient(165deg, var(--espresso, #241A2E) 0%, var(--espresso-deep, #181120) 100%);
+  border-bottom: 1px solid rgba(251, 243, 233, 0.1);
+  color: var(--cream, #FBF3E9);
+}
+.kfs-confirm-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.kfs-confirm-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(251, 243, 233, 0.12);
+  border: 1px solid rgba(251, 243, 233, 0.22);
+  color: var(--caramel-light, #E6A25C);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.kfs-confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFFFFF;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.kfs-confirm-subtitle {
+  margin: 3px 0 0 0;
+  font-size: 12px;
+  color: rgba(251, 243, 233, 0.72);
+  line-height: 1.4;
+}
+.kfs-confirm-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: rgba(251, 243, 233, 0.65);
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.kfs-confirm-close-btn:hover {
+  background: rgba(251, 243, 233, 0.15);
+  color: #FFFFFF;
+}
+.kfs-confirm-form {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 24px 24px;
+}
+.kfs-confirm-field {
+  display: flex;
+  flex-direction: column;
+}
+.kfs-confirm-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #52434F;
+  margin-bottom: 8px;
+}
+.kfs-confirm-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.kfs-confirm-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 44px 0 14px;
+  border-radius: 10px;
+  border: 1.5px solid #D8C7B5;
+  font-size: 14px;
+  color: #1E1224;
+  background: #FFFFFF;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+}
+.kfs-confirm-input:focus {
+  outline: none;
+  border-color: #C97B3D;
+  box-shadow: 0 0 0 3px rgba(201, 123, 61, 0.18);
+}
+.kfs-confirm-eye-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #8B4513;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s ease;
+}
+.kfs-confirm-eye-btn:hover {
+  color: #1E1224;
+}
+.kfs-confirm-alert {
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  color: #DC2626;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin: 12px 0 0 0;
+  line-height: 1.4;
+}
+.kfs-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid #F3EDE6;
+}
+.kfs-confirm-btn-cancel {
+  height: 40px;
+  padding: 0 20px;
+  border: 1px solid #D8C7B5;
+  border-radius: 10px;
+  background: #FBF3E9;
+  color: #241A2E;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.kfs-confirm-btn-cancel:hover {
+  background: #EDE2D3;
+}
+.kfs-confirm-btn-submit {
+  height: 40px;
+  padding: 0 24px;
+  border: 1px solid #241A2E;
+  border-radius: 10px;
+  background: #241A2E;
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 14px rgba(36, 26, 46, 0.25);
+}
+.kfs-confirm-btn-submit:hover {
+  background: #382A45;
+  border-color: #382A45;
+}
+.kfs-confirm-btn-submit:focus-visible,
+.kfs-confirm-btn-cancel:focus-visible {
+  outline: 2px solid #C97B3D;
+  outline-offset: 3px;
 }
 
 

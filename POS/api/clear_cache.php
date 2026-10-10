@@ -33,7 +33,8 @@ if (!$canManage) {
     exit;
 }
 
-$action = trim($_GET['action'] ?? $_POST['action'] ?? 'stats');
+$data = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' ? $_GET : request_data();
+$action = trim($data['action'] ?? 'stats');
 
 switch ($action) {
     case 'stats':

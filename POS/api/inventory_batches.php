@@ -14,8 +14,8 @@ header('Content-Type: application/json');
 
 $pdo    = get_db();
 $user   = current_user();
-$data   = json_decode(file_get_contents('php://input'), true) ?: [];
-$action = $data['action'] ?? ($_GET['action'] ?? '');
+$data   = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' ? $_GET : request_data();
+$action = $data['action'] ?? '';
 
 try {
     // ── List batches for one ingredient ───────────
@@ -204,7 +204,7 @@ try {
     echo json_encode(['ok' => false, 'error' => 'Invalid action.']);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    error_log('inventory_batches error: ' . $e->getMessage());
+    error_log('inventory_batches error: ' . 'Service temporarily unavailable.');
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Server error while updating batch.']);
 }

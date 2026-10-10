@@ -25,6 +25,8 @@ if ($token === '' || !preg_match('/^[a-f0-9]{64}$/i', $token)) {
     exit;
 }
 
+require_pending_approval($token);
+
 try {
     $pdo = get_db();
     $auth = get_login_authorization_by_token($pdo, $token);
@@ -45,23 +47,8 @@ try {
     }
 
     if ($auth['status'] === 'approved') {
-        // If session not yet created on this browser, establish it now
-        if ((int)$auth['session_created'] === 0) {
-            $userStmt = $pdo->prepare('SELECT id, username, firstname, lastname, email, role, status, avatar_path FROM users WHERE id = :id LIMIT 1');
-            $userStmt->execute([':id' => $auth['user_id']]);
-            $user = $userStmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($user && $user['status'] === 'active') {
-                establish_user_session($pdo, $user);
-                $pdo->prepare("UPDATE login_authorizations SET session_created = 1 WHERE id = :id")->execute([':id' => $auth['id']]);
-            } else {
-                echo json_encode([
-                    'ok'     => false,
-                    'status' => 'rejected',
-                    'error'  => 'Account is no longer active.'
-                ]);
-                exit;
-            }
+        if (!consume_login_approval($pdo, $token)) {
+            throw new SecurityFault('APPROVAL_EXPIRED', 'Please sign in again.', 401);
         }
 
         echo json_encode([
@@ -115,7 +102,7 @@ try {
         'distance'      => $auth['distance_meters'],
     ]);
 } catch (Throwable $e) {
-    error_log('check_login_status error: ' . $e->getMessage());
+    error_log('check_login_status error: ' . 'Service temporarily unavailable.');
     echo json_encode([
         'ok'     => false,
         'status' => 'error',

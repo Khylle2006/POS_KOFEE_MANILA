@@ -6,6 +6,7 @@
 // ==============================================================================
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/account_security.php';
 require_once __DIR__ . '/security.php';
 if (file_exists(__DIR__ . '/notify.php')) {
     require_once __DIR__ . '/notify.php';
@@ -15,118 +16,7 @@ if (file_exists(__DIR__ . '/notify.php')) {
  * Ensure database tables for Login Geolocation & HR Authorizations exist.
  */
 function ensure_login_approval_tables(PDO $pdo): void {
-    // 1. Authorizations Queue Table
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS `login_authorizations` (
-            `id` int(11) NOT NULL AUTO_INCREMENT,
-            `user_id` int(11) NOT NULL,
-            `username` varchar(60) NOT NULL,
-            `auth_token` varchar(64) NOT NULL,
-            `status` enum('pending','approved','rejected','expired','cancelled') NOT NULL DEFAULT 'pending',
-            `ip_address` varchar(45) NOT NULL,
-            `user_agent` text DEFAULT NULL,
-            `device_info` varchar(150) DEFAULT NULL,
-            `device_hash` varchar(64) DEFAULT NULL,
-            `latitude` decimal(10,7) DEFAULT NULL,
-            `longitude` decimal(10,7) DEFAULT NULL,
-            `accuracy_meters` decimal(8,2) DEFAULT NULL,
-            `location_status` varchar(50) DEFAULT 'success',
-            `location_name` varchar(255) DEFAULT NULL,
-            `distance_meters` decimal(10,2) DEFAULT NULL,
-            `rejection_reason` varchar(255) DEFAULT NULL,
-            `approved_by` int(11) DEFAULT NULL,
-            `approved_at` datetime DEFAULT NULL,
-            `rejected_by` int(11) DEFAULT NULL,
-            `rejected_at` datetime DEFAULT NULL,
-            `session_created` tinyint(1) NOT NULL DEFAULT 0,
-            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-            `expires_at` datetime NOT NULL,
-            PRIMARY KEY (`id`),
-            UNIQUE KEY `uk_auth_token` (`auth_token`),
-            KEY `idx_user_status` (`user_id`, `status`),
-            KEY `idx_created` (`created_at`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ");
-
-    // 2. Settings Table
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS `login_approval_settings` (
-            `setting_key` varchar(60) NOT NULL,
-            `setting_value` text DEFAULT NULL,
-            PRIMARY KEY (`setting_key`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ");
-
-    // 3. Trusted Devices Table
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS `trusted_login_devices` (
-            `id` int(11) NOT NULL AUTO_INCREMENT,
-            `user_id` int(11) NOT NULL,
-            `device_hash` varchar(64) NOT NULL,
-            `device_name` varchar(150) NOT NULL,
-            `ip_address` varchar(45) NOT NULL,
-            `trusted_by` int(11) NOT NULL,
-            `expires_at` datetime NOT NULL,
-            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-            PRIMARY KEY (`id`),
-            KEY `idx_user_dev` (`user_id`, `device_hash`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ");
-
-    // Seed default settings if empty
-    $seedDefaults = [
-        'require_approval_enabled'     => '1',
-        'exempt_roles'                 => 'admin,hr',
-        'store_name'                   => 'Kofee Manila (Main Store)',
-        'store_latitude'               => '14.3294000',
-        'store_longitude'              => '120.9367000',
-        'store_geofence_radius_meters' => '200',
-        'auto_approve_within_geofence' => '0',
-    ];
-
-    $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM login_approval_settings WHERE setting_key = :k");
-    $insertStmt = $pdo->prepare("INSERT INTO login_approval_settings (setting_key, setting_value) VALUES (:k, :v)");
-
-    foreach ($seedDefaults as $k => $v) {
-        $checkStmt->execute([':k' => $k]);
-        if ((int)$checkStmt->fetchColumn() === 0) {
-            $insertStmt->execute([':k' => $k, ':v' => $v]);
-        }
-    }
-
-    // 4. Ensure login_approval.manage permission exists in RBAC tables
-    try {
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS `permissions` (
-                `perm_key` varchar(64) NOT NULL,
-                `label` varchar(100) NOT NULL,
-                `category` varchar(50) NOT NULL,
-                `description` text DEFAULT NULL,
-                PRIMARY KEY (`perm_key`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        ");
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS `role_permissions` (
-                `role` varchar(30) NOT NULL,
-                `perm_key` varchar(64) NOT NULL,
-                PRIMARY KEY (`role`, `perm_key`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        ");
-
-        $permCheck = $pdo->prepare("SELECT COUNT(*) FROM permissions WHERE perm_key = 'login_approval.manage'");
-        $permCheck->execute();
-        if ((int)$permCheck->fetchColumn() === 0) {
-            $pdo->prepare("
-                INSERT INTO permissions (perm_key, label, category, description)
-                VALUES ('login_approval.manage', 'Login Approvals & Geolocation', 'HR & Staff', 'Review, approve, or reject staff login authorization requests and configure store geofence settings')
-            ")->execute();
-        }
-
-        // Grant to Admin role by default if not yet granted
-        $pdo->prepare("INSERT IGNORE INTO role_permissions (role, perm_key) VALUES ('admin', 'login_approval.manage')")->execute();
-    } catch (Throwable $e) {
-        error_log('ensure_login_approval_tables permission check warning: ' . $e->getMessage());
-    }
+    require_runtime_schema(get_db());
 }
 
 /**
@@ -141,10 +31,43 @@ function get_login_approval_settings(PDO $pdo): array {
         'enabled'              => ($raw['require_approval_enabled'] ?? '1') === '1',
         'exempt_roles'         => array_filter(array_map('trim', explode(',', strtolower($raw['exempt_roles'] ?? 'admin,hr')))),
         'store_name'           => $raw['store_name'] ?? 'Kofee Manila (Main Store)',
-        'store_lat'            => !empty($raw['store_latitude']) ? (float)$raw['store_latitude'] : 14.3294,
-        'store_lon'            => !empty($raw['store_longitude']) ? (float)$raw['store_longitude'] : 120.9367,
+        'store_lat'            => isset($raw['store_latitude']) && is_numeric($raw['store_latitude']) ? (float)$raw['store_latitude'] : 14.3294,
+        'store_lon'            => isset($raw['store_longitude']) && is_numeric($raw['store_longitude']) ? (float)$raw['store_longitude'] : 120.9367,
         'geofence_radius'      => !empty($raw['store_geofence_radius_meters']) ? (float)$raw['store_geofence_radius_meters'] : 200.0,
         'auto_approve_in_zone' => ($raw['auto_approve_within_geofence'] ?? '0') === '1',
+    ];
+}
+
+/** Validate settings before any writes; role keys come from the current role catalog. */
+function validate_login_approval_settings(array $input, array $availableRoles): array {
+    $name = $input['store_name'] ?? '';
+    if (!is_string($name) || trim($name) === '' || mb_strlen(trim($name)) > 120) {
+        throw new InvalidArgumentException('Enter a store name of up to 120 characters.');
+    }
+    $numbers = [];
+    foreach (['store_latitude' => [-90, 90], 'store_longitude' => [-180, 180], 'store_geofence_radius_meters' => [20, 10000]] as $key => [$min, $max]) {
+        $value = $input[$key] ?? '';
+        if (!is_scalar($value) || !is_numeric($value) || !is_finite((float)$value) || (float)$value < $min || (float)$value > $max) {
+            throw new InvalidArgumentException('Enter valid coordinates (latitude -90 to 90, longitude -180 to 180) and a radius of 20 to 10,000 meters.');
+        }
+        $numbers[$key] = (string)(float)$value;
+    }
+    $roles = $input['exempt_roles'] ?? [];
+    $knownRoles = array_column($availableRoles, 'role_key');
+    if (!is_array($roles)) {
+        throw new InvalidArgumentException('Choose bypass roles from the existing role list.');
+    }
+    foreach ($roles as $role) {
+        if (!is_string($role) || !in_array($role, $knownRoles, true)) {
+            throw new InvalidArgumentException('Choose bypass roles from the existing role list.');
+        }
+    }
+    return $numbers + [
+        'store_name' => trim($name),
+        'require_approval_enabled' => isset($input['require_approval_enabled']) ? '1' : '0',
+        // Browser coordinates remain review context, never a device-trust credential.
+        'auto_approve_within_geofence' => '0',
+        'exempt_roles' => implode(',', array_unique($roles)),
     ];
 }
 
@@ -159,8 +82,20 @@ function save_login_approval_settings(PDO $pdo, array $settings): void {
         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
     ");
 
-    foreach ($settings as $k => $v) {
-        $stmt->execute([':k' => $k, ':v' => (string)$v]);
+    $pdo->beginTransaction();
+    try {
+        foreach ($settings as $k => $v) {
+            $stmt->execute([':k' => $k, ':v' => (string)$v]);
+        }
+        security_audit($pdo, 'login_approval_settings_changed', 'login_approval_settings', null, [
+            'decision' => ($settings['require_approval_enabled'] ?? '1') === '1' ? 'enabled' : 'disabled',
+        ]);
+        $pdo->commit();
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $error;
     }
 }
 
@@ -184,35 +119,20 @@ function calculate_geodistance_meters(float $lat1, float $lon1, float $lat2, flo
  * Check if user role requires HR authorization before logging in.
  */
 function does_user_require_login_approval(PDO $pdo, array $user): bool {
-    $cfg = get_login_approval_settings($pdo);
-    if (!$cfg['enabled']) {
+    $settings = get_login_approval_settings($pdo);
+    if (!$settings['enabled']) {
         return false;
     }
-
-    $userRoles = $user['roles'] ?? [$user['role'] ?? 'crew'];
-    foreach ($userRoles as $r) {
-        if (in_array(strtolower(trim($r)), $cfg['exempt_roles'], true)) {
-            return false;
-        }
-    }
-
-    return true;
+    $roles = $user['roles'] ?? [];
+    $roles[] = $user['role'] ?? '';
+    return array_intersect($roles, $settings['exempt_roles']) === [];
 }
 
 /**
  * Check if this device fingerprint was previously trusted and not yet expired.
  */
 function is_device_trusted(PDO $pdo, int $userId, string $deviceHash): bool {
-    if ($deviceHash === '') return false;
-    ensure_login_approval_tables($pdo);
-
-    $stmt = $pdo->prepare("
-        SELECT id FROM trusted_login_devices
-        WHERE user_id = :uid AND device_hash = :hash AND expires_at > NOW()
-        LIMIT 1
-    ");
-    $stmt->execute([':uid' => $userId, ':hash' => $deviceHash]);
-    return (bool)$stmt->fetchColumn();
+    return trusted_device($pdo, $userId);
 }
 
 /**
@@ -281,11 +201,8 @@ function create_login_authorization(
         $locationName = "Location Unavailable (IP: {$ip})";
     }
 
-    // Check if auto-approved by store geofence
+    // Browser coordinates provide context for HR, never an authentication factor.
     $initialStatus = 'pending';
-    if ($cfg['auto_approve_in_zone'] && $distanceMeters !== null && $distanceMeters <= $cfg['geofence_radius']) {
-        $initialStatus = 'approved';
-    }
 
     $expiresAt = date('Y-m-d H:i:s', time() + (30 * 60)); // 30 minutes validity
 
@@ -362,41 +279,38 @@ function get_login_authorization_by_token(PDO $pdo, string $token): ?array {
  */
 function approve_login_authorization(PDO $pdo, int $authId, int $reviewerId, int $trustDays = 0): array {
     ensure_login_approval_tables($pdo);
-
+    $pdo->beginTransaction();
+    try {
     $stmt = $pdo->prepare("SELECT * FROM login_authorizations WHERE id = :id FOR UPDATE");
     $stmt->execute([':id' => $authId]);
     $auth = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$auth) {
+        $pdo->rollBack();
         return ['ok' => false, 'error' => 'Login authorization record not found.'];
     }
     if ($auth['status'] !== 'pending') {
+        $pdo->rollBack();
         return ['ok' => false, 'error' => "This login request is already {$auth['status']}."];
     }
 
-    $pdo->prepare("
+    $update = $pdo->prepare("
         UPDATE login_authorizations
         SET status = 'approved',
             approved_by = :uid,
             approved_at = NOW()
-        WHERE id = :id
-    ")->execute([':uid' => $reviewerId, ':id' => $authId]);
-
-    // Optional: Trust this device for X days
-    if ($trustDays > 0 && !empty($auth['device_hash'])) {
-        $exp = date('Y-m-d H:i:s', time() + ($trustDays * 86400));
-        $pdo->prepare("
-            INSERT INTO trusted_login_devices (user_id, device_hash, device_name, ip_address, trusted_by, expires_at)
-            VALUES (:uid, :hash, :dev, :ip, :by, :exp)
-        ")->execute([
-            ':uid'  => $auth['user_id'],
-            ':hash' => $auth['device_hash'],
-            ':dev'  => $auth['device_info'] ?: 'Trusted Device',
-            ':ip'   => $auth['ip_address'],
-            ':by'   => $reviewerId,
-            ':exp'  => $exp,
-        ]);
+        WHERE id = :id AND status = 'pending' AND expires_at > NOW()
+    ");
+    $update->execute([':uid' => $reviewerId, ':id' => $authId]);
+    if ($update->rowCount() !== 1) throw new SecurityFault('LOGIN_APPROVAL_EXPIRED', 'Login request has expired.', 409);
+    security_audit($pdo, 'device_login_approved', 'login_authorization', $authId, ['decision' => 'approved']);
+    $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $exception;
     }
+
+    // Trust is issued only to the browser that consumes this approved request.
 
     // Send confirmation notification to the employee
     notify_user(
@@ -415,28 +329,39 @@ function approve_login_authorization(PDO $pdo, int $authId, int $reviewerId, int
  */
 function reject_login_authorization(PDO $pdo, int $authId, int $reviewerId, string $reason): array {
     ensure_login_approval_tables($pdo);
-
+    $pdo->beginTransaction();
+    try {
     $stmt = $pdo->prepare("SELECT * FROM login_authorizations WHERE id = :id FOR UPDATE");
     $stmt->execute([':id' => $authId]);
     $auth = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$auth) {
+        $pdo->rollBack();
         return ['ok' => false, 'error' => 'Login authorization record not found.'];
     }
     if ($auth['status'] !== 'pending') {
+        $pdo->rollBack();
         return ['ok' => false, 'error' => "This login request is already {$auth['status']}."];
     }
 
     $reason = trim($reason) ?: 'Location or device not authorized by HR.';
 
-    $pdo->prepare("
+    $update = $pdo->prepare("
         UPDATE login_authorizations
         SET status = 'rejected',
             rejection_reason = :reason,
             rejected_by = :uid,
             rejected_at = NOW()
-        WHERE id = :id
-    ")->execute([':reason' => $reason, ':uid' => $reviewerId, ':id' => $authId]);
+        WHERE id = :id AND status = 'pending' AND expires_at > NOW()
+    ");
+    $update->execute([':reason' => $reason, ':uid' => $reviewerId, ':id' => $authId]);
+    if ($update->rowCount() !== 1) throw new SecurityFault('LOGIN_APPROVAL_EXPIRED', 'Login request has expired.', 409);
+    security_audit($pdo, 'device_login_rejected', 'login_authorization', $authId, ['decision' => 'rejected']);
+    $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $exception;
+    }
 
     notify_user(
         (int)$auth['user_id'],
@@ -532,9 +457,11 @@ function establish_user_session(PDO $pdo, array $user): void {
         $all_roles = $role_stmt->fetchAll(PDO::FETCH_COLUMN);
         $_SESSION['roles'] = $all_roles ?: [$user['role']];
     } catch (PDOException $e) {
-        error_log('role load failed: ' . $e->getMessage());
-        $_SESSION['roles'] = [$user['role']];
+        $_SESSION = [];
+        throw new SecurityFault('AUTHORIZATION_UNAVAILABLE', 'Sign-in is unavailable.', 503);
     }
+
+    register_auth_session($pdo, (int)$user['id']);
 
     $_SESSION['permissions']        = null;
     $_SESSION['permissions_loaded'] = 0;
@@ -543,6 +470,6 @@ function establish_user_session(PDO $pdo, array $user): void {
         $pdo->prepare('UPDATE users SET last_login = NOW() WHERE id = :id')
             ->execute([':id' => $user['id']]);
     } catch (PDOException $e) {
-        error_log('last_login update failed: ' . $e->getMessage());
+        error_log('last_login update failed: ' . 'Service temporarily unavailable.');
     }
 }

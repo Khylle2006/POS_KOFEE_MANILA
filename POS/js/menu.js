@@ -121,7 +121,7 @@ async function loadMenu() {
 }
 document.addEventListener('DOMContentLoaded', loadMenu);
 
-let currentCat  = "ice-coffee";
+let currentCat  = "all";
 let currentSize = "small";
 let orderItems  = [];
 let orderType   = "dine";
@@ -190,7 +190,7 @@ function renderGrid() {
 
     // Searching looks across every category so staff can find a drink
     // without first guessing which tab it lives under.
-    const pool = searchTerm
+    const pool = (currentCat === 'all' || searchTerm)
         ? Object.values(menuData).flat()
         : (menuData[currentCat] || []);
 
@@ -213,19 +213,44 @@ function renderGrid() {
     }
 
     grid.innerHTML = items.map(item => {
-        const price   = currentSize === 'small' ? item.priceSmall : item.priceLarge;
-        const soldOut = item.stock <= 0;
+        const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
+        const soldOut  = item.stock <= 0;
+        const sizeTag  = currentSize === 'small' ? '16oz Regular' : '22oz Up Size';
+        const badgeTag = soldOut ? 'Sold Out' : 'Signature Roast';
         return `
-        <button type="button" class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? 'disabled' : `onclick="addToOrder(${item.id})"`} aria-label="${escapeHtml(item.name)}, ${currentSize === 'small' ? 'regular 16 ounces' : 'large 22 ounces'}, ${soldOut ? 'sold out' : `₱${price.toFixed(2)}. Add to order`}">
+        <button type="button" class="menu-card${soldOut ? ' sold-out' : ''}" onclick="addToOrder(${item.id})" aria-label="${escapeHtml(item.name)}, ${currentSize === 'small' ? 'regular 16 ounces' : 'large 22 ounces'}, ${soldOut ? 'sold out. Show availability notice' : `₱${price.toFixed(2)}. Add to order`}">
+            <span class="card-gloss-sheen" aria-hidden="true"></span>
+            <span class="card-badge${soldOut ? ' sold' : ''}">• ${escapeHtml(badgeTag)}</span>
             <span class="item-img">
                 <img src="${escapeHtml(item.imageSrc)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
             </span>
             <span class="item-name">${escapeHtml(item.name)}</span>
+            <span class="item-meta">${sizeTag} &bull; Handcrafted</span>
+            <span class="item-card-footer">
             ${soldOut
                 ? `<span class="item-soldout">Sold out</span>`
                 : `<span class="item-price">₱${parseFloat(price).toFixed(2)}</span>`}
+            ${soldOut ? '' : '<span class="add-cart-chip" aria-hidden="true">+ Add</span>'}
+            </span>
         </button>`;
     }).join('');
+
+    initTilt();
+}
+
+function initTilt() {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || window.matchMedia?.('(pointer: coarse)').matches) return;
+    document.querySelectorAll('.menu-card:not(.sold-out)').forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width - 0.5;
+            const y = (e.clientY - rect.top) / rect.height - 0.5;
+            card.style.transform = `perspective(700px) rotateX(${(-y * 10).toFixed(2)}deg) rotateY(${(x * 10).toFixed(2)}deg) translateY(-8px)`;
+        });
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = '';
+        });
+    });
 }
 
 function escapeHtml(str) {
@@ -250,37 +275,61 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
+async function checkCartAddition(itemId, size) {
+    const items = orderItems.map(item => ({ id: item.id, size: item.size, qty: item.qty }));
+    const existing = items.find(item => item.id === itemId && item.size === size);
+    if (existing) existing.qty++;
+    else items.push({ id: itemId, size, qty: 1 });
+    const res = await fetch('../api/cart_stock.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deduct', items })
+    });
+    const data = await res.json();
+    if (res.ok === false && data.success === true) {
+        throw new Error('Inventory check failed.');
+    }
+    return data;
+}
+
+function showStockWarning(itemName, detail = '') {
+    Swal.fire({
+        title: 'Not enough stock',
+        text: `${itemName} cannot be added to checkout because there is not enough stock for this order.${detail ? ` ${detail}` : ''}`,
+        icon: 'warning',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#886125'
+    });
+}
+
+function showCartRejection(itemName, data) {
+    if (data.code === 'STOCK_INSUFFICIENT' || !data.code) {
+        showStockWarning(itemName, data.error || '');
+    } else {
+        showSimpleError(data.error || 'Unable to check inventory. Please try again.');
+    }
+}
+
 async function addToOrder(itemId) {
     if (cartBusy) return;
     const item = Object.values(menuData).flat().find(i => i.id == itemId);
     if (!item) { console.error("Item not found:", itemId); return; }
-    if (item.stock <= 0) return;
+    if (item.stock <= 0) {
+        showStockWarning(item.name);
+        return;
+    }
+    const size = currentSize;
 
     cartBusy = true;
     try {
-        const res = await fetch('../api/cart_stock.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'deduct',
-                product_id: itemId,
-                size: currentSize,
-                qty: 1
-            })
-        });
-        const data = await res.json();
+        const data = await checkCartAddition(item.id, size);
         if (!data.success) {
-            Swal.fire({
-                title: "Out of Stock!",
-                text: data.error || "Cannot add item due to insufficient ingredients in storage.",
-                icon: "warning",
-                confirmButtonColor: '#C97B3D'
-            });
+            showCartRejection(item.name, data);
             return;
         }
 
-        const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
-        const key      = itemId + '_' + currentSize;
+        const price    = size === 'small' ? item.priceSmall : item.priceLarge;
+        const key      = item.id + '_' + size;
         const existing = orderItems.find(o => o.key === key);
 
         if (existing) {
@@ -288,10 +337,10 @@ async function addToOrder(itemId) {
         } else {
             orderItems.push({
                 key,
-                id:       itemId,
+                id:       item.id,
                 name:     item.name,
                 imageSrc: item.imageSrc,
-                size:     currentSize,
+                size,
                 price:    parseFloat(price),
                 qty:      1
             });
@@ -332,7 +381,7 @@ function renderOrder() {
             </div>
             <div class="oi-info">
                 <div class="oi-name">${escapeHtml(o.name)}</div>
-                <div class="oi-size">${o.size === 'small' ? 'Regular · 16oz' : 'Large · 22oz'}</div>
+                <div class="oi-size">${o.size === 'small' ? '16oz Regular' : '22oz Up Size'}</div>
             </div>
             <div class="oi-controls">
                 <button class="qty-btn" aria-label="Decrease quantity of ${escapeHtml(o.name)}" onclick="changeQty(${i}, -1)">−</button>
@@ -354,24 +403,9 @@ async function changeQty(index, delta) {
     cartBusy = true;
     try {
         if (delta > 0) {
-            const res = await fetch('../api/cart_stock.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'deduct',
-                    product_id: item.id,
-                    size: item.size,
-                    qty: 1
-                })
-            });
-            const data = await res.json();
+            const data = await checkCartAddition(item.id, item.size);
             if (!data.success) {
-                Swal.fire({
-                    title: "Out of Stock!",
-                    text: data.error || "Cannot add more due to shortage in storage.",
-                    icon: "warning",
-                    confirmButtonColor: '#C97B3D'
-                });
+                showCartRejection(item.name, data);
                 return;
             }
             item.qty += 1;
@@ -397,6 +431,7 @@ async function changeQty(index, delta) {
         renderOrder();
     } catch (err) {
         console.error("Cart stock change error:", err);
+        showSimpleError('Unable to check inventory. Please try again.');
     } finally {
         cartBusy = false;
     }
@@ -752,6 +787,10 @@ async function startPayMongoSession() {
 
         payMongoOrderId = data.order_id;
         const checkoutUrl = data.checkout_url;
+        if (!checkoutUrl) {
+            showSimpleError('Checkout outcome is pending reconciliation. Do not submit another payment. Order #' + data.order_id);
+            return;
+        }
 
         // Render QR Code using reliable SVG/PNG QR Generator
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=6&data=${encodeURIComponent(checkoutUrl)}`;
@@ -768,7 +807,7 @@ async function startPayMongoSession() {
         // Show demo simulation button if in demo or dev environment
         const demoBox = document.getElementById('pm-demo-actions');
         if (demoBox) {
-            demoBox.style.display = (data.is_demo || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'block' : 'none';
+            demoBox.style.display = data.is_demo ? 'block' : 'none';
         }
 
         selectPaymentMethod('paymongo');
@@ -826,7 +865,8 @@ function startPayMongoPolling(orderId) {
                     paidOrder.items || pendingCheckout?.snapshot,
                     {
                         method: 'PayMongo QR (GCash/Maya/Card)',
-                        reference: paidOrder.payment_reference || ('PM-' + orderId)
+                        reference: paidOrder.payment_reference || ('PM-' + orderId),
+                        orderTime: paidOrder.placed_at || paidOrder.created_at
                     }
                 );
             }
@@ -862,7 +902,8 @@ function checkPayMongoStatusManual() {
                     o.items || pendingCheckout?.snapshot,
                     {
                         method: 'PayMongo QR',
-                        reference: o.payment_reference || ('PM-' + payMongoOrderId)
+                        reference: o.payment_reference || ('PM-' + payMongoOrderId),
+                        orderTime: o.placed_at || o.created_at
                     }
                 );
             } else {
@@ -875,37 +916,10 @@ function checkPayMongoStatusManual() {
 }
 
 function simulatePayMongoPayment() {
-    if (!payMongoOrderId) return;
-    const statusText = document.getElementById('pm-status-text');
-    if (statusText) statusText.textContent = 'Simulating customer payment...';
-
-    fetch(`../api/check_paymongo_status.php?order_id=${encodeURIComponent(payMongoOrderId)}&simulate=1`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.success && data.paid) {
-                if (payMongoPollTimer) clearInterval(payMongoPollTimer);
-                orderSubmitted = true;
-                closeConfirmOrder(false);
-                const o = data.order || {};
-                showReceipt(
-                    o.id || payMongoOrderId,
-                    o.total ? (o.total / 1.12) : pendingCheckout?.subtotal,
-                    o.total ? (o.total - (o.total / 1.12)) : pendingCheckout?.vat,
-                    o.total || pendingCheckout?.total,
-                    o.items || pendingCheckout?.snapshot,
-                    {
-                        method: 'PayMongo QR (Demo Simulated)',
-                        reference: o.payment_reference || ('DEMO-' + payMongoOrderId)
-                    }
-                );
-            } else {
-                showSimpleError(data.error || 'Failed to simulate payment.');
-            }
-        })
-        .catch(err => showSimpleError(err.message));
+    const link = document.getElementById('pm-ext-link');
+    if (link?.href && link.href.includes('/php/demo_checkout.php')) window.open(link.href, '_blank', 'noopener');
 }
 
-// ── Submit Confirmed Order ────────────────────
 async function submitConfirmedOrder() {
     if (!pendingCheckout) return;
 
@@ -1002,7 +1016,7 @@ async function submitConfirmedOrder() {
         try {
             data = JSON.parse(text);
         } catch (parseErr) {
-            console.error('Server raw output:', text);
+            console.error('Checkout returned an invalid response.');
             throw new Error('Server returned an invalid response.');
         }
 
@@ -1019,7 +1033,8 @@ async function submitConfirmedOrder() {
             method: selectedPaymentMethod === 'cash' ? 'Cash' : (selectedPaymentMethod === 'ewallet' ? currentWalletVendor : 'Card POS'),
             tendered,
             change,
-            reference: paymentRef
+            reference: paymentRef,
+            orderTime: data.placed_at || data.created_at
         });
 
     } catch (err) {
@@ -1047,6 +1062,19 @@ function showSimpleError(message) {
 }
 
 // ── Receipt Modal ─────────────────────────────
+function formatReceiptOrderTime(value) {
+    if (!value) return 'Unavailable';
+    // Database DATETIME values use the store's UTC+8 timezone.
+    const timestamp = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+        ? value.replace(' ', 'T') + '+08:00' : value;
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return 'Unavailable';
+    return date.toLocaleString('en-PH', {
+        timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+    });
+}
+
 function showReceipt(orderId, subtotal, vat, total, items, paymentInfo = {}) {
     const typeLabels = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
 
@@ -1056,13 +1084,8 @@ function showReceipt(orderId, subtotal, vat, total, items, paymentInfo = {}) {
     const typeEl = document.getElementById('r-type');
     if (typeEl) typeEl.textContent = typeLabels[orderType] || 'Dine In';
 
-    const now = new Date();
-    const timeStr = now.toLocaleString('en-PH', {
-        month: 'short', day: 'numeric',
-        hour: 'numeric', minute: '2-digit', hour12: true
-    });
     const dateEl = document.getElementById('r-time');
-    if (dateEl) dateEl.textContent = timeStr;
+    if (dateEl) dateEl.textContent = formatReceiptOrderTime(paymentInfo.orderTime);
 
     // Itemized receipt rows
     const itemsContainer = document.getElementById('r-items');
@@ -1154,7 +1177,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         o.items || [],
                         {
                             method: 'PayMongo QR',
-                            reference: o.payment_reference || ('PM-' + orderId)
+                            reference: o.payment_reference || ('PM-' + orderId),
+                            orderTime: o.placed_at || o.created_at
                         }
                     );
                     // Clean URL query params without reloading

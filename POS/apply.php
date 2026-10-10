@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/includes/request_security.php';
+secure_session_start();
+send_security_headers();
+start_browser_security_output();
 // ─────────────────────────────────────────────────────────────
 //  Kofee Manila — Job Application Form
 // ─────────────────────────────────────────────────────────────
@@ -69,6 +73,7 @@ if (!$job) {
         <nav class="km-nav-links">
           <a href="index.html" class="km-nav-link">Home</a>
           <a href="careers.php" class="km-nav-link active">Careers</a>
+          <a href="supplier_partnership.php" class="km-nav-link">Suppliers</a>
           <a href="index.html#about" class="km-nav-link">About Us</a>
         </nav>
 
@@ -453,7 +458,7 @@ if (!$job) {
             Copy
           </button>
         </div>
-        <p id="submittedEmailNote" style="font-size: 11.5px; color: var(--km-text-faint); margin-top: 8px;">Save this code to track your application stage at any time.</p>
+        <p id="submittedEmailNote" style="font-size: 11.5px; color: var(--km-text-faint); margin-top: 8px;">Check your registered email for a private application status link.</p>
       </div>
 
       <div style="display: flex; gap: 12px; justify-content: center;">
@@ -475,10 +480,10 @@ if (!$job) {
       </div>
 
       <div style="margin-bottom: 18px;">
-        <label class="km-form-label" for="trackQueryInput" style="margin-bottom: 6px; display: block;">Application Code or Email</label>
+        <label class="km-form-label" for="trackQueryInput" style="margin-bottom: 6px; display: block;">Registered email</label>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="trackQueryInput" class="km-form-input" placeholder="e.g. KM-2026-BAR-1234" autocomplete="off">
-          <button type="button" class="km-submit-btn" id="trackSubmitBtn" onclick="queryTrackStatus()">Check</button>
+          <input type="text" id="trackQueryInput" class="km-form-input" placeholder="you@example.com" autocomplete="off">
+          <button type="button" class="km-submit-btn" id="trackSubmitBtn" onclick="queryTrackStatus()">Email link</button>
         </div>
       </div>
 
@@ -638,9 +643,9 @@ if (!$job) {
         lastTrackingCode = result.tracking_code;
         document.getElementById('submittedCodeText').innerText = result.tracking_code;
         const emailNote = document.getElementById('submittedEmailNote');
-        emailNote.innerText = result.email_sent
-          ? 'A confirmation and tracking link were sent to your email address.'
-          : 'Your application was saved, but the confirmation email could not be sent. Please save the tracking code above.';
+        emailNote.innerText = result.email_queued
+          ? 'A private tracking link has been queued for delivery to your email address.'
+          : 'Your application was saved, but the private link will be emailed. Contact the store if it does not arrive.';
         document.getElementById('successModalBackdrop').classList.add('open');
         appForm.reset();
         removeSelectedFile();
@@ -698,83 +703,17 @@ if (!$job) {
 
     // Application Tracking Lookup
     async function queryTrackStatus() {
-      const q = document.getElementById('trackQueryInput').value.trim();
-      const resArea = document.getElementById('trackResultArea');
-      const trackBtn = document.getElementById('trackSubmitBtn');
-
-      if (!q) {
-        alert('Please enter your Application Code or Email address.');
-        return;
-      }
-
-      trackBtn.disabled = true;
-      trackBtn.innerText = 'Checking…';
-      resArea.style.display = 'block';
-      resArea.innerHTML = '<p style="color:var(--km-text-muted);font-size:13px;text-align:center;">Looking up application records…</p>';
-
+      const email = document.getElementById('trackQueryInput').value.trim();
+      const area = document.getElementById('trackResultArea');
+      area.style.display = 'block';
       try {
-        const resp = await fetch('api/track_application.php?query=' + encodeURIComponent(q));
-        const data = await resp.json();
-
-        if (!data.success) {
-          resArea.innerHTML = `
-            <div style="background:#FFF5F5;border:1px solid #FED7D7;border-radius:8px;padding:12px 14px;color:#C53030;font-size:13px;">
-              ${data.error || 'No matching application record found.'}
-            </div>
-          `;
-          return;
-        }
-
-        const step = data.current_step;
-        resArea.innerHTML = `
-          <div style="background:#FAF7F2;border:1px solid var(--km-border);border-radius:10px;padding:16px;margin-bottom:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-              <div>
-                <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--km-caramel);">${data.application_code}</span>
-                <h4 style="font-family:var(--km-font-serif);font-size:17px;font-weight:700;color:var(--km-text-dark);">${data.job_title}</h4>
-                <div style="font-size:12px;color:var(--km-text-muted);margin-top:2px;">
-                  Applicant: <strong>${data.candidate_name}</strong> &bull; Submitted on ${data.submitted_at}
-                </div>
-              </div>
-              <span class="km-job-tag" style="background:#EFE8DF;">${data.job_location}</span>
-            </div>
-
-            <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--km-border);">
-              <div style="display:flex;justify-content:space-between;position:relative;margin-bottom:14px;">
-                <div style="position:absolute;top:14px;left:20px;right:20px;height:2px;background:#E2D9CE;z-index:1;"></div>
-                <div style="position:absolute;top:14px;left:20px;width:${step === 1 ? '0%' : step === 2 ? '50%' : '100%'};height:2px;background:var(--km-caramel);z-index:2;transition:width 0.3s ease;"></div>
-
-                <div style="display:flex;flex-direction:column;align-items:center;z-index:3;width:80px;text-align:center;">
-                  <div style="width:28px;height:28px;border-radius:50%;background:${step >= 1 ? 'var(--km-caramel)' : '#FFF'};border:2px solid ${step >= 1 ? 'var(--km-caramel)' : '#C49E7C'};color:${step >= 1 ? '#FFF' : '#7D4924'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">1</div>
-                  <span style="font-size:11px;font-weight:${step === 1 ? '700' : '500'};color:var(--km-text-dark);margin-top:4px;">Review</span>
-                </div>
-
-                <div style="display:flex;flex-direction:column;align-items:center;z-index:3;width:80px;text-align:center;">
-                  <div style="width:28px;height:28px;border-radius:50%;background:${step >= 2 ? 'var(--km-caramel)' : '#FFF'};border:2px solid ${step >= 2 ? 'var(--km-caramel)' : '#C49E7C'};color:${step >= 2 ? '#FFF' : '#7D4924'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">2</div>
-                  <span style="font-size:11px;font-weight:${step === 2 ? '700' : '500'};color:var(--km-text-dark);margin-top:4px;">Interview</span>
-                </div>
-
-                <div style="display:flex;flex-direction:column;align-items:center;z-index:3;width:80px;text-align:center;">
-                  <div style="width:28px;height:28px;border-radius:50%;background:${step >= 3 ? 'var(--km-caramel)' : '#FFF'};border:2px solid ${step >= 3 ? 'var(--km-caramel)' : '#C49E7C'};color:${step >= 3 ? '#FFF' : '#7D4924'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">3</div>
-                  <span style="font-size:11px;font-weight:${step === 3 ? '700' : '500'};color:var(--km-text-dark);margin-top:4px;">Decision</span>
-                </div>
-              </div>
-
-              <div style="background:#FFF;border-radius:8px;border:1px solid var(--km-border-light);padding:12px;font-size:12.5px;color:var(--km-text-body);line-height:1.5;">
-                <strong style="color:var(--km-text-dark);display:block;margin-bottom:2px;">Current Status: ${data.stage_label}</strong>
-                ${data.status_message}
-              </div>
-            </div>
-          </div>
-        `;
-      } catch (err) {
-        resArea.innerHTML = '<p style="color:#C53030;font-size:13px;text-align:center;">Failed to connect to application tracking service.</p>';
-      } finally {
-        trackBtn.disabled = false;
-        trackBtn.innerText = 'Check';
-      }
+        const response = await fetch('api/track_application.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'recover', email }) });
+        const data = await response.json();
+        area.textContent = data.message || data.error || 'Please try again later.';
+      } catch (error) { area.textContent = 'The status service is temporarily unavailable.'; }
     }
   </script>
 
+<script src="js/application-tracking.js"></script>
 </body>
 </html>

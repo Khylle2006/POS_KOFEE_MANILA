@@ -79,7 +79,7 @@ try {
         exit;
     }
 } catch (Throwable $e) {
-    error_log('shift_clock error: ' . $e->getMessage());
+    error_log('shift_clock error: ' . 'Service temporarily unavailable.');
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Could not record your attendance.']);
 }

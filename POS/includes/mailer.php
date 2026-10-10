@@ -4,6 +4,8 @@
 //  PHPMailer integration with SMTP configuration & templates
 // ─────────────────────────────────────────────────────────────
 
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/private_credentials.php';
 require_once __DIR__ . '/PHPMailer/Exception.php';
 require_once __DIR__ . '/PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/SMTP.php';
@@ -33,31 +35,29 @@ if (!defined('SMTP_FROM_NAME'))  define('SMTP_FROM_NAME',  getenv('SMTP_FROM_NAM
  * @return array{host: string, port: int, user: string, pass: string, secure: string, from_email: string, from_name: string, configured: bool}
  */
 function get_kofee_smtp_config(): array {
-    $host      = defined('SMTP_HOST')       ? (string)SMTP_HOST       : '';
-    $port      = defined('SMTP_PORT')       ? (int)SMTP_PORT          : 587;
-    $user      = defined('SMTP_USER')       ? (string)SMTP_USER       : '';
-    $pass      = defined('SMTP_PASS')       ? (string)SMTP_PASS       : '';
-    $secure    = defined('SMTP_SECURE')     ? (string)SMTP_SECURE     : PHPMailer::ENCRYPTION_STARTTLS;
-    $fromEmail = defined('SMTP_FROM_EMAIL') ? (string)SMTP_FROM_EMAIL : '';
-    $fromName  = defined('SMTP_FROM_NAME')  ? (string)SMTP_FROM_NAME  : 'Kofee Manila';
+    $host = app_setting('SMTP_HOST', '');
+    $port = (int)app_setting('SMTP_PORT', '587');
+    $user = app_setting('SMTP_USER', '');
+    $pass = app_setting('SMTP_PASS', '');
+    $secure = app_setting('SMTP_SECURE', 'tls');
+    $fromEmail = app_setting('SMTP_FROM_EMAIL', '');
+    $fromName = app_setting('SMTP_FROM_NAME', 'Kofee Manila');
 
     // If credentials are missing in constants, check procurement_settings database table
-    if (empty($user) || empty($pass)) {
+    if (!app_production() && (empty($user) || empty($pass))) {
         try {
             require_once __DIR__ . '/db.php';
             $pdo = get_db();
             $stmt = $pdo->query("SELECT setting_key, setting_value FROM procurement_settings WHERE setting_key LIKE 'smtp_%'");
             $dbRows = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
             if (!empty($dbRows['smtp_user']))       $user      = trim($dbRows['smtp_user']);
-            if (!empty($dbRows['smtp_pass']))       $pass      = trim($dbRows['smtp_pass']);
+            if (!empty($dbRows['smtp_pass']))       $pass      = decrypt_private_value(trim($dbRows['smtp_pass']));
             if (!empty($dbRows['smtp_host']))       $host      = trim($dbRows['smtp_host']);
             if (!empty($dbRows['smtp_port']))       $port      = (int)$dbRows['smtp_port'];
             if (!empty($dbRows['smtp_secure']))     $secure    = trim($dbRows['smtp_secure']);
             if (!empty($dbRows['smtp_from_email'])) $fromEmail = trim($dbRows['smtp_from_email']);
             if (!empty($dbRows['smtp_from_name']))  $fromName  = trim($dbRows['smtp_from_name']);
-        } catch (Throwable $e) {
-            // DB not ready or settings table missing
-        }
+        } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
     }
 
     if (empty($host))      $host = 'smtp.gmail.com';
@@ -98,9 +98,9 @@ function get_phpmailer_instance(?array $customConfig = null): PHPMailer {
         // Fix for Windows XAMPP environments where local CA certificates may not be registered
         $mail->SMTPOptions = [
             'ssl' => [
-                'verify_peer'       => false,
-                'verify_peer_name'  => false,
-                'allow_self_signed' => true
+                'verify_peer'       => true,
+                'verify_peer_name'  => true,
+                'allow_self_signed' => false
             ]
         ];
     }
@@ -117,6 +117,11 @@ function get_phpmailer_instance(?array $customConfig = null): PHPMailer {
  * @return array{ok: bool, sent: bool, simulated?: bool, error?: string, message?: string}
  */
 function send_kofee_email(string $toEmail, string $toName, string $subject, string $htmlBody, string $altBody = '', ?array $customConfig = null): array {
+    if (PHP_SAPI !== 'cli' && $customConfig === null) {
+        require_once __DIR__ . '/jobs.php';
+        enqueue_job(get_db(), 'email-' . bin2hex(random_bytes(16)), 'email', ['to' => $toEmail, 'name' => $toName, 'subject' => $subject, 'html' => $htmlBody, 'alt' => $altBody]);
+        return ['ok' => true, 'sent' => false, 'queued' => true, 'error' => null];
+    }
     $cfg = $customConfig ?: get_kofee_smtp_config();
     $mail = get_phpmailer_instance($cfg);
 
@@ -141,7 +146,7 @@ function send_kofee_email(string $toEmail, string $toName, string $subject, stri
         $sent = false;
         try {
             $sent = @$mail->send();
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 
         return [
             'ok'        => $sent,
@@ -151,12 +156,12 @@ function send_kofee_email(string $toEmail, string $toName, string $subject, stri
             'message'   => $sent ? 'Email sent successfully.' : 'Email was not sent because SMTP credentials are not configured.'
         ];
     } catch (Exception $e) {
-        error_log('PHPMailer error: ' . $e->getMessage());
+        error_log('PHPMailer error: ' . 'Service temporarily unavailable.');
         return [
             'ok'      => false,
             'sent'    => false,
-            'error'   => $e->getMessage(),
-            'message' => 'PHPMailer error: ' . $e->getMessage()
+            'error'   => 'Service temporarily unavailable.',
+            'message' => 'PHPMailer error: ' . 'Service temporarily unavailable.'
         ];
     }
 }
@@ -201,6 +206,8 @@ function test_smtp_connection(string $testEmail, ?array $overrideConfig = null):
  * Persist SMTP settings to both procurement_settings table and includes/config.local.php.
  */
 function save_kofee_smtp_settings(array $params): array {
+    if (app_production()) throw new SecurityFault('CREDENTIALS_ENVIRONMENT_MANAGED', 'Production credentials must be provisioned through the server environment.', 409);
+    require_recent_password();
     try {
         require_once __DIR__ . '/db.php';
         $pdo = get_db();
@@ -218,7 +225,7 @@ function save_kofee_smtp_settings(array $params): array {
             'smtp_host'       => $host,
             'smtp_port'       => (string)$port,
             'smtp_user'       => $user,
-            'smtp_pass'       => $pass,
+            'smtp_pass'       => encrypt_private_value($pass),
             'smtp_secure'     => $secure,
             'smtp_from_email' => $fromEmail,
             'smtp_from_name'  => $fromName,
@@ -239,30 +246,11 @@ function save_kofee_smtp_settings(array $params): array {
             ]);
         }
 
-        // 2. Also write/update includes/config.local.php
-        $localFile = __DIR__ . '/config.local.php';
-        $content = "<?php\n";
-        $content .= "// Auto-generated Kofee Manila local configuration\n";
-        $content .= "// Updated on " . date('Y-m-d H:i:s') . "\n\n";
-        $content .= "define('DB_HOST', 'localhost');\n";
-        $content .= "define('DB_NAME', 'kofeedb');\n";
-        $content .= "define('DB_USER', 'root');\n";
-        $content .= "define('DB_PASS', '');\n";
-        $content .= "define('APP_ENV', 'development');\n\n";
-        $content .= "// SMTP Email Configuration (PHPMailer)\n";
-        $content .= "define('SMTP_HOST', " . var_export($host, true) . ");\n";
-        $content .= "define('SMTP_PORT', " . (int)$port . ");\n";
-        $content .= "define('SMTP_USER', " . var_export($user, true) . ");\n";
-        $content .= "define('SMTP_PASS', " . var_export($pass, true) . ");\n";
-        $content .= "define('SMTP_SECURE', " . var_export($secure, true) . ");\n";
-        $content .= "define('SMTP_FROM_EMAIL', " . var_export($fromEmail, true) . ");\n";
-        $content .= "define('SMTP_FROM_NAME', " . var_export($fromName, true) . ");\n";
-
-        @file_put_contents($localFile, $content);
+        security_audit($pdo, 'smtp_settings_changed', 'configuration');
 
         return ['ok' => true, 'message' => 'SMTP settings saved successfully!'];
     } catch (Throwable $e) {
-        return ['ok' => false, 'error' => $e->getMessage()];
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 

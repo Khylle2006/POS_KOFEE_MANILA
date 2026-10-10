@@ -71,7 +71,7 @@ function shift_state(): array {
             'time_in'     => $time_in ?: null,
         ];
     } catch (Throwable $e) {
-        error_log('shift_state failed: ' . $e->getMessage());
+        error_log('shift_state failed: ' . 'Service temporarily unavailable.');
         // Fail open on infrastructure errors — never strand staff mid-rush.
         return ['gated' => false, 'open' => true, 'employee_id' => null,
                 'reason' => 'error', 'time_in' => null];
@@ -139,10 +139,12 @@ function render_shift_gate(): void {
               started. Ask HR or an administrator to link it, then reload this page.
             </p>
             <div class="mt-5 flex gap-2">
-              <a href="../auth/logout.php"
-                 class="flex-1 text-center py-2.5 rounded-lg text-[13px] font-semibold
+              <form method="post" action="../auth/logout.php" class="flex-1 flex">
+                <?= csrf_field() ?>
+                <button type="submit" class="w-full text-center py-2.5 rounded-lg text-[13px] font-semibold
                         border border-[var(--latte,#efe0cc)] text-[var(--text-muted,#8b7c88)]
-                        hover:bg-[var(--accent-lt,#fcefe1)]">Log out</a>
+                        hover:bg-[var(--accent-lt,#fcefe1)]">Log out</button>
+              </form>
               <button type="button" onclick="location.reload()"
                  class="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-white
                         bg-[var(--caramel,#c47d3e)] hover:opacity-90">Reload</button>
@@ -169,10 +171,12 @@ function render_shift_gate(): void {
                  class="flex-1 text-center py-2 rounded-lg text-[12px] font-semibold
                         border border-[var(--latte,#efe0cc)] text-[var(--text-muted,#8b7c88)]
                         hover:bg-[var(--accent-lt,#fcefe1)]">Clock in with photo</a>
-              <a href="../auth/logout.php"
-                 class="flex-1 text-center py-2 rounded-lg text-[12px] font-semibold
+              <form method="post" action="../auth/logout.php" class="flex-1 flex">
+                <?= csrf_field() ?>
+                <button type="submit" class="w-full text-center py-2 rounded-lg text-[12px] font-semibold
                         border border-[var(--latte,#efe0cc)] text-[var(--text-muted,#8b7c88)]
-                        hover:bg-[var(--accent-lt,#fcefe1)]">Log out</a>
+                        hover:bg-[var(--accent-lt,#fcefe1)]">Log out</button>
+              </form>
             </div>
           <?php endif; ?>
         </div>

@@ -57,13 +57,14 @@ if (isset($data['permissions']) && is_array($data['permissions'])) {
                 }
             }
         }
+        security_audit($pdo, 'role_permissions_changed', 'role');
         $pdo->commit();
         clear_permission_cache();
         echo json_encode(['ok' => true, 'message' => 'Role permissions saved successfully.']);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         http_response_code(500);
-        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        echo json_encode(['ok' => false, 'error' => 'Service temporarily unavailable.']);
     }
     exit;
 }
@@ -85,13 +86,14 @@ if (isset($data['updates']) && is_array($data['updates'])) {
                 $revokeStmt->execute([':role' => $role, ':perm' => $pk]);
             }
         }
+        security_audit($pdo, 'role_permissions_changed', 'role');
         $pdo->commit();
         clear_permission_cache();
         echo json_encode(['ok' => true, 'message' => 'Permissions batch saved successfully.']);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         http_response_code(500);
-        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        echo json_encode(['ok' => false, 'error' => 'Service temporarily unavailable.']);
     }
     exit;
 }

@@ -8,6 +8,13 @@
 .kfs-public .nav-links a:not(.btn) { padding-block: 12px; }
 .kfs-public :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { font-size: 16px; }
 .kfs-public .km-btn { min-height: 44px; }
+.kfs-public header, .kfs-public .km-header {
+  background: rgba(30, 21, 23, 0.96) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid rgba(217, 186, 133, 0.18) !important;
+  color: #FAF7F2 !important;
+}
 
 /* The portal is a module preview, with explicit paths to the workspace. */
 .kfs-portal * { font-family: var(--font-ui); }

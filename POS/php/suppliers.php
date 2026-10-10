@@ -133,8 +133,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // 2. Generate Temporary Password
-                $tempPass = 'KM-Sup!' . mt_rand(1000, 9999) . chr(mt_rand(97, 122));
-                $hashedPass = password_hash($tempPass, PASSWORD_DEFAULT);
+                $tempPass = bin2hex(random_bytes(12));
+                $hashedPass = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
 
                 // 3. Name parsing
                 $parts = explode(' ', trim($app['contact_person']));
@@ -194,17 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->commit();
 
                 // 8. Base URL for Login
-                $baseUrl = trim((string)(defined('APP_BASE_URL') ? APP_BASE_URL : (getenv('APP_BASE_URL') ?: '')));
-                if (!$baseUrl) {
-                    $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
-                    $isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
-                    $appPath = str_replace('\\', '/', dirname(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/php/suppliers.php'))));
-                    $appPath = ($appPath === '/' || $appPath === '.') ? '' : '/' . trim($appPath, '/');
-                    $baseUrl = ($isHttps ? 'https' : 'http') . '://' . $host . $appPath;
-                } else {
-                    $baseUrl = rtrim($baseUrl, '/');
-                }
-                $loginUrl = $baseUrl . '/auth/login.php';
+                $loginUrl = app_url() . '/auth/login.php';
 
                 // 9. Dispatch Approval Email with Credentials
                 $mailSent = false;
@@ -237,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = 'Failed to approve application: ' . $e->getMessage();
+                $toast = 'Failed to approve application: ' . 'Service temporarily unavailable.';
                 $toast_type = 'error';
             }
         }
@@ -329,25 +319,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_once __DIR__ . '/../includes/mailer.php';
 
             // Generate fresh temporary password for the user
-            $tempPass = 'KM-Sup!' . mt_rand(1000, 9999) . chr(mt_rand(97, 122));
-            $hashedPass = password_hash($tempPass, PASSWORD_DEFAULT);
+            $tempPass = bin2hex(random_bytes(12));
+            $hashedPass = password_hash($tempPass, PASSWORD_BCRYPT, ['cost' => 12]);
             if (!empty($app['created_user_id'])) {
                 $pdo->prepare('UPDATE users SET password = :p WHERE id = :id')
                     ->execute([':p' => $hashedPass, ':id' => $app['created_user_id']]);
             }
             $username = $app['created_username'] ?: ('supplier_' . $app['id']);
 
-            $baseUrl = trim((string)(defined('APP_BASE_URL') ? APP_BASE_URL : (getenv('APP_BASE_URL') ?: '')));
-            if (!$baseUrl) {
-                $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
-                $isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
-                $appPath = str_replace('\\', '/', dirname(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/php/suppliers.php'))));
-                $appPath = ($appPath === '/' || $appPath === '.') ? '' : '/' . trim($appPath, '/');
-                $baseUrl = ($isHttps ? 'https' : 'http') . '://' . $host . $appPath;
-            } else {
-                $baseUrl = rtrim($baseUrl, '/');
-            }
-            $loginUrl = $baseUrl . '/auth/login.php';
+            $loginUrl = app_url() . '/auth/login.php';
 
             $mailRes = send_supplier_approval_email(
                 $app['email'],
@@ -446,7 +426,7 @@ if (isset($_GET['toast'])) {
 $pending_apps_count = 0;
 try {
     $pending_apps_count = (int)$pdo->query("SELECT COUNT(*) FROM supplier_applications WHERE status IN ('review', 'under_review')")->fetchColumn();
-} catch (Throwable $e) {}
+} catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 
 // ── SMTP Email Status ──
 require_once __DIR__ . '/../includes/mailer.php';
@@ -521,6 +501,32 @@ $appStmt = $pdo->prepare("
 $appStmt->execute($app_params);
 $applications = $appStmt->fetchAll();
 
+// Attach multi-file attachments for RBAC review
+if (!empty($applications)) {
+    try {
+        $appIds = array_column($applications, 'id');
+        $inClause = implode(',', array_map('intval', $appIds));
+        $attRows = $pdo->query("SELECT * FROM supplier_application_attachments WHERE application_id IN ($inClause) ORDER BY id ASC")->fetchAll();
+        $attByApp = [];
+        foreach ($attRows as $ar) {
+            $attByApp[$ar['application_id']][] = [
+                'filename'  => $ar['filename'],
+                'file_path' => $ar['file_path'],
+                'file_size' => $ar['file_size'],
+            ];
+        }
+        foreach ($applications as &$appRef) {
+            $appRef['attachments'] = $attByApp[$appRef['id']] ?? [];
+        }
+        unset($appRef);
+    } catch (Throwable $e) {
+        foreach ($applications as &$appRef) {
+            $appRef['attachments'] = [];
+        }
+        unset($appRef);
+    }
+}
+
 // Applications statistics
 $total_apps = 0;
 $pending_apps = 0;
@@ -535,7 +541,7 @@ try {
         if ($sr['status'] === 'approved') $approved_apps += $c;
         if ($sr['status'] === 'rejected') $rejected_apps += $c;
     }
-} catch (Throwable $e) {}
+} catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -926,17 +932,25 @@ try {
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                   <a href="download_file.php?f=<?= urlencode($a['business_permit_path']) ?>&name=<?= urlencode($a['business_permit_filename']) ?>"
                      target="_blank" class="km-doc-chip" title="View Business Permit">
-                    📄 Permit
+                    <?= icon('file-text', 12) ?> Permit
                   </a>
                   <a href="download_file.php?f=<?= urlencode($a['authenticity_cert_path']) ?>&name=<?= urlencode($a['authenticity_cert_filename']) ?>"
                      target="_blank" class="km-doc-chip" title="View Authenticity Certificate">
-                    🏅 Authenticity
+                    <?= icon('award', 12) ?> Authenticity
                   </a>
                   <?php if (!empty($a['additional_documents_path'])): ?>
                     <a href="download_file.php?f=<?= urlencode($a['additional_documents_path']) ?>&name=<?= urlencode($a['additional_documents_filename'] ?: 'document') ?>"
                        target="_blank" class="km-doc-chip" title="Additional Document">
-                      📎 Extra
+                      <?= icon('paperclip', 12) ?> Extra
                     </a>
+                  <?php endif; ?>
+                  <?php if (!empty($a['attachments'])): ?>
+                    <?php foreach ($a['attachments'] as $att): if ($att['file_path'] === $a['additional_documents_path']) continue; ?>
+                      <a href="download_file.php?f=<?= urlencode($att['file_path']) ?>&name=<?= urlencode($att['filename'] ?: 'attachment') ?>"
+                         target="_blank" class="km-doc-chip" title="<?= htmlspecialchars($att['filename']) ?>">
+                        <?= icon('paperclip', 12) ?> <?= htmlspecialchars(mb_strimwidth($att['filename'], 0, 15, '...')) ?>
+                      </a>
+                    <?php endforeach; ?>
                   <?php endif; ?>
                 </div>
               </td>
@@ -1336,7 +1350,7 @@ try {
 
         <div class="field-group">
           <label class="field-label">SMTP Password / Google App Password <span style="color:var(--red)">*</span></label>
-          <input type="password" name="smtp_pass" class="field-input" value="<?= htmlspecialchars($smtp_cfg['pass']) ?>" required placeholder="16-character Google App Password" autocomplete="new-password" />
+          <input type="password" name="smtp_pass" class="field-input" value="" required placeholder="16-character Google App Password" autocomplete="new-password" />
           <small style="font-size:11.5px;color:var(--text-muted);">Stored securely in your local environment config &amp; database.</small>
         </div>
 
@@ -1531,11 +1545,23 @@ function openAppReview(app) {
     chipsArea.appendChild(a);
   };
 
-  addChip('download_file.php?f=' + encodeURIComponent(app.business_permit_path) + '&name=' + encodeURIComponent(app.business_permit_filename), 'Business Permit', '📄');
-  addChip('download_file.php?f=' + encodeURIComponent(app.authenticity_cert_path) + '&name=' + encodeURIComponent(app.authenticity_cert_filename), 'Authenticity Certificate', '🏅');
+  const icFile = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+  const icAward = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>';
+  const icClip = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+
+  addChip('download_file.php?f=' + encodeURIComponent(app.business_permit_path) + '&name=' + encodeURIComponent(app.business_permit_filename), 'Business Permit', icFile);
+  addChip('download_file.php?f=' + encodeURIComponent(app.authenticity_cert_path) + '&name=' + encodeURIComponent(app.authenticity_cert_filename), 'Authenticity Certificate', icAward);
 
   if (app.additional_documents_path) {
-    addChip('download_file.php?f=' + encodeURIComponent(app.additional_documents_path) + '&name=' + encodeURIComponent(app.additional_documents_filename || 'document'), 'Additional Document', '📎');
+    addChip('download_file.php?f=' + encodeURIComponent(app.additional_documents_path) + '&name=' + encodeURIComponent(app.additional_documents_filename || 'document'), app.additional_documents_filename || 'Additional Document', icClip);
+  }
+
+  if (Array.isArray(app.attachments)) {
+    app.attachments.forEach((att, idx) => {
+      if (att.file_path && att.file_path !== app.additional_documents_path) {
+        addChip('download_file.php?f=' + encodeURIComponent(att.file_path) + '&name=' + encodeURIComponent(att.filename || ('attachment-' + (idx + 1))), att.filename || ('Attachment ' + (idx + 1)), icClip);
+      }
+    });
   }
 
   // Cover notes

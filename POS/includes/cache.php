@@ -58,6 +58,8 @@ function cache_has_apcu(): bool {
  * @return bool True on success, false on failure
  */
 function cache_set(string $key, mixed $value, int $ttl = 300): bool {
+    $key = cache_access_key($key);
+    if (!cache_value_safe($value)) return false;
     $expiresAt = time() + max(1, $ttl);
     $mem =& cache_memory_store();
 
@@ -113,6 +115,7 @@ function cache_set(string $key, mixed $value, int $ttl = 300): bool {
  * @return mixed
  */
 function cache_get(string $key, mixed $default = null): mixed {
+    $key = cache_access_key($key);
     $now = time();
     $mem =& cache_memory_store();
 
@@ -153,9 +156,9 @@ function cache_get(string $key, mixed $default = null): mixed {
 
     // Strip security prefix (15 bytes)
     $serialized = substr($raw, 15);
-    $payload = @unserialize($serialized);
+    $payload = @unserialize($serialized, ['allowed_classes' => false]);
 
-    if (!is_array($payload) || !isset($payload['expires_at'])) {
+    if (!is_array($payload) || !isset($payload['expires_at']) || !cache_value_safe($payload)) {
         @unlink($filename);
         return $default;
     }
@@ -208,6 +211,7 @@ function cache_remember(string $key, int $ttl, callable $callback): mixed {
  * Remove an item from the cache.
  */
 function cache_delete(string $key): bool {
+    $key = cache_access_key($key);
     $mem =& cache_memory_store();
     unset($mem[$key]);
 
@@ -262,7 +266,7 @@ function cache_delete_pattern(string $prefix): int {
         $raw = @file_get_contents($file);
         if ($raw !== false && strlen($raw) >= 16) {
             $serialized = substr($raw, 15);
-            $payload = @unserialize($serialized);
+            $payload = @unserialize($serialized, ['allowed_classes' => false]);
             if (is_array($payload) && isset($payload['key'])) {
                 if (str_starts_with($payload['key'], $prefix)) {
                     @unlink($file);
@@ -313,7 +317,7 @@ function cache_stats(): array {
 
         $raw = @file_get_contents($file);
         if ($raw !== false && strlen($raw) >= 16) {
-            $payload = @unserialize(substr($raw, 15));
+            $payload = @unserialize(substr($raw, 15), ['allowed_classes' => false]);
             if (is_array($payload)) {
                 $isExpired = ($payload['expires_at'] ?? 0) < $now;
                 if ($isExpired) {
@@ -340,4 +344,14 @@ function cache_stats(): array {
         'total_kb'      => round($totalBytes / 1024, 2),
         'keys'          => $keys,
     ];
+}
+
+function cache_access_key(string $key): string {
+    $permissions = $_SESSION['permissions'] ?? []; sort($permissions);
+    return $key . '_scope_' . hash('sha256', json_encode([$_SESSION['user_id'] ?? 0, $permissions], JSON_THROW_ON_ERROR));
+}
+function cache_value_safe(mixed $value): bool {
+    if (is_object($value) || is_resource($value)) return false;
+    if (is_array($value)) foreach ($value as $item) if (!cache_value_safe($item)) return false;
+    return true;
 }

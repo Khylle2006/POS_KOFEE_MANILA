@@ -27,7 +27,7 @@ function payroll_settings(): array {
             $cache[$r['setting_key']] = $r['setting_value'];
         }
     } catch (Throwable $e) {
-        error_log('payroll_settings failed: ' . $e->getMessage());
+        error_log('payroll_settings failed: ' . 'Service temporarily unavailable.');
     }
     return $cache;
 }
@@ -150,7 +150,7 @@ function aggregate_attendance(int $employee_id, string $start, string $end): arr
             $totals['unapproved_days'] = (float)$skip->fetchColumn();
         }
     } catch (Throwable $e) {
-        error_log('aggregate_attendance failed: ' . $e->getMessage());
+        error_log('aggregate_attendance failed: ' . 'Service temporarily unavailable.');
         return $totals;
     }
 
@@ -249,7 +249,7 @@ function employee_sales_in_period(int $employee_id, string $start, string $end):
             'tips'   => (float)($row['tips']   ?? 0),
         ];
     } catch (Throwable $e) {
-        error_log('employee_sales_in_period failed: ' . $e->getMessage());
+        error_log('employee_sales_in_period failed: ' . 'Service temporarily unavailable.');
         return ['sales' => 0.0, 'orders' => 0, 'tips' => 0.0];
     }
 }
@@ -720,7 +720,7 @@ function run_payroll_calculation(int $period_id, ?int $actor_id = null): array {
         return ['ok' => true, 'count' => count($employees), 'exceptions' => $exception_count];
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        error_log('run_payroll_calculation failed: ' . $e->getMessage());
+        error_log('run_payroll_calculation failed: ' . 'Service temporarily unavailable.');
         return ['ok' => false, 'error' => 'Calculation failed. Check the error log.'];
     }
 }
@@ -731,80 +731,10 @@ function run_payroll_calculation(int $period_id, ?int $actor_id = null): array {
  */
 function release_payroll(int $period_id, ?int $actor_id = null): array {
     $pdo = get_db();
-
-    try {
-        $stmt = $pdo->prepare('SELECT * FROM payroll_periods WHERE id = :id');
-        $stmt->execute([':id' => $period_id]);
-        $period = $stmt->fetch();
-
-        if (!$period) return ['ok' => false, 'error' => 'Period not found.'];
-        if ($period['status'] !== 'approved') {
-            return ['ok' => false, 'error' => 'Only an approved period can be released for payment.'];
-        }
-
-        $pdo->beginTransaction();
-
-        // Post loan repayments against the amounts actually deducted.
-        $slips = $pdo->prepare(
-            'SELECT id, employee_id, loan_deduction FROM payslips
-              WHERE period_id = :p AND loan_deduction > 0'
-        );
-        $slips->execute([':p' => $period_id]);
-
-        $loan_stmt = $pdo->prepare(
-            "SELECT id, balance, per_period_amount FROM employee_loans
-              WHERE employee_id = :e AND status = 'active' AND balance > 0
-              ORDER BY start_date"
-        );
-        $repay_ins = $pdo->prepare(
-            'INSERT INTO loan_repayments (loan_id, payslip_id, amount, paid_on)
-             VALUES (:l, :p, :a, :d)'
-        );
-        $loan_upd = $pdo->prepare(
-            "UPDATE employee_loans
-                SET balance = GREATEST(0, balance - :a),
-                    status = CASE WHEN balance - :a2 <= 0 THEN 'completed' ELSE status END
-              WHERE id = :id"
-        );
-
-        foreach ($slips->fetchAll() as $slip) {
-            $remaining = (float)$slip['loan_deduction'];
-            $loan_stmt->execute([':e' => (int)$slip['employee_id']]);
-
-            foreach ($loan_stmt->fetchAll() as $loan) {
-                if ($remaining <= 0) break;
-                $take = min($remaining, (float)$loan['per_period_amount'], (float)$loan['balance']);
-                if ($take <= 0) continue;
-
-                $repay_ins->execute([
-                    ':l' => $loan['id'], ':p' => $slip['id'],
-                    ':a' => $take, ':d' => $period['pay_date'],
-                ]);
-                $loan_upd->execute([':a' => $take, ':a2' => $take, ':id' => $loan['id']]);
-                $remaining -= $take;
-            }
-        }
-
-        $pdo->prepare(
-            "UPDATE payslips SET payment_status = 'paid', paid_at = NOW()
-              WHERE period_id = :p AND payment_status = 'unpaid'"
-        )->execute([':p' => $period_id]);
-
-        $pdo->prepare(
-            "UPDATE payroll_periods SET status = 'paid', paid_at = NOW() WHERE id = :id"
-        )->execute([':id' => $period_id]);
-
-        $pdo->commit();
-
-        payroll_audit($period_id, null, 'released',
-            'Payroll released. Net total: ' . number_format((float)$period['net_total'], 2), $actor_id);
-
-        return ['ok' => true];
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        error_log('release_payroll failed: ' . $e->getMessage());
-        return ['ok' => false, 'error' => 'Release failed. Check the error log.'];
-    }
+    $stmt = $pdo->prepare('SELECT id FROM payslips WHERE period_id = ? ORDER BY id');
+    $stmt->execute([$period_id]);
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) release_single_employee_payslip($pdo, (int)$id, $actor_id ?? (int)$_SESSION['user_id']);
+    return ['ok' => true, 'message' => 'Payroll release processed.'];
 }
 
 // ═══════════════════════════════════════════════
@@ -823,7 +753,7 @@ function payroll_audit(?int $period_id, ?int $payslip_id, string $action,
             ':an' => $action, ':d' => $detail,
         ]);
     } catch (Throwable $e) {
-        error_log('payroll_audit failed: ' . $e->getMessage());
+        error_log('payroll_audit failed: ' . 'Service temporarily unavailable.');
     }
 }
 
@@ -913,190 +843,45 @@ function sync_period_payment_status(PDO $pdo, int $period_id): void {
  */
 function release_single_employee_payslip(PDO $pdo, int $payslip_id, int $actor_id, ?string $method = null, array $details = []): array {
     require_once __DIR__ . '/paymongo_disbursement_helpers.php';
-
-    $stmt = $pdo->prepare("
-        SELECT s.*, e.firstname, e.lastname, e.employee_code, e.contact_number, e.user_id,
-               epd.payout_type, epd.bank_code, epd.bank_name, epd.account_name,
-               epd.account_number_last4, epd.ewallet_provider, epd.ewallet_account_name, epd.ewallet_mobile_number
-        FROM payslips s
-        JOIN employees e ON e.id = s.employee_id
-        LEFT JOIN employee_payment_details epd ON epd.employee_id = e.id AND epd.is_active = 1
-        WHERE s.id = :id
-    ");
-    $stmt->execute([':id' => $payslip_id]);
+    $stmt = $pdo->prepare('SELECT s.*, p.status AS period_status, e.firstname, e.lastname, e.user_id, d.bank_code, d.bank_name, d.account_number_last4, d.ewallet_provider, d.ewallet_mobile_number FROM payslips s JOIN payroll_periods p ON p.id = s.period_id JOIN employees e ON e.id = s.employee_id LEFT JOIN employee_payment_details d ON d.employee_id = e.id AND d.is_active = 1 WHERE s.id = ?');
+    $stmt->execute([$payslip_id]);
     $slip = $stmt->fetch();
-
-    if (!$slip) {
-        return ['ok' => false, 'error' => 'Payslip record not found.'];
+    if (!$slip) throw new SecurityFault('PAYSLIP_NOT_FOUND', 'Payslip not found.', 404);
+    if ($slip['payment_status'] === 'paid') return ['ok' => true, 'status' => 'paid', 'transfer_id' => $slip['transfer_id'], 'message' => 'Payslip was already released.'];
+    if ($slip['period_status'] !== 'approved') throw new SecurityFault('PAYROLL_NOT_APPROVED', 'Payroll must be approved before release.', 409);
+    $method = $method ?: ($slip['payment_method'] ?: 'cash');
+    if (!in_array($method, ['cash', 'cheque', 'bank_transfer', 'ewallet', 'paymongo'], true)) throw new SecurityFault('PAYMENT_METHOD_INVALID', 'Invalid payout method.');
+    if (money_centavos($slip['net_pay']) <= 0) throw new SecurityFault('PAYOUT_AMOUNT_INVALID', 'Payout must be positive.');
+    $name = trim($slip['firstname'] . ' ' . $slip['lastname']);
+    $online = in_array($method, ['bank_transfer', 'ewallet', 'paymongo'], true);
+    $result = ['ok' => true, 'status' => 'paid', 'transfer_id' => 'CSH-' . $payslip_id];
+    if ($online) {
+        $result = execute_paymongo_transfer_call(get_paymongo_disbursement_config($pdo), [
+            'payslip_id' => $payslip_id, 'employee_id' => $slip['employee_id'], 'amount' => $slip['net_pay'],
+            'recipient_name' => $name, 'payout_destination' => $method === 'ewallet' ? 'ewallet' : 'bank',
+            'bank_code' => $slip['bank_code'], 'bank_name' => $slip['bank_name'], 'account_number_last4' => $slip['account_number_last4'],
+            'ewallet_provider' => $slip['ewallet_provider'], 'ewallet_mobile_number' => $slip['ewallet_mobile_number'],
+        ]);
     }
-
-    if ($slip['payment_status'] === 'paid') {
-        return ['ok' => false, 'error' => 'This employee has already been paid and released.'];
-    }
-
-    $employee_name = trim($slip['firstname'] . ' ' . $slip['lastname']);
-    $net_pay = (float)$slip['net_pay'];
-    $period_id = (int)$slip['period_id'];
-
-    if ($net_pay <= 0) {
-        return ['ok' => false, 'error' => "Cannot disburse zero or negative net pay (₱" . number_format($net_pay, 2) . ") for {$employee_name}."];
-    }
-
-    // Determine target payment method
-    $chosen_method = $method ?: ($slip['payment_method'] ?: 'cash');
-
-    // Allow user override from $details
-    $bank_name   = $details['bank_name'] ?? ($slip['bank_name'] ?? null);
-    $bank_code   = $details['bank_code'] ?? ($slip['bank_code'] ?? null);
-    $last4       = $details['account_number_last4'] ?? ($slip['account_number_last4'] ?? null);
-    $ew_provider = $details['ewallet_provider'] ?? ($slip['ewallet_provider'] ?? null);
-    $ew_mobile   = $details['ewallet_mobile_number'] ?? ($slip['ewallet_mobile_number'] ?? null);
-
-    $is_online = in_array($chosen_method, ['bank_transfer', 'ewallet', 'paymongo'], true);
-
-    if ($is_online) {
-        // Validate destination
-        $dest_type = ($chosen_method === 'ewallet' || !empty($ew_provider)) ? 'ewallet' : 'bank';
-        
-        $item_data = [
-            'amount'                => $net_pay,
-            'recipient_name'        => $employee_name,
-            'payout_destination'    => $dest_type,
-            'bank_code'             => $bank_code,
-            'bank_name'             => $bank_name,
-            'account_number_last4'  => $last4,
-            'ewallet_provider'      => $ew_provider,
-            'ewallet_mobile_number' => $ew_mobile,
-            'idempotency_key'       => 'pay_' . hash('sha256', "ps_{$payslip_id}_amt_{$net_pay}_" . time()),
-        ];
-
-        // Format destination display
-        if ($dest_type === 'bank') {
-            $dest_display = ($bank_name ?: 'Bank') . ' •••• ' . ($last4 ?: '0000');
-        } else {
-            $dest_display = strtoupper($ew_provider ?: 'E-Wallet') . ' ' . ($ew_mobile ?: '09XX•••XXXX');
-        }
-
-        $cfg = get_paymongo_disbursement_config($pdo);
-        $res = execute_paymongo_transfer_call($cfg, $item_data);
-
-        if (!$res['ok']) {
-            // Update payslip to failed, recording individual error
-            $pdo->prepare("
-                UPDATE payslips
-                SET payment_status = 'failed',
-                    transfer_error = :err,
-                    transfer_channel = :ch,
-                    payout_account_info = :info
-                WHERE id = :id
-            ")->execute([
-                ':err'  => $res['error'],
-                ':ch'   => $chosen_method,
-                ':info' => $dest_display,
-                ':id'   => $payslip_id,
-            ]);
-
-            // Sync period status
-            sync_period_payment_status($pdo, $period_id);
-
-            payroll_audit($period_id, $payslip_id, 'transfer_failed', "Transfer of ₱" . number_format($net_pay, 2) . " to {$employee_name} failed: {$res['error']}", $actor_id);
-
-            return [
-                'ok'            => false,
-                'status'        => 'failed',
-                'employee_name' => $employee_name,
-                'error'         => $res['error']
-            ];
-        }
-
-        $transfer_id = $res['transfer_id'];
-    } else {
-        // Manual Cash / Cheque Release
-        $dest_display = ($chosen_method === 'cheque') ? 'Corporate Bank Cheque' : 'Cash / Over-The-Counter Envelope';
-        $transfer_id  = 'CSH-' . date('Ymd') . '-' . str_pad((string)$payslip_id, 4, '0', STR_PAD_LEFT);
-    }
-
-    // Transfer succeeded!
+    $paid = !empty($result['ok']) && in_array($result['status'] ?? '', ['paid', 'succeeded'], true);
+    $status = $paid ? 'paid' : (!empty($result['unknown']) || !empty($result['ok']) ? 'pending' : 'failed');
     $pdo->beginTransaction();
     try {
-        // 1. Mark payslip as paid
-        $pdo->prepare("
-            UPDATE payslips
-            SET payment_status = 'paid',
-                transfer_id = :tid,
-                transfer_error = NULL,
-                transfer_channel = :ch,
-                payout_account_info = :info,
-                paid_at = NOW(),
-                released_by = :uid
-            WHERE id = :id
-        ")->execute([
-            ':tid'  => $transfer_id,
-            ':ch'   => $chosen_method,
-            ':info' => $dest_display,
-            ':uid'  => $actor_id,
-            ':id'   => $payslip_id,
-        ]);
-
-        // 2. Post loan deductions if applicable
-        if ((float)$slip['loan_deduction'] > 0) {
-            $remaining = (float)$slip['loan_deduction'];
-            $loan_stmt = $pdo->prepare(
-                "SELECT id, balance, per_period_amount FROM employee_loans
-                  WHERE employee_id = :e AND status = 'active' AND balance > 0
-                  ORDER BY start_date"
-            );
-            $loan_stmt->execute([':e' => (int)$slip['employee_id']]);
-            $repay_ins = $pdo->prepare(
-                'INSERT INTO loan_repayments (loan_id, payslip_id, amount, paid_on)
-                 VALUES (:l, :p, :a, :d)'
-            );
-            $loan_upd = $pdo->prepare(
-                "UPDATE employee_loans
-                    SET balance = GREATEST(0, balance - :a),
-                        status = CASE WHEN balance - :a2 <= 0 THEN 'completed' ELSE status END
-                  WHERE id = :id"
-            );
-
-            foreach ($loan_stmt->fetchAll() as $loan) {
-                if ($remaining <= 0) break;
-                $take = min($remaining, (float)$loan['per_period_amount'], (float)$loan['balance']);
-                if ($take <= 0) continue;
-
-                $repay_ins->execute([
-                    ':l' => $loan['id'], ':p' => $payslip_id,
-                    ':a' => $take, ':d' => date('Y-m-d'),
-                ]);
-                $loan_upd->execute([':a' => $take, ':a2' => $take, ':id' => $loan['id']]);
-                $remaining -= $take;
-            }
+        $lock = $pdo->prepare('SELECT payment_status FROM payslips WHERE id = ? FOR UPDATE'); $lock->execute([$payslip_id]);
+        if ($lock->fetchColumn() === 'paid') { $pdo->commit(); return ['ok' => true, 'status' => 'paid', 'message' => 'Payslip was already released.']; }
+        // A manual release cannot override an unresolved gateway transfer.
+        if (!$online) {
+            $attempt = $pdo->prepare('SELECT status FROM payment_attempts WHERE operation_key = ? FOR UPDATE');
+            $attempt->execute(['payslip-transfer-' . $payslip_id]);
+            if ($attempt->fetchColumn()) throw new SecurityFault('PAYOUT_RECONCILIATION_REQUIRED', 'Review the existing transfer before manual release.', 409);
         }
-
-        // 3. Sync period status
-        sync_period_payment_status($pdo, $period_id);
-
-        payroll_audit($period_id, $payslip_id, 'transfer_paid', "Released ₱" . number_format($net_pay, 2) . " to {$employee_name} via {$chosen_method} (Ref: {$transfer_id})", $actor_id);
-
+        $pdo->prepare('UPDATE payslips SET payment_status = ?, transfer_id = ?, transfer_channel = ?, released_by = ?, paid_at = ?, transfer_error = ? WHERE id = ?')->execute([$status, $result['transfer_id'] ?? null, $method, $actor_id, $paid ? date('Y-m-d H:i:s') : null, $result['error'] ?? null, $payslip_id]);
+        if ($paid) apply_payslip_loan_repayments($pdo, ['payslip_id' => $payslip_id, 'employee_id' => $slip['employee_id']]);
+        sync_period_payment_status($pdo, (int)$slip['period_id']);
+        security_audit($pdo, 'payslip_release', 'payslip', $payslip_id, ['status' => $status]);
         $pdo->commit();
-
-        // 4. Notify employee
-        try {
-            if (!empty($slip['user_id']) && function_exists('notify_user')) {
-                notify_user((int)$slip['user_id'], 'payroll_payout', 'Salary Released', "Your payout of ₱" . number_format($net_pay, 2) . " has been successfully released via {$chosen_method}.", 'my_payslips.php');
-            }
-        } catch (Throwable $e) {}
-
-        return [
-            'ok'            => true,
-            'status'        => 'paid',
-            'transfer_id'   => $transfer_id,
-            'employee_name' => $employee_name,
-            'message'       => "Payment of ₱" . number_format($net_pay, 2) . " released to {$employee_name} successfully."
-        ];
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        return ['ok' => false, 'error' => 'Database error recording release: ' . $e->getMessage()];
-    }
+    } catch (Throwable $exception) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $exception; }
+    return ['ok' => $status !== 'failed', 'status' => $status, 'transfer_id' => $result['transfer_id'] ?? null, 'employee_name' => $name, 'error' => $result['error'] ?? null, 'message' => $paid ? 'Payout confirmed.' : 'Payout submitted; confirmation is pending.'];
 }
 
 /**
@@ -1118,7 +903,7 @@ function batch_release_employees(PDO $pdo, int $period_id, array $payslip_ids, i
             $success_count++;
             $results[] = [
                 'payslip_id'    => $id,
-                'status'        => 'paid',
+                'status'        => $res['status'] ?? 'pending',
                 'employee_name' => $res['employee_name'] ?? "Payslip #$id",
                 'transfer_id'   => $res['transfer_id'] ?? '',
                 'message'       => $res['message'] ?? 'Paid'
@@ -1179,7 +964,7 @@ function finance_review_payroll(PDO $pdo, int $period_id, string $decision, int 
             return ['ok' => true, 'message' => 'Payroll period approved by Finance and ready for payout release.'];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            return ['ok' => false, 'error' => 'Error approving payroll: ' . $e->getMessage()];
+            return ['ok' => false, 'error' => 'Error approving payroll: ' . 'Service temporarily unavailable.'];
         }
     } else {
         // Request correction / Reject
@@ -1204,7 +989,7 @@ function finance_review_payroll(PDO $pdo, int $period_id, string $decision, int 
             return ['ok' => true, 'message' => 'Payroll returned to draft for corrections.'];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            return ['ok' => false, 'error' => 'Error returning payroll: ' . $e->getMessage()];
+            return ['ok' => false, 'error' => 'Error returning payroll: ' . 'Service temporarily unavailable.'];
         }
     }
 }
@@ -1422,8 +1207,8 @@ function create_step_payroll_run(PDO $pdo, array $period_meta, array $employees_
         ];
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        error_log('create_step_payroll_run failed: ' . $e->getMessage());
-        return ['ok' => false, 'error' => 'Failed to create payroll run: ' . $e->getMessage()];
+        error_log('create_step_payroll_run failed: ' . 'Service temporarily unavailable.');
+        return ['ok' => false, 'error' => 'Failed to create payroll run: ' . 'Service temporarily unavailable.'];
     }
 }
 

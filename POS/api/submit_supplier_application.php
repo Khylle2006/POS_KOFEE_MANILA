@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/private_storage.php';
 // ─────────────────────────────────────────────────────────────
 //  api/submit_supplier_application.php — Process Supplier Onboarding
 // ─────────────────────────────────────────────────────────────
@@ -11,6 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/application_tracking.php';
+public_submission_guard('supplier-submission');
 require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/mailer.php';
 require_once __DIR__ . '/../includes/procurement_helpers.php';
@@ -81,7 +84,7 @@ try {
     }
 
     // ── 3. Helper for Document Uploads ──
-    $uploadDir = __DIR__ . '/../uploads/supplier_permits';
+    $uploadDir = private_upload_directory('supplier_permits');
     if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Storage directory unavailable. Please try again.']);
@@ -97,15 +100,7 @@ try {
         'image/webp' => 'webp',
     ];
 
-    $process_upload = function(string $field_key, string $label, bool $required) use ($mime_to_ext, $uploadDir, &$errors): ?array {
-        if (!isset($_FILES[$field_key]) || $_FILES[$field_key]['error'] === UPLOAD_ERR_NO_FILE) {
-            if ($required) {
-                $errors[] = "{$label} is required (PDF, DOCX, JPG, or PNG up to 10 MB).";
-            }
-            return null;
-        }
-
-        $file = $_FILES[$field_key];
+    $process_single_file = function(array $file, string $label) use ($mime_to_ext, $uploadDir, &$errors): ?array {
         if ($file['error'] !== UPLOAD_ERR_OK) {
             $errors[] = "Error uploading {$label} (code {$file['error']}). Please try again.";
             return null;
@@ -138,21 +133,61 @@ try {
         $targetPath = $uploadDir . '/' . $storedName;
         $dbPath     = 'uploads/supplier_permits/' . $storedName;
 
-        if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+        if (!private_move_uploaded_file($file['tmp_name'], $targetPath)) {
             $errors[] = "Failed to save {$label} on server.";
             return null;
         }
-        @chmod($targetPath, 0644);
+        chmod($targetPath, 0600);
 
         return [
             'original_name' => $origName,
             'stored_path'   => $dbPath,
+            'file_size'     => (int)($file['size'] ?? 0),
         ];
     };
 
-    $permitData  = $process_upload('business_permit', 'Business Permit / Registration Document', true);
-    $authDocData = $process_upload('authenticity_cert', 'Product Authenticity / FDA / COA Certificate', true);
-    $addlDocData = $process_upload('additional_documents', 'Additional Documents', false);
+    $process_upload = function(string $field_key, string $label, bool $required) use ($process_single_file, &$errors): ?array {
+        if (!isset($_FILES[$field_key]) || $_FILES[$field_key]['error'] === UPLOAD_ERR_NO_FILE) {
+            if ($required) {
+                $errors[] = "{$label} is required (PDF, DOCX, JPG, or PNG up to 10 MB).";
+            }
+            return null;
+        }
+        return $process_single_file($_FILES[$field_key], $label);
+    };
+
+    // Helper for multi-file attachments (e.g. additional_documents[])
+    $process_multi_upload = function(string $field_key, string $label) use ($process_single_file, &$errors): array {
+        if (!isset($_FILES[$field_key])) return [];
+        $files = $_FILES[$field_key];
+        $results = [];
+
+        if (is_array($files['name'])) {
+            $count = count($files['name']);
+            for ($i = 0; $i < $count; $i++) {
+                if ($files['error'][$i] === UPLOAD_ERR_NO_FILE) continue;
+                $single = [
+                    'name'     => $files['name'][$i],
+                    'type'     => $files['type'][$i] ?? '',
+                    'tmp_name' => $files['tmp_name'][$i],
+                    'error'    => $files['error'][$i],
+                    'size'     => $files['size'][$i],
+                ];
+                $res = $process_single_file($single, "{$label} #" . ($i + 1));
+                if ($res) $results[] = $res;
+            }
+        } elseif ($files['error'] !== UPLOAD_ERR_NO_FILE) {
+            $res = $process_single_file($files, $label);
+            if ($res) $results[] = $res;
+        }
+
+        return $results;
+    };
+
+    $permitData   = $process_upload('business_permit', 'Business Permit / Registration Document', true);
+    $authDocData  = $process_upload('authenticity_cert', 'Product Authenticity / FDA / COA Certificate', true);
+    $allAddlFiles = $process_multi_upload('additional_documents', 'Additional Documents');
+    $addlDocData  = !empty($allAddlFiles) ? $allAddlFiles[0] : null;
 
     if (!empty($errors)) {
         http_response_code(422);
@@ -192,6 +227,7 @@ try {
         :notes, "review", :ip, NOW()
     )';
 
+    $pdo->beginTransaction();
     $stmt = $pdo->prepare($insertSql);
     $stmt->execute([
         ':code'     => $trackingCode,
@@ -221,63 +257,27 @@ try {
 
     $appId = (int)$pdo->lastInsertId();
 
-    // ── 6. Public Tracking URL & Confirmation Email ──
-    $baseUrl = trim((string)(defined('APP_BASE_URL') ? APP_BASE_URL : (getenv('APP_BASE_URL') ?: '')));
-    $baseParts = $baseUrl !== '' ? parse_url($baseUrl) : false;
-    if (!$baseParts || empty($baseParts['scheme']) || empty($baseParts['host'])
-        || !in_array(strtolower($baseParts['scheme']), ['http', 'https'], true)) {
-        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
-        if (!preg_match('/^(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::\d{1,5})?$/i', $host)) {
-            $host = 'localhost';
-        }
-        $isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
-        $appPath = str_replace('\\', '/', dirname(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/api/submit_supplier_application.php'))));
-        $appPath = ($appPath === '/' || $appPath === '.') ? '' : '/' . trim($appPath, '/');
-        $baseUrl = ($isHttps ? 'https' : 'http') . '://' . $host . $appPath;
-    } else {
-        $baseUrl = rtrim($baseUrl, '/');
-    }
-    $trackingUrl = $baseUrl . '/supplier_partnership.php?track=' . rawurlencode($trackingCode);
+    // Persist all attached documents to supplier_application_attachments for RBAC review
+    save_supplier_application_attachments($pdo, $appId, $allAddlFiles);
 
+    issue_application_tracking($pdo, 'supplier', $appId, $email);
+    $pdo->commit();
     $emailSent = false;
-    try {
-        $mailRes = send_supplier_application_confirmation_email(
-            $email,
-            $company_name,
-            $contact_person,
-            $product_name,
-            $trackingCode,
-            $trackingUrl
-        );
-        $emailSent = !empty($mailRes['sent']);
-    } catch (Throwable $mailEx) {
-        error_log('Supplier confirmation email error for #' . $appId . ': ' . $mailEx->getMessage());
-    }
-
-    // ── 7. Notify Procurement Managers ──
-    notify_role_by_permission(
-        'procurement.suppliers.manage',
-        'supplier_application_received',
-        'New Supplier Application: ' . $company_name,
-        'Application for ' . $product_name . ' (' . $trackingCode . ') is ready for review.',
-        'suppliers.php?tab=applications'
-    );
-
-    audit_log('supplier_application', $appId, 'submitted', "Application {$trackingCode} submitted by {$company_name}");
 
     echo json_encode([
         'success'        => true,
         'message'        => 'Your supplier application and documents have been received successfully!',
         'tracking_code'  => $trackingCode,
-        'tracking_url'   => $trackingUrl,
         'company_name'   => $company_name,
         'product_name'   => $product_name,
         'email'          => $email,
-        'email_sent'     => $emailSent,
+        'email_queued'     => true,
     ]);
 
 } catch (Throwable $e) {
-    error_log('Supplier application error: ' . $e->getMessage());
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    if ($e instanceof SecurityFault) safe_exception($e);
+    error_log('Supplier application error: ' . 'Service temporarily unavailable.');
     http_response_code(500);
     echo json_encode([
         'success' => false,
