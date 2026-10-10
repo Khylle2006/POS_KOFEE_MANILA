@@ -196,3 +196,64 @@ function send_application_confirmation_email(
     return send_kofee_email($toEmail, $candidateName, $subject, $html, $alt);
 }
 
+/**
+ * Send a branded Multi-Factor Authentication (MFA) verification code email.
+ */
+function send_mfa_code_email(string $toEmail, string $userName, string $code, int $expiresMinutes = 10): array {
+    $safeName = htmlspecialchars($userName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeCode = htmlspecialchars($code, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $subject  = "Your BrewVanti Sign In Code: {$safeCode}";
+
+    $html = '
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0D0709; margin: 0; padding: 24px; color: #FAF7F2; }
+        .container { max-width: 520px; margin: 0 auto; background: #1E1517; border-radius: 18px; overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,0.5); border: 1px solid rgba(217, 186, 133, 0.25); }
+        .header { background: linear-gradient(135deg, #14080D 0%, #2A131A 100%); padding: 32px 24px; text-align: center; border-bottom: 1px solid rgba(217, 186, 133, 0.2); }
+        .header h1 { font-family: Georgia, serif; color: #FAF7F2; font-size: 26px; margin: 0; letter-spacing: 0.5px; }
+        .header p { color: #ECC98F; font-size: 12px; margin: 6px 0 0; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+        .body { padding: 32px 28px; }
+        .body h2 { font-size: 19px; color: #FAF7F2; margin-top: 0; font-weight: 700; }
+        .body p { font-size: 14px; line-height: 1.6; color: #E8DFD5; margin-bottom: 16px; }
+        .code-box { background: rgba(255, 255, 255, 0.05); border: 2px dashed #ECC98F; border-radius: 14px; padding: 22px 16px; text-align: center; margin: 26px 0; }
+        .code-digits { font-family: "Courier New", Courier, monospace; font-size: 38px; font-weight: 800; letter-spacing: 12px; color: #ECC98F; text-shadow: 0 0 15px rgba(236, 201, 143, 0.4); }
+        .code-sub { font-size: 12px; color: #C4B5A5; margin-top: 10px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
+        .tip-box { background: rgba(217, 186, 133, 0.08); border-left: 3px solid #ECC98F; padding: 14px 16px; border-radius: 0 10px 10px 0; margin-top: 24px; }
+        .tip-box p { font-size: 12.5px; line-height: 1.5; color: #E8DFD5; margin: 0; }
+        .footer { background: #12090B; padding: 20px 24px; text-align: center; font-size: 12px; color: #9C8C7E; border-top: 1px solid rgba(217, 186, 133, 0.15); }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>BrewVanti</h1>
+          <p>Two-Factor Authentication &bull; Sign In Verification</p>
+        </div>
+        <div class="body">
+          <h2>Sign In Verification Code</h2>
+          <p>Hello <b>' . $safeName . '</b>,</p>
+          <p>A sign-in attempt was detected for your BrewVanti account. Use the 6-digit verification code below to authorize your session:</p>
+          <div class="code-box">
+            <div class="code-digits">' . $safeCode . '</div>
+            <div class="code-sub">Valid for ' . (int)$expiresMinutes . ' minutes</div>
+          </div>
+          <div class="tip-box">
+            <p>🔒 <b>Security Reminder:</b> Never share this code with anyone. BrewVanti and Kofee Manila staff will never ask for your verification code.</p>
+          </div>
+          <p style="margin-top:22px;font-size:12px;color:#A99A8E;">If you did not initiate this sign-in attempt, please notify your manager or change your account credentials immediately.</p>
+        </div>
+        <div class="footer">
+          &copy; ' . date('Y') . ' BrewVanti &bull; Kofee Manila POS System. All rights reserved.
+        </div>
+      </div>
+    </body>
+    </html>';
+
+    $altBody = "Hello {$userName},\n\nYour BrewVanti sign-in verification code is: {$code}\n\nThis code is valid for {$expiresMinutes} minutes.\nNever share this code with anyone.\n\nBrewVanti POS";
+    return send_kofee_email($toEmail, $userName, $subject, $html, $altBody);
+}
+

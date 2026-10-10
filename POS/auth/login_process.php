@@ -8,6 +8,7 @@
 require_once '../includes/db.php';
 require_once '../includes/security.php';
 require_once '../includes/login_approval_helpers.php';
+require_once '../includes/mfa_helpers.php';
 
 secure_session_start();
 send_security_headers();
@@ -84,53 +85,31 @@ if ($status === 'on_hold') {
     redirect_error('Your account is currently on hold. Contact your manager.', $username);
 }
 
-// ── Success ───────────────────────────────────
-record_login_attempt($username, true);
-
-// ── Multi-role resolution for authorization check ──
-$user_roles = [];
-try {
-    $role_stmt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :id ORDER BY role');
-    $role_stmt->execute([':id' => $user['id']]);
-    $user_roles = $role_stmt->fetchAll(PDO::FETCH_COLUMN);
-} catch (PDOException $e) {
-    error_log('role load failed: ' . $e->getMessage());
-}
-$user['roles'] = $user_roles ?: [$user['role']];
-
-// ── Check Device Trust & Geolocation HR Authorization ──
-$ip = client_ip();
-$userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-$deviceHash = hash('sha256', $user['id'] . '|' . $userAgent . '|' . substr($ip, 0, strrpos($ip, '.')));
-
-$requiresApproval = does_user_require_login_approval($pdo, $user);
-$deviceTrusted = is_device_trusted($pdo, (int)$user['id'], $deviceHash);
-
-if ($requiresApproval && !$deviceTrusted) {
-    // Collect client-provided geolocation & device info
-    $lat = (isset($_POST['latitude']) && is_numeric($_POST['latitude'])) ? (float)$_POST['latitude'] : null;
-    $lon = (isset($_POST['longitude']) && is_numeric($_POST['longitude'])) ? (float)$_POST['longitude'] : null;
-    $acc = (isset($_POST['accuracy']) && is_numeric($_POST['accuracy'])) ? (float)$_POST['accuracy'] : null;
-    $locStatus = trim($_POST['location_status'] ?? 'unknown');
-    $deviceInfo = trim($_POST['device_info'] ?? '');
-
-    $authRes = create_login_authorization($pdo, $user, $lat, $lon, $acc, $locStatus, $deviceInfo);
-
-    if ($authRes['status'] === 'approved') {
-        // Auto-approved inside workplace geofence
-        establish_user_session($pdo, $user);
-        header('Location: index.php');
-        exit;
-    }
-
-    // Pending HR approval: store pending token and redirect to waiting screen
-    $_SESSION['pending_auth_token'] = $authRes['auth_token'];
-    $_SESSION['pending_auth_user_id'] = (int)$user['id'];
-    header('Location: waiting_approval.php?token=' . urlencode($authRes['auth_token']));
-    exit;
+// ── Step 2: Multi-Factor Authentication (MFA) Email Code Verification ──
+// Password credentials are validated. Initiate MFA challenge with a tokenized 6-digit code.
+$mfaRes = create_mfa_challenge($pdo, $user);
+if (!$mfaRes['ok']) {
+    redirect_error($mfaRes['error'] ?? 'Could not initialize MFA verification. Please try again.', $username);
 }
 
-// ── Standard Immediate Authentication (Admin, HR, or Trusted Device) ──
-establish_user_session($pdo, $user);
-header('Location: index.php');
+// Preserve client-provided geolocation & device info across the MFA verification step
+$lat = (isset($_POST['latitude']) && is_numeric($_POST['latitude'])) ? (float)$_POST['latitude'] : null;
+$lon = (isset($_POST['longitude']) && is_numeric($_POST['longitude'])) ? (float)$_POST['longitude'] : null;
+$acc = (isset($_POST['accuracy']) && is_numeric($_POST['accuracy'])) ? (float)$_POST['accuracy'] : null;
+$locStatus = trim($_POST['location_status'] ?? 'unknown');
+$deviceInfo = trim($_POST['device_info'] ?? '');
+
+$_SESSION['pending_mfa'] = [
+    'user_id'         => (int)$user['id'],
+    'username'        => $user['username'],
+    'mfa_token'       => $mfaRes['mfa_token'],
+    'latitude'        => $lat,
+    'longitude'       => $lon,
+    'accuracy'        => $acc,
+    'location_status' => $locStatus,
+    'device_info'     => $deviceInfo,
+    'initiated_at'    => time(),
+];
+
+header('Location: mfa_verify.php?token=' . urlencode($mfaRes['mfa_token']));
 exit;
