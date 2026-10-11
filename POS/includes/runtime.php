@@ -33,7 +33,22 @@ function app_https(): bool
 
 function app_url(): string
 {
-    $url = rtrim(app_setting('APP_URL', app_production() ? '' : 'http://localhost/POS_KOFEE_MANILA/POS'), '/');
+    $configured = app_setting('APP_URL');
+    $configuredHost = $configured !== '' ? (parse_url($configured, PHP_URL_HOST) ?: '') : '';
+    $serverHost = $_SERVER['HTTP_HOST'] ?? '';
+    if ($configured === '' || ($configuredHost === 'localhost' && $serverHost !== '' && !in_array($serverHost, ['localhost', '127.0.0.1'], true))) {
+        if (!empty($_SERVER['HTTP_HOST'])) {
+            $scheme = app_https() ? 'https' : 'http';
+            $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+            $dir = rtrim(dirname($script), '/');
+            $base = preg_replace('#/(php|api|auth|database|tools|tests)$#i', '', $dir);
+            $url = $scheme . '://' . $_SERVER['HTTP_HOST'] . $base;
+        } else {
+            $url = $configured !== '' ? rtrim($configured, '/') : (app_production() ? '' : 'http://localhost/POS_KOFEE_MANILA/POS');
+        }
+    } else {
+        $url = rtrim($configured, '/');
+    }
     $parts = parse_url($url);
     if ($parts === false || empty($parts['host']) || !in_array($parts['scheme'] ?? '', ['http', 'https'], true)
         || isset($parts['pass']) || isset($parts['user']) || isset($parts['query']) || isset($parts['fragment'])

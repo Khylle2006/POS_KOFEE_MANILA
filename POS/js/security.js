@@ -5,7 +5,10 @@
 
     const script = typeof document !== 'undefined' ? document.currentScript : null;
     const scriptSrc = script?.src || (typeof location !== 'undefined' ? new URL('../js/security.js', location.href).href : 'http://localhost/');
-    const base = new URL('../', scriptSrc);
+    let base = new URL('../', scriptSrc);
+    if (typeof location !== 'undefined' && location.origin && base.origin !== location.origin) {
+        base = new URL('../', location.href);
+    }
     const nativeFetch = window.fetch.bind(window);
     const token = () => document.querySelector('meta[name="csrf-token"]')?.content
         || document.querySelector('input[name="_csrf"]')?.value
