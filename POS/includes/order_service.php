@@ -213,7 +213,7 @@ function submit_order(PDO $pdo, array $data, int $actor, string $key, bool $gate
     $lineItems = array_map(static fn(array $item): array => ['currency' => 'PHP', 'amount' => $item['price'], 'name' => $item['name'] . ' (' . $item['size'] . ')', 'quantity' => $item['qty']], $cart['items']);
     $base = app_url();
     $result = paymongo_request('checkout_sessions', ['send_email_receipt' => false, 'show_description' => true,
-        'description' => 'Kofee Manila Order #' . $orderId, 'line_items' => $lineItems, 'payment_method_types' => ['gcash', 'paymaya', 'card'],
+        'description' => 'Kofee Manila Order #' . $orderId, 'line_items' => $lineItems, 'payment_method_types' => ['gcash', 'paymaya', 'card', 'qrph', 'grab_pay', 'dob'],
         'reference_number' => (string)$orderId, 'success_url' => $base . '/php/menu.php?paymongo_success=1&order_id=' . $orderId,
         'cancel_url' => $base . '/php/menu.php?paymongo_cancel=1&order_id=' . $orderId], 'POST');
     $session = $result['data']['id'] ?? null;

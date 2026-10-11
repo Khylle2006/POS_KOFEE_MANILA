@@ -252,7 +252,7 @@ require_permission('orders.new');
         <button type="button" class="pay-method-card" data-method="paymongo" onclick="selectPaymentMethod('paymongo')">
           <span class="pmc-icon"><?= icon('qr', 18) ?></span>
           <span class="pmc-name">PayMongo QR</span>
-          <span class="pmc-desc">GCash / Maya / Card</span>
+          <span class="pmc-desc">GCash / Maya / QR Ph / Card</span>
         </button>
 
         <button type="button" class="pay-method-card" data-method="ewallet" onclick="selectPaymentMethod('ewallet')">
@@ -301,7 +301,7 @@ require_permission('orders.new');
           <div id="pm-init-box" class="pm-init-state">
             <div class="pm-init-icon"><?= icon('qr', 36) ?></div>
             <h4>Dynamic PayMongo QR</h4>
-            <p>Generate a secure PayMongo checkout session supporting GCash, Maya, and credit/debit cards.</p>
+            <p>Generate a secure PayMongo checkout session supporting GCash, Maya, QR Ph, GrabPay, and credit/debit cards.</p>
             <button type="button" class="btn-pm-generate" onclick="startPayMongoSession()">
               <?= icon('zap', 14) ?> Generate QR & Checkout
             </button>

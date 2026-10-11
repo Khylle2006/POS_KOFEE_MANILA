@@ -35,6 +35,35 @@ try {
     }
     $isFinalPaid = $order['payment_status'] === 'paid';
 
+    // If order payment is pending with a PayMongo checkout session, query PayMongo to reconcile status
+    if (!$isFinalPaid && ($order['payment_status'] ?? '') === 'pending' && !empty($order['paymongo_session_id'])) {
+        require_once __DIR__ . '/../includes/payment_events.php';
+        try {
+            $pmRes = paymongo_request('checkout_sessions/' . rawurlencode($order['paymongo_session_id']));
+            if (!empty($pmRes['success']) && !empty($pmRes['data'])) {
+                $pdo->beginTransaction();
+                try {
+                    reconcile_checkout_session($pdo, $orderId, $pmRes['data']);
+                    $pdo->commit();
+                    invalidate_order_caches();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                }
+                // Refresh order record
+                $stmt->execute([':id' => $orderId]);
+                $refreshed = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($refreshed) {
+                    $order = $refreshed;
+                    $isFinalPaid = ($order['payment_status'] === 'paid');
+                }
+            }
+        } catch (Throwable $e) {
+            // Keep going if provider reconciliation experiences network issues
+        }
+    }
+
     // Fetch full order items for receipt
     $itemsStmt = $pdo->prepare("
         SELECT oi.product_id, oi.quantity, oi.price, oi.subtotal, oi.size, p.name, p.image_path
