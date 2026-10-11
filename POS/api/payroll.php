@@ -909,10 +909,14 @@ try {
 
     respond(['ok' => false, 'error' => 'Unknown payroll action.'], 422);
 
+} catch (SecurityFault $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    error_log('payroll api security fault: ' . $e->errorCode . ' - ' . $e->getMessage());
+    respond(['ok' => false, 'error' => $e->getMessage(), 'code' => $e->errorCode], $e->status);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    error_log('payroll api error: ' . 'Service temporarily unavailable.');
-    respond(['ok' => false, 'error' => 'A server error occurred. Check the error log.'], 500);
+    error_log('payroll api error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    respond(['ok' => false, 'error' => $e->getMessage() ?: 'A server error occurred. Check the error log.'], 500);
 }
 
 /**

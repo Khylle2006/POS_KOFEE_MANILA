@@ -116,10 +116,16 @@ function claim_financial_request(PDO $pdo, string $scope, array $data): void
         if ($previous !== null) {
             $pdo->commit();
             if (!empty($previous['processing'])) throw new SecurityFault('FINANCIAL_REQUEST_PENDING', 'This request requires reconciliation before another submission.', 409);
-            http_response_code($previous['status']);
-            if (isset($previous['redirect'])) header('Location: ' . $previous['redirect']);
-            else { header('Content-Type: application/json'); echo json_encode($previous['body'], JSON_THROW_ON_ERROR); }
-            exit;
+            if (($previous['status'] ?? 200) < 500) {
+                http_response_code($previous['status']);
+                if (isset($previous['redirect'])) header('Location: ' . $previous['redirect']);
+                else { header('Content-Type: application/json'); echo json_encode($previous['body'], JSON_THROW_ON_ERROR); }
+                exit;
+            }
+            $pdo->prepare('DELETE FROM request_idempotency WHERE scope = ? AND actor_id = ? AND key_hash = ?')
+                ->execute([$scope, $actor, hash('sha256', $key)]);
+            $GLOBALS['financial_request'] = [$scope, $actor, $key];
+            return;
         }
         finish_idempotency($pdo, $scope, $actor, $key, ['processing' => true]);
         $pdo->commit();
@@ -131,6 +137,11 @@ function complete_financial_request(PDO $pdo, array $payload): void
 {
     if (isset($GLOBALS['financial_request'])) {
         [$scope, $actor, $key] = $GLOBALS['financial_request'];
+        if (($payload['status'] ?? 200) >= 500) {
+            $pdo->prepare('DELETE FROM request_idempotency WHERE scope = ? AND actor_id = ? AND key_hash = ?')
+                ->execute([$scope, $actor, hash('sha256', $key)]);
+            return;
+        }
         finish_idempotency($pdo, $scope, $actor, $key, $payload);
     }
 }

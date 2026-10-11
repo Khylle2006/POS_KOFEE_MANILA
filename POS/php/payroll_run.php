@@ -1032,7 +1032,8 @@ async function submitIndividualRelease() {
       payment_details: {
         account_info: info,
         account_name: currentIndPayslip.name,
-      }
+      },
+      retry_ts: Date.now()
     });
 
     await Swal.fire({
@@ -1072,7 +1073,7 @@ async function retrySinglePayslip(id, name, net) {
   });
 
   try {
-    const res = await post({ action: 'release_individual', payslip_id: id });
+    const res = await post({ action: 'release_individual', payslip_id: id, retry_ts: Date.now() });
     await Swal.fire({
       icon: 'success',
       title: 'Transfer Succeeded',
@@ -1480,7 +1481,7 @@ async function dispatchPaymongoPayout() {
 async function retryPaymongoItem(itemId) {
   try {
     Swal.fire({ title: 'Retrying item...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-    const data = await post({ action: 'paymongo_retry_item', payout_item_id: itemId });
+    const data = await post({ action: 'paymongo_retry_item', payout_item_id: itemId, retry_ts: Date.now() });
     await Swal.fire({ icon: 'success', title: 'Retried', text: data.message || 'Item updated.' });
     await loadPaymongoAudit();
   } catch (err) {

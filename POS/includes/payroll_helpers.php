@@ -848,7 +848,7 @@ function release_single_employee_payslip(PDO $pdo, int $payslip_id, int $actor_i
     $slip = $stmt->fetch();
     if (!$slip) throw new SecurityFault('PAYSLIP_NOT_FOUND', 'Payslip not found.', 404);
     if ($slip['payment_status'] === 'paid') return ['ok' => true, 'status' => 'paid', 'transfer_id' => $slip['transfer_id'], 'message' => 'Payslip was already released.'];
-    if ($slip['period_status'] !== 'approved') throw new SecurityFault('PAYROLL_NOT_APPROVED', 'Payroll must be approved before release.', 409);
+    if (!in_array($slip['period_status'], ['approved', 'partially_paid'], true)) throw new SecurityFault('PAYROLL_NOT_APPROVED', 'Payroll must be approved before release.', 409);
     $method = $method ?: ($slip['payment_method'] ?: 'cash');
     if (!in_array($method, ['cash', 'cheque', 'bank_transfer', 'ewallet', 'paymongo'], true)) throw new SecurityFault('PAYMENT_METHOD_INVALID', 'Invalid payout method.');
     if (money_centavos($slip['net_pay']) <= 0) throw new SecurityFault('PAYOUT_AMOUNT_INVALID', 'Payout must be positive.');
@@ -871,7 +871,7 @@ function release_single_employee_payslip(PDO $pdo, int $payslip_id, int $actor_i
         if ($lock->fetchColumn() === 'paid') { $pdo->commit(); return ['ok' => true, 'status' => 'paid', 'message' => 'Payslip was already released.']; }
         // A manual release cannot override an unresolved gateway transfer.
         if (!$online) {
-            $attempt = $pdo->prepare('SELECT status FROM payment_attempts WHERE operation_key = ? FOR UPDATE');
+            $attempt = $pdo->prepare("SELECT status FROM payment_attempts WHERE operation_key = ? AND status <> 'rejected' FOR UPDATE");
             $attempt->execute(['payslip-transfer-' . $payslip_id]);
             if ($attempt->fetchColumn()) throw new SecurityFault('PAYOUT_RECONCILIATION_REQUIRED', 'Review the existing transfer before manual release.', 409);
         }

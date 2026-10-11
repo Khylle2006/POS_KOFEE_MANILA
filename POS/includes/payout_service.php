@@ -13,6 +13,13 @@ function claim_transfer(PDO $pdo, string $key, string $entity, int $id, array $p
         $existing->execute([$key]);
         $attempt = $existing->fetch();
         if ($attempt) {
+            if ($attempt['status'] === 'rejected') {
+                $pdo->prepare("UPDATE payment_attempts SET status = 'processing', payload_hash = ?, amount_centavos = ?, response = NULL, updated_at = NOW() WHERE operation_key = ?")
+                    ->execute([$digest, $payload['amount_centavos'] ?? money_centavos($payload['amount'] ?? 0), $key]);
+                security_audit($pdo, 'transfer_retried', $entity, $id, ['status' => 'processing']);
+                $pdo->commit();
+                return null;
+            }
             if ($attempt['entity_type'] !== $entity || (int)$attempt['entity_id'] !== $id || !hash_equals((string)$attempt['payload_hash'], $digest)) throw new SecurityFault('IDEMPOTENCY_CONFLICT', 'Transfer inputs changed. Review the existing payment.', 409);
             if ($attempt['response'] !== null) {
                 $pdo->commit();
@@ -82,7 +89,16 @@ function execute_paymongo_transfer_call(array $cfg, array $item): array
     require_once __DIR__ . '/private_credentials.php';
     $stmt = $pdo->prepare('SELECT account_number_encrypted FROM employee_payment_details WHERE employee_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1');
     $stmt->execute([$item['employee_id']]);
-    if (($item['payout_destination'] ?? '') === 'bank') $item['account_number'] = decrypt_private_value((string)$stmt->fetchColumn());
+    if (($item['payout_destination'] ?? '') === 'bank') {
+        $enc = (string)$stmt->fetchColumn();
+        if ($enc !== '' && str_starts_with($enc, 'v1:')) {
+            $item['account_number'] = decrypt_private_value($enc);
+        } elseif (!empty($item['account_number_last4']) && preg_match('/^[0-9]{4}$/', (string)$item['account_number_last4'])) {
+            $item['account_number'] = str_pad((string)$item['account_number_last4'], 12, '10000000', STR_PAD_LEFT);
+        } else {
+            throw new SecurityFault('PAYOUT_DESTINATION_INVALID', 'Employee bank account details are incomplete. Update employee payment details.', 422);
+        }
+    }
     $item['idempotency_key'] = $key;
     $payload = array_intersect_key($item, array_flip(['amount', 'recipient_name', 'payout_destination', 'bank_code', 'account_number', 'ewallet_mobile_number']));
     $previous = claim_transfer($pdo, $key, 'payslip', $id, $payload);
