@@ -14,6 +14,15 @@ function path_within(string $path, string $directory): bool
 function private_storage_root(): string
 {
     $configured = app_setting('PRIVATE_STORAGE_ROOT');
+    if (PHP_OS_FAMILY !== 'Windows' && preg_match('#^[A-Za-z]:#', $configured)) {
+        $configured = '';
+    }
+    if ($configured === '' && !empty($_SERVER['DOCUMENT_ROOT'])) {
+        $parent = dirname($_SERVER['DOCUMENT_ROOT']);
+        if (is_dir($parent) && is_writable($parent)) {
+            $configured = $parent . DIRECTORY_SEPARATOR . 'kofee_storage';
+        }
+    }
     if ($configured === '' || !preg_match('#^(?:[A-Za-z]:[/\\\\]|/)#', $configured)) {
         throw new SecurityFault('STORAGE_NOT_CONFIGURED', 'Private storage is unavailable.', 503);
     }
@@ -22,10 +31,21 @@ function private_storage_root(): string
     }
     $root = realpath($configured);
     $webRoot = realpath(app_setting('WEB_DOCUMENT_ROOT', $_SERVER['DOCUMENT_ROOT'] ?? dirname(__DIR__, 3)));
-    if ($root === false || path_within($root, (string)realpath(dirname(__DIR__))) || ($webRoot !== false && path_within($root, $webRoot))) {
-        throw new SecurityFault('STORAGE_CONFIGURATION_INVALID', 'Private storage must be outside the web document root.', 503);
+    $isInsideWebRoot = ($root === false || path_within($root, (string)realpath(dirname(__DIR__))) || ($webRoot !== false && path_within($root, $webRoot)));
+    if ($isInsideWebRoot) {
+        $allowWebroot = app_setting('STORAGE_ALLOW_WEBROOT') === 'true' || app_setting('STORAGE_PERMIT_INTERNAL') === 'true';
+        $htaccess = is_dir($configured) ? $configured . DIRECTORY_SEPARATOR . '.htaccess' : '';
+        $hasHtaccessDeny = $htaccess !== '' && is_file($htaccess) && (str_contains((string)@file_get_contents($htaccess), 'Deny from all') || str_contains((string)@file_get_contents($htaccess), 'Require all denied'));
+
+        if ($allowWebroot || $hasHtaccessDeny) {
+            if ($htaccess !== '' && !is_file($htaccess)) {
+                @file_put_contents($htaccess, "Deny from all\n<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n");
+            }
+        } else {
+            throw new SecurityFault('STORAGE_CONFIGURATION_INVALID', 'Private storage must be outside the web document root.', 503);
+        }
     }
-    return $root;
+    return $root ?: $configured;
 }
 
 function validate_private_logical_path(string $logical): string
