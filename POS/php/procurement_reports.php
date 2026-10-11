@@ -226,7 +226,7 @@ try {
             break;
     }
 } catch (Throwable $e) {
-    error_log('procurement_reports query failed: ' . $e->getMessage());
+    error_log('procurement_reports query failed: ' . 'Service temporarily unavailable.');
     $rows = []; $columns = $columns ?: ['error' => 'Error'];
 }
 

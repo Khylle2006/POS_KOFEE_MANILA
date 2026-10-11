@@ -67,7 +67,7 @@ $next = $pdo->query(
 $active_branches = [];
 try {
     $active_branches = $pdo->query("SELECT id, name, code FROM branches WHERE status = 'active' ORDER BY name ASC")->fetchAll();
-} catch (Throwable $e) {}
+} catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 
 // Labour cost vs sales for the current month.
 $labour = $pdo->query(

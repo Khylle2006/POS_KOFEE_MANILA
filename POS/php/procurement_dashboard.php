@@ -41,7 +41,7 @@ function dash_count(PDO $pdo, string $sql, array $params = []): int {
         $stmt->execute($params);
         return (int)$stmt->fetchColumn();
     } catch (Throwable $e) {
-        error_log('procurement_dashboard stat failed: ' . $e->getMessage());
+        error_log('procurement_dashboard stat failed: ' . 'Service temporarily unavailable.');
         return 0;
     }
 }
@@ -51,7 +51,7 @@ function dash_rows(PDO $pdo, string $sql, array $params = []): array {
         $stmt->execute($params);
         return $stmt->fetchAll();
     } catch (Throwable $e) {
-        error_log('procurement_dashboard rows failed: ' . $e->getMessage());
+        error_log('procurement_dashboard rows failed: ' . 'Service temporarily unavailable.');
         return [];
     }
 }

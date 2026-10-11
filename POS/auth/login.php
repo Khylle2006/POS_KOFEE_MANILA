@@ -1,9 +1,13 @@
 <?php
+require_once __DIR__ . '/../includes/request_security.php';
+secure_session_start();
+send_security_headers();
+start_browser_security_output();
 require_once '../includes/security.php';
 secure_session_start();
 send_security_headers();
 
-if (!empty($_SESSION['user_id'])) {
+if (!empty($_SESSION['user_id']) && resume_auth_session(get_db())) {
     header('Location: index.php');
     exit;
 }
@@ -263,7 +267,7 @@ unset($_SESSION['login_username']);
     border-radius: 28px;
     padding: 44px 38px 38px;
     border: 1px solid rgba(217, 186, 133, 0.35);
-    box-shadow: 
+    box-shadow:
       0 35px 85px rgba(0, 0, 0, 0.85),
       0 0 45px rgba(217, 186, 133, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.22),
@@ -576,6 +580,13 @@ unset($_SESSION['login_username']);
       font-size: 25px;
     }
   }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+:where(a, button, input):focus-visible { outline: 3px solid #ECC98F; outline-offset: 3px; }
+body { overflow-y: auto; }
+.auth-password-field { position: relative; }
+.auth-password-field input { padding-right: 64px; }
+#toggle-password { position: absolute; right: 6px; top: 4px; min-height: 40px; padding: 0 10px; color: #ECC98F; background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+#geo_badge { min-height: 44px; }
 </style>
 </head>
 <body>
@@ -592,7 +603,7 @@ unset($_SESSION['login_username']);
   <div class="cursor-glow-follower" id="mouseGlow"></div>
 
   <!-- ─── Ultra-Realistic 2.5D Roasted Coffee Beans ─── -->
-  <svg class="floating-bean bean-1" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-1" viewBox="0 0 60 80" fill="none">
     <defs>
       <radialGradient id="beanGrad1" cx="35%" cy="35%" r="70%">
         <stop offset="0%" stop-color="#5E3825" />
@@ -611,7 +622,7 @@ unset($_SESSION['login_username']);
     <path d="M30 11 Q37 40 30 69" stroke="#7A4B2F" stroke-width="1.2" stroke-linecap="round" opacity="0.6" />
   </svg>
 
-  <svg class="floating-bean bean-2" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-2" viewBox="0 0 60 80" fill="none">
     <defs>
       <radialGradient id="beanGrad2" cx="35%" cy="35%" r="70%">
         <stop offset="0%" stop-color="#4E2E1D" />
@@ -630,7 +641,7 @@ unset($_SESSION['login_username']);
     <path d="M30 11 Q23 40 30 69" stroke="#6E4126" stroke-width="1" stroke-linecap="round" opacity="0.5" />
   </svg>
 
-  <svg class="floating-bean bean-3" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-3" viewBox="0 0 60 80" fill="none">
     <defs>
       <radialGradient id="beanGrad3" cx="35%" cy="35%" r="70%">
         <stop offset="0%" stop-color="#583522" />
@@ -648,7 +659,7 @@ unset($_SESSION['login_username']);
     <path d="M30 11 Q36 40 30 69" stroke="#7A4B2F" stroke-width="1.2" stroke-linecap="round" opacity="0.6" />
   </svg>
 
-  <svg class="floating-bean bean-4" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-4" viewBox="0 0 60 80" fill="none">
     <defs>
       <radialGradient id="beanGrad4" cx="35%" cy="35%" r="70%">
         <stop offset="0%" stop-color="#4B2B1B" />
@@ -662,12 +673,12 @@ unset($_SESSION['login_username']);
     <path d="M30 11 Q24 40 30 69" stroke="#683D24" stroke-width="1" stroke-linecap="round" opacity="0.5" />
   </svg>
 
-  <svg class="floating-bean bean-5" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-5" viewBox="0 0 60 80" fill="none">
     <path d="M30 6 C46 6 54 22 54 42 C54 62 44 74 30 74 C16 74 6 62 6 42 C6 22 14 6 30 6 Z" fill="#2E170E" />
     <path d="M30 10 Q37 40 30 70" stroke="#0B0402" stroke-width="4" stroke-linecap="round" />
   </svg>
 
-  <svg class="floating-bean bean-6" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-6" viewBox="0 0 60 80" fill="none">
     <path d="M30 6 C46 6 54 22 54 42 C54 62 44 74 30 74 C16 74 6 62 6 42 C6 22 14 6 30 6 Z" fill="#3A1F15" />
     <path d="M30 10 Q23 40 30 70" stroke="#0D0502" stroke-width="3.8" stroke-linecap="round" />
   </svg>
@@ -687,11 +698,11 @@ unset($_SESSION['login_username']);
 
     <!-- Alert Notifications -->
     <?php if ($error): ?>
-      <div class="alert-banner alert-error">
+      <div class="alert-banner alert-error" role="alert">
         <?= htmlspecialchars($error) ?>
       </div>
     <?php elseif ($info): ?>
-      <div class="alert-banner alert-info">
+      <div class="alert-banner alert-info" role="status">
         <?= htmlspecialchars($info) ?>
       </div>
     <?php endif; ?>
@@ -707,18 +718,18 @@ unset($_SESSION['login_username']);
 
       <!-- Username Field -->
       <div class="field-group">
-        <label class="field-label" for="usernameInput">Username</label>
-        <input type="text" id="usernameInput" name="username" class="field-input" placeholder="Enter your username" value="<?= $saved_username ?>" required autocomplete="username">
+        <label class="field-label" for="username">Username</label>
+        <input type="text" id="username" name="username" class="field-input" placeholder="Enter your username" value="<?= $saved_username ?>" required autocomplete="username">
       </div>
 
       <!-- Password Field -->
       <div class="field-group">
-        <label class="field-label" for="passwordInput">Password</label>
-        <input type="password" id="passwordInput" name="password" class="field-input" placeholder="••••••••" required autocomplete="current-password">
+        <label class="field-label" for="password">Password</label>
+        <div class="auth-password-field"><input type="password" id="password" name="password" class="field-input" placeholder="••••••••" required autocomplete="current-password"><button type="button" id="toggle-password" aria-label="Show password" aria-pressed="false" aria-controls="password">Show</button></div>
       </div>
 
       <!-- Geolocation Workplace Status Badge -->
-      <div id="geo_badge">
+      <div id="geo_badge" role="status" aria-live="polite">
         <div class="geo-badge-left">
           <span id="geo_icon">📍</span>
           <span id="geo_label">Checking workplace location…</span>
@@ -751,6 +762,7 @@ unset($_SESSION['login_username']);
     const mouseGlow = document.getElementById('mouseGlow');
 
     document.addEventListener('mousemove', (e) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.matchMedia('(pointer: coarse)').matches) return;
       // 1. Cursor Glow Follower
       if (mouseGlow) {
         mouseGlow.style.left = e.clientX + 'px';
@@ -777,6 +789,7 @@ unset($_SESSION['login_username']);
     });
   </script>
 
-  <script src="js/login.js"></script>
+  <script src="../js/auth-ui.js?v=<?= filemtime(__DIR__ . '/../js/auth-ui.js') ?>" defer></script>
+  <script src="js/login.js?v=<?= filemtime(__DIR__ . '/js/login.js') ?>"></script>
 </body>
 </html>

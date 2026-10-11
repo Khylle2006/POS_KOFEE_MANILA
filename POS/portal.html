@@ -40,8 +40,9 @@
       color: #FFF !important;
     }
   </style>
+  <link rel="stylesheet" href="css/public-ui.css">
 </head>
-<body class="bg-[#110A16] text-slate-100 h-screen flex flex-col antialiased selection:bg-[#C97B3D] selection:text-white overflow-hidden">
+<body class="kfs-portal bg-[#110A16] text-slate-100 h-screen flex flex-col antialiased selection:bg-[#C97B3D] selection:text-white overflow-hidden">
 
   <!-- MASTER TOP HEADER -->
   <header class="bg-[#170E1E] border-b border-[#2E1C3A] px-5 py-2.5 flex items-center justify-between shrink-0 z-40">
@@ -52,21 +53,22 @@
       <div>
         <div class="flex items-center space-x-2">
           <span class="font-serif font-bold text-base text-amber-100">Kofee Manila</span>
-          <span class="text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded-full bg-[#C97B3D]/20 text-[#EAA869] border border-[#C97B3D]/30">Live Localhost Edition</span>
+          <span class="text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded-full bg-[#C97B3D]/20 text-[#EAA869] border border-[#C97B3D]/30">Module preview</span>
         </div>
-        <p class="text-[10px] text-slate-400">All-Pages Master Portal &bull; Running on XAMPP Apache</p>
+        <p class="text-[10px] text-slate-400">Explore the workspace with sample data</p>
       </div>
     </div>
 
     <!-- Quick Actions & PHP Link Buttons -->
     <div class="flex items-center space-x-3">
+      <button type="button" class="portal-menu-toggle" id="portal-menu-toggle" aria-controls="portal-navigation" aria-expanded="false" onclick="togglePortalNavigation()">Modules</button>
       <a href="index.html" target="_blank" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#22152C] border border-[#3A244A] text-xs text-slate-300 hover:text-white transition">
         <svg class="w-3.5 h-3.5 text-[#C97B3D]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         <span>View Customer Storefront</span>
       </a>
       <a href="auth/login.php" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#C97B3D] hover:bg-[#D98B4D] text-white text-xs font-bold transition shadow-sm">
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <span>PHP Backend Login</span>
+        <span>Staff sign in</span>
       </a>
       <div class="text-right border-l border-[#2E1C3A] pl-3">
         <div class="text-amber-200 font-mono font-bold text-xs" id="masterClock">00:00:00</div>
@@ -79,7 +81,7 @@
   <div class="flex-1 flex overflow-hidden">
     
     <!-- LEFT SIDEBAR: ERP NAVIGATION -->
-    <aside class="w-64 bg-[#170E1E] border-r border-[#2E1C3A] flex flex-col shrink-0 overflow-y-auto">
+    <aside id="portal-navigation" aria-label="Preview modules" class="w-64 bg-[#170E1E] border-r border-[#2E1C3A] flex flex-col shrink-0 overflow-y-auto">
       
       <div class="p-4 space-y-6">
         
@@ -616,7 +618,17 @@
   </div>
 
   <script>
+    function togglePortalNavigation(force) {
+      const navigation = document.getElementById('portal-navigation');
+      const open = typeof force === 'boolean' ? force : !navigation.classList.contains('portal-nav-open');
+      navigation.classList.toggle('portal-nav-open', open);
+      document.getElementById('portal-menu-toggle').setAttribute('aria-expanded', String(open));
+    }
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') togglePortalNavigation(false);
+    });
     function navTo(pageKey, btn) {
+      togglePortalNavigation(false);
       document.querySelectorAll('.page-view').forEach(p => p.classList.add('hidden'));
       const target = document.getElementById('page-' + pageKey);
       if (target) target.classList.remove('hidden');

@@ -1,8 +1,11 @@
 <?php
+require_once __DIR__ . '/../includes/request_security.php';
+secure_session_start();
+send_security_headers();
+start_browser_security_output();
 // ==============================================================================
 // FILE: auth/waiting_approval.php
 // Live Waiting Screen for Employees Awaiting HR Geolocation Login Approval
-// BrewVanti 2.5D Living Fluid Mesh Aurora & Glassmorphism Theme
 // ==============================================================================
 
 require_once '../includes/db.php';
@@ -25,6 +28,7 @@ if ($token === '' || !preg_match('/^[a-f0-9]{64}$/i', $token)) {
     exit;
 }
 
+require_pending_approval($token);
 $pdo = get_db();
 $auth = get_login_authorization_by_token($pdo, $token);
 
@@ -34,7 +38,9 @@ if (!$auth) {
 }
 
 // Handle manual cancel request
-if (isset($_GET['action']) && $_GET['action'] === 'cancel') {
+if (($_POST['action'] ?? '') === 'cancel') {
+    require_method('POST');
+    require_csrf();
     $pdo->prepare("UPDATE login_authorizations SET status = 'cancelled' WHERE id = :id AND status = 'pending'")
         ->execute([':id' => $auth['id']]);
     unset($_SESSION['pending_auth_token'], $_SESSION['pending_auth_user_id']);
@@ -44,12 +50,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'cancel') {
 
 // If already approved, establish session & forward immediately
 if ($auth['status'] === 'approved') {
-    $userStmt = $pdo->prepare('SELECT id, username, firstname, lastname, email, role, status, avatar_path FROM users WHERE id = :id LIMIT 1');
-    $userStmt->execute([':id' => $auth['user_id']]);
-    $user = $userStmt->fetch(PDO::FETCH_ASSOC);
-    if ($user && $user['status'] === 'active') {
-        establish_user_session($pdo, $user);
-        $pdo->prepare("UPDATE login_authorizations SET session_created = 1 WHERE id = :id")->execute([':id' => $auth['id']]);
+    if (consume_login_approval($pdo, $token)) {
         header('Location: index.php');
         exit;
     }
@@ -297,7 +298,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
     border-radius: 28px;
     padding: 38px 34px 32px;
     border: 1px solid rgba(217, 186, 133, 0.35);
-    box-shadow: 
+    box-shadow:
       0 35px 85px rgba(0, 0, 0, 0.85),
       0 0 45px rgba(217, 186, 133, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.22),
@@ -729,6 +730,10 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
       font-size: 22px;
     }
   }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+:where(a, button, input):focus-visible { outline: 3px solid #ECC98F; outline-offset: 3px; }
+body { overflow-y: auto; }
+.cancel-link { background: transparent; border: 0; cursor: pointer; font: inherit; min-height: 44px; }
 </style>
 </head>
 <body>
@@ -745,7 +750,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
   <div class="cursor-glow-follower" id="mouseGlow"></div>
 
   <!-- ─── Ultra-Realistic 2.5D Roasted Coffee Beans ─── -->
-  <svg class="floating-bean bean-1" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-1" viewBox="0 0 60 80" fill="none">
     <defs>
       <radialGradient id="beanGrad1" cx="35%" cy="35%" r="70%">
         <stop offset="0%" stop-color="#5E3825" />
@@ -764,7 +769,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
     <path d="M30 11 Q37 40 30 69" stroke="#7A4B2F" stroke-width="1.2" stroke-linecap="round" opacity="0.6" />
   </svg>
 
-  <svg class="floating-bean bean-2" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-2" viewBox="0 0 60 80" fill="none">
     <defs>
       <radialGradient id="beanGrad2" cx="35%" cy="35%" r="70%">
         <stop offset="0%" stop-color="#4E2E1D" />
@@ -783,7 +788,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
     <path d="M30 11 Q23 40 30 69" stroke="#6E4126" stroke-width="1" stroke-linecap="round" opacity="0.5" />
   </svg>
 
-  <svg class="floating-bean bean-3" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-3" viewBox="0 0 60 80" fill="none">
     <defs>
       <radialGradient id="beanGrad3" cx="35%" cy="35%" r="70%">
         <stop offset="0%" stop-color="#583522" />
@@ -801,7 +806,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
     <path d="M30 11 Q36 40 30 69" stroke="#7A4B2F" stroke-width="1.2" stroke-linecap="round" opacity="0.6" />
   </svg>
 
-  <svg class="floating-bean bean-4" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-4" viewBox="0 0 60 80" fill="none">
     <defs>
       <radialGradient id="beanGrad4" cx="35%" cy="35%" r="70%">
         <stop offset="0%" stop-color="#4B2B1B" />
@@ -815,12 +820,12 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
     <path d="M30 11 Q24 40 30 69" stroke="#683D24" stroke-width="1" stroke-linecap="round" opacity="0.5" />
   </svg>
 
-  <svg class="floating-bean bean-5" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-5" viewBox="0 0 60 80" fill="none">
     <path d="M30 6 C46 6 54 22 54 42 C54 62 44 74 30 74 C16 74 6 62 6 42 C6 22 14 6 30 6 Z" fill="#2E170E" />
     <path d="M30 10 Q37 40 30 70" stroke="#0B0402" stroke-width="4" stroke-linecap="round" />
   </svg>
 
-  <svg class="floating-bean bean-6" viewBox="0 0 60 80" fill="none">
+  <svg aria-hidden="true" class="floating-bean bean-6" viewBox="0 0 60 80" fill="none">
     <path d="M30 6 C46 6 54 22 54 42 C54 62 44 74 30 74 C16 74 6 62 6 42 C6 22 14 6 30 6 Z" fill="#3A1F15" />
     <path d="M30 10 Q23 40 30 70" stroke="#0D0502" stroke-width="3.8" stroke-linecap="round" />
   </svg>
@@ -847,7 +852,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
     </div>
 
     <!-- Active Status Center -->
-    <div id="status_container" class="status-center-wrap">
+    <div id="status_container" role="status" aria-live="polite" class="status-center-wrap">
 
       <!-- Radar Pulse -->
       <div id="radar_wrapper" class="radar-wrapper">
@@ -948,11 +953,11 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
 
     <!-- Actions Footer -->
     <div class="actions-footer">
-      <a href="waiting_approval.php?token=<?= urlencode($token) ?>&action=cancel"
-         onclick="return confirm('Cancel this login request and return to the sign in page?');"
-         class="cancel-link">
-        Cancel Request
-      </a>
+      <form method="POST" action="waiting_approval.php" onsubmit="return confirm('Cancel this login request and return to the sign in page?');">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="cancel">
+        <button type="submit" class="cancel-link">Cancel Request</button>
+      </form>
 
       <button id="refresh_btn" type="button" onclick="checkStatus(true)" class="btn-check-now">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -970,6 +975,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
     const mouseGlow = document.getElementById('mouseGlow');
 
     document.addEventListener('mousemove', (e) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.matchMedia('(pointer: coarse)').matches) return;
       // 1. Cursor Glow Follower
       if (mouseGlow) {
         mouseGlow.style.left = e.clientX + 'px';
@@ -1078,7 +1084,7 @@ $isWithinGeofence = ($auth['distance_meters'] !== null && (float)$auth['distance
         `;
         statusTitle.textContent = "Login Attempt Denied";
         statusTitle.style.color = "#FECDD3";
-        statusDesc.innerHTML = `<span style="color:#FECDD3; font-weight:700;">Reason:</span> ${data.reason || 'Location or device not approved by HR.'}`;
+        statusDesc.textContent = `Reason: ${data.reason || 'Location or device not approved by HR.'}`;
         elapsedCounter.parentElement.style.background = "rgba(225, 29, 72, 0.2)";
         elapsedCounter.parentElement.style.borderColor = "rgba(225, 29, 72, 0.4)";
         elapsedCounter.parentElement.style.color = "#FECDD3";

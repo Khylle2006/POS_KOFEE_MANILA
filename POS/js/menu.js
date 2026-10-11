@@ -1,5 +1,8 @@
-console.log("menu.js loaded");
 let menuData = {};
+let menuLoaded = false;
+let menuLoading = false;
+let menuUnavailable = false;
+let menuStale = false;
 
 // High-resolution real drink pictures mapped by category / drink profile
 const CATEGORY_DEFAULT_IMAGES = {
@@ -37,10 +40,8 @@ function getProductImage(item, categoryKey) {
     return CATEGORY_DEFAULT_IMAGES[categoryKey] || DEFAULT_DRINK_IMAGE;
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-    const res  = await fetch("../api/get_menu.php");
-    const data = await res.json();
-
+function populateMenuData(data) {
+    if (!Array.isArray(data)) return;
     menuData = {
         "ice-coffee": [],
         "hot-coffee": [],
@@ -49,10 +50,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
     data.forEach(item => {
-        const key = item.category_name.toLowerCase().replace(" ", "-");
+        const key = (item.category_name || '').toLowerCase().replace(" ", "-");
         if (!menuData[key]) menuData[key] = [];
         menuData[key].push({
-            id:         item.id,
+            id:         Number.parseInt(item.id, 10),
             name:       item.name,
             imageSrc:   getProductImage(item, key),
             priceSmall: parseFloat(item.price_small),
@@ -61,9 +62,64 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     });
 
+    menuLoaded = true;
     renderGrid();
     renderOrder();
-});
+}
+
+async function loadMenu() {
+    if (menuLoading) return;
+    menuLoading = true;
+    menuUnavailable = false;
+    // 1. Instant Cache Render: load from local cache for 0ms startup time
+    const cacheKey = "kofee_pos_menu_cache";
+    let cachedStr = null;
+    try {
+        cachedStr = sessionStorage.getItem(cacheKey) || localStorage.getItem(cacheKey);
+    } catch (error) {
+        // Restricted browser storage still allows a fresh server catalog.
+    }
+    let renderedFromCache = false;
+
+    if (cachedStr) {
+        try {
+            const cachedItems = JSON.parse(cachedStr);
+            if (Array.isArray(cachedItems) && cachedItems.length > 0) {
+                populateMenuData(cachedItems);
+                renderedFromCache = true;
+            }
+        } catch (e) {
+            console.warn("Cached menu corrupted, skipping cache render", e);
+        }
+    }
+    renderGrid();
+
+    // 2. Background Revalidation: fetch latest catalog from server
+    try {
+        const res = await fetch("../api/get_menu.php", { signal: AbortSignal.timeout(10000) });
+        if (!res.ok) throw new Error('Menu request failed');
+        const freshData = await res.json();
+        if (!Array.isArray(freshData)) throw new Error('Invalid menu response');
+        menuStale = false;
+        const freshStr = JSON.stringify(freshData);
+        if (!renderedFromCache || freshStr !== cachedStr) {
+            populateMenuData(freshData);
+            try {
+                    sessionStorage.setItem(cacheKey, freshStr);
+                    localStorage.setItem(cacheKey, freshStr);
+            } catch (error) {
+                // Cache failure must not hide a successfully fetched catalog.
+            }
+        }
+    } catch (err) {
+        menuUnavailable = !menuLoaded;
+        menuStale = menuLoaded;
+    } finally {
+        menuLoading = false;
+        renderGrid();
+    }
+}
+document.addEventListener('DOMContentLoaded', loadMenu);
 
 let currentCat  = "all";
 let currentSize = "small";
@@ -73,22 +129,34 @@ let searchTerm  = "";
 
 // ── Category & Size ───────────────────────────
 function switchCat(el, cat) {
-    document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.cat-tab').forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-pressed', 'false');
+    });
     el.classList.add('active');
+    el.setAttribute('aria-pressed', 'true');
     currentCat = cat;
-    renderGrid();
+    resetProductSearch();
 }
 
 function switchSize(el, size) {
-    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.size-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+    });
     el.classList.add('active');
+    el.setAttribute('aria-pressed', 'true');
     currentSize = size;
     renderGrid();
 }
 
 function switchOrderType(el, type) {
-    document.querySelectorAll('.order-type-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.order-type-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+    });
     el.classList.add('active');
+    el.setAttribute('aria-pressed', 'true');
     orderType = type;
 }
 
@@ -97,10 +165,28 @@ function filterProducts(value) {
     renderGrid();
 }
 
+function resetProductSearch() {
+    searchTerm = '';
+    const search = document.getElementById('menu-search');
+    if (search) search.value = '';
+    renderGrid();
+}
+
 // ── Menu Grid ─────────────────────────────────
 function renderGrid() {
     const grid = document.getElementById('menu-grid');
     if (!grid) return;
+    const status = document.getElementById('catalog-status');
+    const reset = document.getElementById('reset-menu-search');
+    if (reset) reset.hidden = !searchTerm;
+    grid.setAttribute('aria-busy', String(menuLoading));
+    if (!menuLoaded) {
+        if (status) status.textContent = menuUnavailable ? 'Catalog unavailable' : 'Loading drinks…';
+        grid.innerHTML = menuUnavailable
+            ? '<div class="empty-cat"><p>We couldn’t load the drinks.</p><small>Check your connection and try again.</small><button type="button" class="btn btn-outline" onclick="loadMenu()">Try again</button></div>'
+            : '<div class="empty-cat"><p>Loading the catalog…</p><small>Your drinks will appear here shortly.</small></div>';
+        return;
+    }
 
     // Searching looks across every category so staff can find a drink
     // without first guessing which tab it lives under.
@@ -111,12 +197,13 @@ function renderGrid() {
     const items = searchTerm
         ? pool.filter(i => i.name.toLowerCase().includes(searchTerm))
         : pool;
+    if (status) status.textContent = `${items.length} drink${items.length === 1 ? '' : 's'}${searchTerm ? ' found across all categories' : ' in this category'}${menuStale ? ' · Offline catalog — availability checked when adding' : ''}`;
 
     if (items.length === 0) {
         grid.innerHTML = searchTerm ? `<div class="empty-cat">
             <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
             <p>No drinks match "${escapeHtml(searchTerm)}"</p>
-            <small>Try a different name or check another category</small>
+            <small>Try a different name or clear the search.</small>
         </div>` : `<div class="empty-cat">
             <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
             <p>No items in this category yet</p>
@@ -131,29 +218,28 @@ function renderGrid() {
         const sizeTag  = currentSize === 'small' ? '16oz Regular' : '22oz Up Size';
         const badgeTag = soldOut ? 'Sold Out' : 'Signature Roast';
         return `
-        <div class="menu-card${soldOut ? ' sold-out' : ''}" ${soldOut ? '' : `onclick="addToOrder(${item.id})"`} data-tilt>
-            <div class="card-gloss-sheen"></div>
-            <div class="card-badge${soldOut ? ' sold' : ''}">• ${escapeHtml(badgeTag)}</div>
-            <div class="item-img">
-                <img src="${escapeHtml(item.imageSrc)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
-            </div>
-            <div class="item-name">${escapeHtml(item.name)}</div>
-            <div class="item-meta">${sizeTag} &bull; Handcrafted</div>
-            <div class="item-card-footer">
-                ${soldOut
-                    ? `<div class="item-soldout">Sold out</div>`
-                    : `<div class="item-price">₱${parseFloat(price).toFixed(2)}</div>
-                       <button type="button" class="add-cart-chip" onclick="event.stopPropagation(); addToOrder(${item.id})">
-                         + Add
-                       </button>`}
-            </div>
-        </div>`;
+        <button type="button" class="menu-card${soldOut ? ' sold-out' : ''}" onclick="addToOrder(${item.id})" aria-label="${escapeHtml(item.name)}, ${currentSize === 'small' ? 'regular 16 ounces' : 'large 22 ounces'}, ${soldOut ? 'sold out. Show availability notice' : `₱${price.toFixed(2)}. Add to order`}">
+            <span class="card-gloss-sheen" aria-hidden="true"></span>
+            <span class="card-badge${soldOut ? ' sold' : ''}">• ${escapeHtml(badgeTag)}</span>
+            <span class="item-img">
+                <img src="${escapeHtml(item.imageSrc)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_DRINK_IMAGE}'"/>
+            </span>
+            <span class="item-name">${escapeHtml(item.name)}</span>
+            <span class="item-meta">${sizeTag} &bull; Handcrafted</span>
+            <span class="item-card-footer">
+            ${soldOut
+                ? `<span class="item-soldout">Sold out</span>`
+                : `<span class="item-price">₱${parseFloat(price).toFixed(2)}</span>`}
+            ${soldOut ? '' : '<span class="add-cart-chip" aria-hidden="true">+ Add</span>'}
+            </span>
+        </button>`;
     }).join('');
 
     initTilt();
 }
 
 function initTilt() {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || window.matchMedia?.('(pointer: coarse)').matches) return;
     document.querySelectorAll('.menu-card:not(.sold-out)').forEach(card => {
         card.addEventListener('mousemove', (e) => {
             const rect = card.getBoundingClientRect();
@@ -170,7 +256,7 @@ function initTilt() {
 function escapeHtml(str) {
     const d = document.createElement('div');
     d.textContent = str;
-    return d.innerHTML;
+    return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ── Order & Auto Storage Deduction ───────────
@@ -189,37 +275,61 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
+async function checkCartAddition(itemId, size) {
+    const items = orderItems.map(item => ({ id: item.id, size: item.size, qty: item.qty }));
+    const existing = items.find(item => item.id === itemId && item.size === size);
+    if (existing) existing.qty++;
+    else items.push({ id: itemId, size, qty: 1 });
+    const res = await fetch('../api/cart_stock.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deduct', items })
+    });
+    const data = await res.json();
+    if (res.ok === false && data.success === true) {
+        throw new Error('Inventory check failed.');
+    }
+    return data;
+}
+
+function showStockWarning(itemName, detail = '') {
+    Swal.fire({
+        title: 'Not enough stock',
+        text: `${itemName} cannot be added to checkout because there is not enough stock for this order.${detail ? ` ${detail}` : ''}`,
+        icon: 'warning',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#886125'
+    });
+}
+
+function showCartRejection(itemName, data) {
+    if (data.code === 'STOCK_INSUFFICIENT' || !data.code) {
+        showStockWarning(itemName, data.error || '');
+    } else {
+        showSimpleError(data.error || 'Unable to check inventory. Please try again.');
+    }
+}
+
 async function addToOrder(itemId) {
     if (cartBusy) return;
     const item = Object.values(menuData).flat().find(i => i.id == itemId);
     if (!item) { console.error("Item not found:", itemId); return; }
-    if (item.stock <= 0) return;
+    if (item.stock <= 0) {
+        showStockWarning(item.name);
+        return;
+    }
+    const size = currentSize;
 
     cartBusy = true;
     try {
-        const res = await fetch('../api/cart_stock.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'deduct',
-                product_id: itemId,
-                size: currentSize,
-                qty: 1
-            })
-        });
-        const data = await res.json();
+        const data = await checkCartAddition(item.id, size);
         if (!data.success) {
-            Swal.fire({
-                title: "Out of Stock!",
-                text: data.error || "Cannot add item due to insufficient ingredients in storage.",
-                icon: "warning",
-                confirmButtonColor: '#C97B3D'
-            });
+            showCartRejection(item.name, data);
             return;
         }
 
-        const price    = currentSize === 'small' ? item.priceSmall : item.priceLarge;
-        const key      = itemId + '_' + currentSize;
+        const price    = size === 'small' ? item.priceSmall : item.priceLarge;
+        const key      = item.id + '_' + size;
         const existing = orderItems.find(o => o.key === key);
 
         if (existing) {
@@ -227,10 +337,10 @@ async function addToOrder(itemId) {
         } else {
             orderItems.push({
                 key,
-                id:       itemId,
+                id:       item.id,
                 name:     item.name,
                 imageSrc: item.imageSrc,
-                size:     currentSize,
+                size,
                 price:    parseFloat(price),
                 qty:      1
             });
@@ -274,9 +384,9 @@ function renderOrder() {
                 <div class="oi-size">${o.size === 'small' ? '16oz Regular' : '22oz Up Size'}</div>
             </div>
             <div class="oi-controls">
-                <button class="qty-btn" onclick="changeQty(${i}, -1)">−</button>
+                <button class="qty-btn" aria-label="Decrease quantity of ${escapeHtml(o.name)}" onclick="changeQty(${i}, -1)">−</button>
                 <span class="qty-num">${o.qty}</span>
-                <button class="qty-btn" onclick="changeQty(${i}, 1)">+</button>
+                <button class="qty-btn" aria-label="Increase quantity of ${escapeHtml(o.name)}" onclick="changeQty(${i}, 1)">+</button>
             </div>
             <div class="oi-price">₱${(o.price * o.qty).toFixed(2)}</div>
         </div>
@@ -293,24 +403,9 @@ async function changeQty(index, delta) {
     cartBusy = true;
     try {
         if (delta > 0) {
-            const res = await fetch('../api/cart_stock.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'deduct',
-                    product_id: item.id,
-                    size: item.size,
-                    qty: 1
-                })
-            });
-            const data = await res.json();
+            const data = await checkCartAddition(item.id, item.size);
             if (!data.success) {
-                Swal.fire({
-                    title: "Out of Stock!",
-                    text: data.error || "Cannot add more due to shortage in storage.",
-                    icon: "warning",
-                    confirmButtonColor: '#C97B3D'
-                });
+                showCartRejection(item.name, data);
                 return;
             }
             item.qty += 1;
@@ -336,6 +431,7 @@ async function changeQty(index, delta) {
         renderOrder();
     } catch (err) {
         console.error("Cart stock change error:", err);
+        showSimpleError('Unable to check inventory. Please try again.');
     } finally {
         cartBusy = false;
     }
@@ -385,6 +481,9 @@ function updateTotals() {
     if (el('subtotal')) el('subtotal').textContent = '₱' + subtotal.toFixed(2);
     if (el('tax'))      el('tax').textContent      = '₱' + vat.toFixed(2);
     if (el('total'))    el('total').textContent    = '₱' + total.toFixed(2);
+    if (el('review-order-btn')) el('review-order-btn').disabled = totalCount === 0;
+    if (el('clear-order-btn')) el('clear-order-btn').disabled = totalCount === 0;
+    if (el('desktop-ticket-count')) el('desktop-ticket-count').textContent = `${totalCount} item${totalCount === 1 ? '' : 's'}`;
 
     // Sync Mobile Cart Bar & Mobile Drawer Counters
     if (el('mobile-ticket-count')) {
@@ -398,6 +497,7 @@ function updateTotals() {
     }
     const mobileBar = el('mobile-cart-bar');
     if (mobileBar) {
+        mobileBar.inert = totalCount === 0 || Boolean(el('order-panel')?.classList.contains('drawer-open'));
         if (totalCount > 0) {
             mobileBar.classList.add('has-items');
         } else {
@@ -525,16 +625,59 @@ function clearTendered() {
 }
 
 function openMobileCart() {
+    if (window.innerWidth >= 1024) return;
+    const panel = document.getElementById('order-panel');
+    if (panel) panel.inert = false;
     document.getElementById('order-panel')?.classList.add('drawer-open');
     document.getElementById('mobile-cart-backdrop')?.classList.add('drawer-open');
     document.body.style.overflow = 'hidden';
+    document.getElementById('mobile-cart-toggle')?.setAttribute('aria-expanded', 'true');
+    const catalog = document.querySelector('.menu-left');
+    if (catalog) catalog.inert = true;
+    const mobileBar = document.getElementById('mobile-cart-bar');
+    if (mobileBar) mobileBar.inert = true;
+    document.getElementById('kofee-topbar')?.setAttribute('inert', '');
+    panel?.querySelector('.op-mobile-close-btn')?.focus();
 }
 
 function closeMobileCart() {
+    const panel = document.getElementById('order-panel');
+    const wasOpen = panel?.classList.contains('drawer-open');
     document.getElementById('order-panel')?.classList.remove('drawer-open');
     document.getElementById('mobile-cart-backdrop')?.classList.remove('drawer-open');
-    document.body.style.overflow = '';
+    if (panel) panel.inert = window.innerWidth < 1024;
+    document.getElementById('mobile-cart-toggle')?.setAttribute('aria-expanded', 'false');
+    if (wasOpen) {
+        document.body.style.overflow = '';
+        const catalog = document.querySelector('.menu-left');
+        if (catalog) catalog.inert = false;
+        document.getElementById('kofee-topbar')?.removeAttribute('inert');
+        const mobileBar = document.getElementById('mobile-cart-bar');
+        if (mobileBar) mobileBar.inert = orderItems.length === 0;
+        document.getElementById('mobile-cart-toggle')?.focus();
+    }
 }
+
+document.addEventListener('DOMContentLoaded', closeMobileCart);
+window.addEventListener('resize', () => {
+    if (window.innerWidth >= 1024) closeMobileCart();
+    else {
+        const panel = document.getElementById('order-panel');
+        if (panel) panel.inert = !panel.classList.contains('drawer-open');
+    }
+});
+document.addEventListener('keydown', event => {
+    const panel = document.getElementById('order-panel');
+    if (!panel?.classList.contains('drawer-open')) return;
+    if (event.key === 'Escape') closeMobileCart();
+    if (event.key === 'Tab') {
+        const controls = Array.from(panel.querySelectorAll('button:not(:disabled)')).filter(element => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+});
 
 function checkout() {
     if (orderItems.length === 0) {
@@ -644,6 +787,10 @@ async function startPayMongoSession() {
 
         payMongoOrderId = data.order_id;
         const checkoutUrl = data.checkout_url;
+        if (!checkoutUrl) {
+            showSimpleError('Checkout outcome is pending reconciliation. Do not submit another payment. Order #' + data.order_id);
+            return;
+        }
 
         // Render QR Code using reliable SVG/PNG QR Generator
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=6&data=${encodeURIComponent(checkoutUrl)}`;
@@ -660,7 +807,7 @@ async function startPayMongoSession() {
         // Show demo simulation button if in demo or dev environment
         const demoBox = document.getElementById('pm-demo-actions');
         if (demoBox) {
-            demoBox.style.display = (data.is_demo || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'block' : 'none';
+            demoBox.style.display = data.is_demo ? 'block' : 'none';
         }
 
         selectPaymentMethod('paymongo');
@@ -718,7 +865,8 @@ function startPayMongoPolling(orderId) {
                     paidOrder.items || pendingCheckout?.snapshot,
                     {
                         method: 'PayMongo QR (GCash/Maya/Card)',
-                        reference: paidOrder.payment_reference || ('PM-' + orderId)
+                        reference: paidOrder.payment_reference || ('PM-' + orderId),
+                        orderTime: paidOrder.placed_at || paidOrder.created_at
                     }
                 );
             }
@@ -754,7 +902,8 @@ function checkPayMongoStatusManual() {
                     o.items || pendingCheckout?.snapshot,
                     {
                         method: 'PayMongo QR',
-                        reference: o.payment_reference || ('PM-' + payMongoOrderId)
+                        reference: o.payment_reference || ('PM-' + payMongoOrderId),
+                        orderTime: o.placed_at || o.created_at
                     }
                 );
             } else {
@@ -767,37 +916,10 @@ function checkPayMongoStatusManual() {
 }
 
 function simulatePayMongoPayment() {
-    if (!payMongoOrderId) return;
-    const statusText = document.getElementById('pm-status-text');
-    if (statusText) statusText.textContent = 'Simulating customer payment...';
-
-    fetch(`../api/check_paymongo_status.php?order_id=${encodeURIComponent(payMongoOrderId)}&simulate=1`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.success && data.paid) {
-                if (payMongoPollTimer) clearInterval(payMongoPollTimer);
-                orderSubmitted = true;
-                closeConfirmOrder(false);
-                const o = data.order || {};
-                showReceipt(
-                    o.id || payMongoOrderId,
-                    o.total ? (o.total / 1.12) : pendingCheckout?.subtotal,
-                    o.total ? (o.total - (o.total / 1.12)) : pendingCheckout?.vat,
-                    o.total || pendingCheckout?.total,
-                    o.items || pendingCheckout?.snapshot,
-                    {
-                        method: 'PayMongo QR (Demo Simulated)',
-                        reference: o.payment_reference || ('DEMO-' + payMongoOrderId)
-                    }
-                );
-            } else {
-                showSimpleError(data.error || 'Failed to simulate payment.');
-            }
-        })
-        .catch(err => showSimpleError(err.message));
+    const link = document.getElementById('pm-ext-link');
+    if (link?.href && link.href.includes('/php/demo_checkout.php')) window.open(link.href, '_blank', 'noopener');
 }
 
-// ── Submit Confirmed Order ────────────────────
 async function submitConfirmedOrder() {
     if (!pendingCheckout) return;
 
@@ -894,7 +1016,7 @@ async function submitConfirmedOrder() {
         try {
             data = JSON.parse(text);
         } catch (parseErr) {
-            console.error('Server raw output:', text);
+            console.error('Checkout returned an invalid response.');
             throw new Error('Server returned an invalid response.');
         }
 
@@ -911,7 +1033,8 @@ async function submitConfirmedOrder() {
             method: selectedPaymentMethod === 'cash' ? 'Cash' : (selectedPaymentMethod === 'ewallet' ? currentWalletVendor : 'Card POS'),
             tendered,
             change,
-            reference: paymentRef
+            reference: paymentRef,
+            orderTime: data.placed_at || data.created_at
         });
 
     } catch (err) {
@@ -939,6 +1062,19 @@ function showSimpleError(message) {
 }
 
 // ── Receipt Modal ─────────────────────────────
+function formatReceiptOrderTime(value) {
+    if (!value) return 'Unavailable';
+    // Database DATETIME values use the store's UTC+8 timezone.
+    const timestamp = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+        ? value.replace(' ', 'T') + '+08:00' : value;
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return 'Unavailable';
+    return date.toLocaleString('en-PH', {
+        timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+    });
+}
+
 function showReceipt(orderId, subtotal, vat, total, items, paymentInfo = {}) {
     const typeLabels = { dine: "Dine In", take: "Take Out", delivery: "Delivery" };
 
@@ -948,13 +1084,8 @@ function showReceipt(orderId, subtotal, vat, total, items, paymentInfo = {}) {
     const typeEl = document.getElementById('r-type');
     if (typeEl) typeEl.textContent = typeLabels[orderType] || 'Dine In';
 
-    const now = new Date();
-    const timeStr = now.toLocaleString('en-PH', {
-        month: 'short', day: 'numeric',
-        hour: 'numeric', minute: '2-digit', hour12: true
-    });
     const dateEl = document.getElementById('r-time');
-    if (dateEl) dateEl.textContent = timeStr;
+    if (dateEl) dateEl.textContent = formatReceiptOrderTime(paymentInfo.orderTime);
 
     // Itemized receipt rows
     const itemsContainer = document.getElementById('r-items');
@@ -1046,7 +1177,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         o.items || [],
                         {
                             method: 'PayMongo QR',
-                            reference: o.payment_reference || ('PM-' + orderId)
+                            reference: o.payment_reference || ('PM-' + orderId),
+                            orderTime: o.placed_at || o.created_at
                         }
                     );
                     // Clean URL query params without reloading

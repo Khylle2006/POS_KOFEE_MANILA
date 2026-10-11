@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/db.php';
 
 $local_config = __DIR__ . '/config.local.php';
 if (is_file($local_config)) {
@@ -17,40 +18,19 @@ if (!defined('PAYMONGO_WEBHOOK_SECRET')) {
 
 function paymongo_is_configured(): bool
 {
-    return PAYMONGO_SECRET_KEY !== '' && (strpos(PAYMONGO_SECRET_KEY, 'sk_') === 0 || strpos(PAYMONGO_SECRET_KEY, 'demo') === 0);
+    $mode = payment_mode();
+    return in_array($mode, ['test', 'live'], true)
+        && str_starts_with(app_setting('PAYMONGO_SECRET_KEY'), $mode === 'live' ? 'sk_live_' : 'sk_test_');
 }
 
 function paymongo_is_demo(): bool
 {
-    $key = trim(PAYMONGO_SECRET_KEY);
-    if ($key === '' || $key === 'demo' || $key === 'sandbox') {
-        return true;
-    }
-    if (str_starts_with($key, 'demo') || str_contains($key, 'demo') || str_contains($key, 'sandbox')) {
-        return true;
-    }
-    if (!str_starts_with($key, 'sk_')) {
-        return true;
-    }
-    return false;
+    return payment_mode() === 'demo' && !app_production();
 }
 
 function paymongo_get_base_url(): string
 {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $script = $_SERVER['SCRIPT_NAME'] ?? '';
-
-    $posIndex = strpos($script, '/POS/');
-    if ($posIndex !== false) {
-        $prefix = substr($script, 0, $posIndex + 4);
-    } elseif (str_ends_with($script, '/POS')) {
-        $prefix = $script;
-    } else {
-        $prefix = '/POS_KOFEE_MANILA/POS';
-    }
-
-    return rtrim($scheme . $host . $prefix, '/');
+    return app_url();
 }
 
 function paymongo_order_has_column(PDO $pdo, string $column): bool
@@ -66,29 +46,13 @@ function paymongo_order_has_column(PDO $pdo, string $column): bool
 
 function paymongo_ensure_order_columns(PDO $pdo): void
 {
-    $columns = [
-        'paymongo_session_id' => 'VARCHAR(100) NULL',
-        'paymongo_payment_id' => 'VARCHAR(100) NULL',
-        'payment_status'      => "ENUM('pending','paid','failed') NOT NULL DEFAULT 'pending'",
-        'amount_tendered'     => 'DECIMAL(12,2) NULL',
-        'change_amount'       => 'DECIMAL(12,2) NULL',
-        'payment_reference'   => 'VARCHAR(100) NULL',
-    ];
-
-    foreach ($columns as $column => $definition) {
-        if (!paymongo_order_has_column($pdo, $column)) {
-            try {
-                $pdo->exec('ALTER TABLE orders ADD COLUMN ' . $column . ' ' . $definition);
-            } catch (Throwable $e) {
-                error_log("paymongo_ensure_order_columns error for $column: " . $e->getMessage());
-            }
-        }
-    }
+    require_runtime_schema(get_db());
 }
 
 function paymongo_request(string $endpoint, ?array $attributes = null, string $method = 'GET'): array
 {
     if (paymongo_is_demo()) {
+        require_demo_payment();
         // Safe local sandbox simulation for development & demonstration
         if (str_starts_with($endpoint, 'checkout_sessions')) {
             // Check status of an existing session
@@ -97,13 +61,15 @@ function paymongo_request(string $endpoint, ?array $attributes = null, string $m
                 $isPaid = false;
                 try {
                     $db = get_db();
-                    $st = $db->prepare("SELECT payment_status, status FROM orders WHERE paymongo_session_id = :sid LIMIT 1");
+                    $st = $db->prepare("SELECT payment_status, total_amount FROM orders WHERE paymongo_session_id = :sid LIMIT 1");
                     $st->execute([':sid' => $sessId]);
                     $row = $st->fetch(PDO::FETCH_ASSOC);
-                    if ($row && ($row['payment_status'] === 'paid' || $row['status'] === 'completed')) {
+                    if ($row && ($row['payment_status'] === 'paid')) {
                         $isPaid = true;
                     }
-                } catch (Throwable) {}
+                } catch (Throwable $exception) {
+                    throw new SecurityFault('PAYMENT_LOOKUP_UNAVAILABLE', 'Payment status is unavailable.', 503);
+                }
 
                 return [
                     'success' => true,
@@ -118,7 +84,7 @@ function paymongo_request(string $endpoint, ?array $attributes = null, string $m
                                 [
                                     'id'         => 'pay_sim_' . substr(hash('sha256', $sessId), 0, 16),
                                     'type'       => 'payment',
-                                    'attributes' => ['status' => 'paid', 'amount' => 10000]
+                                    'attributes' => ['status' => 'paid', 'amount' => money_centavos($row['total_amount']), 'currency' => 'PHP']
                                 ]
                             ] : []
                         ]
@@ -160,10 +126,13 @@ function paymongo_request(string $endpoint, ?array $attributes = null, string $m
         CURLOPT_CUSTOMREQUEST  => strtoupper($method),
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
         CURLOPT_HTTPHEADER     => [
             'Accept: application/json',
             'Content-Type: application/json',
-            'Authorization: Basic ' . base64_encode(PAYMONGO_SECRET_KEY . ':'),
+            'Authorization: Basic ' . base64_encode(app_setting('PAYMONGO_SECRET_KEY') . ':'),
         ],
     ]);
 
@@ -188,7 +157,7 @@ function paymongo_request(string $endpoint, ?array $attributes = null, string $m
     curl_close($curl);
 
     if ($body === false || $error !== '') {
-        return ['success' => false, 'code' => $code ?: 500, 'data' => null, 'error' => $error ?: 'PayMongo connection failed.'];
+        return ['success' => false, 'code' => $code ?: 500, 'data' => null, 'unknown' => true, 'error' => 'Provider connection failed. Reconciliation is required.'];
     }
 
     $decoded = json_decode($body, true) ?: [];

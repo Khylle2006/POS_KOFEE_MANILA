@@ -106,6 +106,7 @@ try {
             }
         }
 
+        security_audit($pdo, 'role_permissions_changed', 'role');
         $pdo->commit();
         clear_permission_cache();
 
@@ -139,6 +140,7 @@ try {
             }
         }
 
+        security_audit($pdo, 'role_permissions_changed', 'role');
         $pdo->commit();
         clear_permission_cache();
 
@@ -158,6 +160,6 @@ try {
         $pdo->rollBack();
     }
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+    echo json_encode(['ok' => false, 'error' => 'Database error: ' . 'Service temporarily unavailable.']);
 }
 

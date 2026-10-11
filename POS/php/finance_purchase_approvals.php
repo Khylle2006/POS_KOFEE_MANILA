@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: finance_purchase_approvals.php?toast=' . urlencode($toast));
                 exit;
             } catch (Exception $e) {
-                $toast = $e->getMessage();
+                $toast = 'Service temporarily unavailable.';
                 $toast_type = 'error';
             }
         }

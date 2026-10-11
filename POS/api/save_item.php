@@ -273,6 +273,11 @@ try {
     // Commit all operations safely
     $pdo->commit();
 
+    // Invalidate menu & recipe caches so POS and ordering terminals update instantly
+    require_once __DIR__ . '/../includes/cache.php';
+    cache_delete_pattern('pos_menu');
+    cache_delete_pattern('recipe_');
+
     echo json_encode([
         'ok'             => true,
         'message'        => $isUpdate ? "Menu item '{$name}' updated successfully!" : "Menu item '{$name}' created successfully!",
@@ -298,5 +303,5 @@ try {
         if (is_file($targetFile)) @unlink($targetFile);
     }
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Database transaction failed: ' . $e->getMessage()]);
+    echo json_encode(['ok' => false, 'error' => 'Database transaction failed: ' . 'Service temporarily unavailable.']);
 }

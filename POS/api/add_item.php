@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/permissions.php';
+require_once __DIR__ . '/../includes/cache.php';
 require_once '../includes/shift_guard.php';
 require_once '../includes/notify.php';
 require_login();
@@ -45,10 +46,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':ps'   => $price_small,
                 ':pl'   => $price_large,
             ]);
+            cache_delete_pattern('pos_menu');
             echo json_encode(['ok' => true]);
         } catch (PDOException $e) {
             http_response_code(500);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+            echo json_encode(['ok' => false, 'error' => 'Service temporarily unavailable.']);
         }
         exit;
     }
@@ -80,10 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare(
                 'UPDATE products SET name=:n, description=:d, price_small=:ps, price_large=:pl, category_id=:c WHERE id=:id'
             )->execute([':n'=>$name,':d'=>$desc,':ps'=>$price_small,':pl'=>$price_large,':c'=>(string)$cat_id,':id'=>$id]);
+            cache_delete_pattern('pos_menu');
             echo json_encode(['ok'=>true]);
         } catch (PDOException $e) {
             http_response_code(500);
-            echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+            echo json_encode(['ok'=>false,'error'=>'Service temporarily unavailable.']);
         }
         exit;
     }
@@ -99,10 +102,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $new_stock = ($row['stock'] > 0) ? 0 : 1;
             $pdo->prepare('UPDATE products SET stock=:s WHERE id=:id')
                 ->execute([':s'=>$new_stock,':id'=>$id]);
+            cache_delete_pattern('pos_menu');
             echo json_encode(['ok'=>true,'available'=>$new_stock > 0]);
         } catch (PDOException $e) {
             http_response_code(500);
-            echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+            echo json_encode(['ok'=>false,'error'=>'Service temporarily unavailable.']);
         }
         exit;
     }
@@ -145,6 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   WHERE id = :id'
             )->execute([':by' => (int)$_SESSION['user_id'], ':id' => $id]);
 
+            cache_delete_pattern('pos_menu');
+
             notify_event(
                 action_type: 'MENU_ITEM_ARCHIVED',
                 perm_key:    'menu.manage',
@@ -161,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'message'  => '"' . $row['name'] . '" archived. It no longer appears in the POS.',
             ]);
         } catch (Throwable $e) {
-            error_log('archive product failed: ' . $e->getMessage());
+            error_log('archive product failed: ' . 'Service temporarily unavailable.');
             http_response_code(500);
             echo json_encode(['ok' => false, 'error' => 'Could not archive this item.']);
         }
@@ -191,6 +197,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['ok' => false, 'error' => 'Archived product not found.']);
             exit;
         }
+
+        cache_delete_pattern('pos_menu');
 
         $name = $pdo->prepare('SELECT name FROM products WHERE id = :id');
         $name->execute([':id' => $id]);

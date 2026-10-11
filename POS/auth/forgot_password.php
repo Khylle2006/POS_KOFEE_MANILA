@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/../includes/request_security.php';
+secure_session_start();
+send_security_headers();
+start_browser_security_output();
 // ─────────────────────────────────────────────────────────────
 //  auth/forgot_password.php
 //  Self-service password reset request via PHPMailer
@@ -27,12 +31,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Your session expired. Please refresh and try again.';
     } else {
         $input = trim($_POST['identity'] ?? '');
+        rate_limit('reset-ip', client_ip(), 20, 3600);
+        rate_limit('reset-account', strtolower($input), 5, 3600);
         $input_value = htmlspecialchars($input);
 
         if ($input === '') {
             $error = 'Please enter your username or registered email.';
         } else {
             try {
+                require_once __DIR__ . '/../includes/jobs.php';
+                encode_job_payload('email', []);
+                app_url();
                 $pdo = get_db();
                 $stmt = $pdo->prepare("
                     SELECT id, username, firstname, lastname, email, status 
@@ -44,6 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user = $stmt->fetch();
 
                 if ($user && !empty($user['email'])) {
+                    $pdo->beginTransaction();
+                    $lock = $pdo->prepare("SELECT id FROM users WHERE id = ? AND status = 'active' FOR UPDATE");
+                    $lock->execute([$user['id']]);
+                    if (!$lock->fetchColumn()) throw new SecurityFault('RESET_UNAVAILABLE', 'Reset is unavailable.', 503);
                     // Generate 64-character secure raw token, store SHA-256 hash in database
                     $raw_token    = bin2hex(random_bytes(32));
                     $hashed_token = hash('sha256', $raw_token);
@@ -64,16 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':expires' => $expires,
                     ]);
 
-                    // Build full URL using raw token
-                    $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? '') == 443;
-                    $scheme   = $is_https ? 'https' : 'http';
-                    $host     = $_SERVER['HTTP_HOST'] ?? 'localhost';
-                    $dir      = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
-                    $reset_url = $scheme . '://' . $host . $dir . '/reset_password.php?token=' . urlencode($raw_token);
+                    $reset_url = app_url() . '/auth/reset_password.php?token=' . urlencode($raw_token);
 
                     $fname = $user['firstname'] ?: $user['username'];
                     $mailResult = send_password_reset_email($user['email'], $fname, $reset_url);
 
+                    $pdo->commit();
                     if (!empty($mailResult['error'])) {
                         error_log('Forgot password mail delivery failed: ' . $mailResult['error']);
                     }
@@ -82,7 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Uniform message to prevent username enumeration and never leak reset URLs
                 $success = "If an account matches that username or email, a secure password reset link has been dispatched to the registered address. Please check your inbox and spam folder.";
             } catch (Throwable $e) {
-                error_log('Forgot password error: ' . $e->getMessage());
+                if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+                if ($e instanceof SecurityFault) safe_exception($e);
+                error_log('Forgot password error: ' . 'Service temporarily unavailable.');
                 $error = 'An unexpected error occurred. Please try again later.';
             }
         }
@@ -177,8 +188,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     100%{ opacity:1; transform: translateY(0) scale(1); }
   }
 </style>
+<link rel="stylesheet" href="../css/auth-ui.css?v=<?= filemtime(__DIR__ . '/../css/auth-ui.css') ?>">
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 sm:p-8">
+<body class="kfs-auth min-h-screen flex items-center justify-center p-4 sm:p-8">
 
 <div class="relative w-full max-w-md sm:max-w-2xl rounded-[28px] overflow-hidden card-pop"
      style="background: linear-gradient(150deg, var(--espresso) 0%, var(--espresso-deep) 100%); box-shadow:0 30px 60px -18px rgba(24,17,32,0.45);">
@@ -220,8 +232,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <form class="space-y-4" method="POST" action="forgot_password.php">
         <?= csrf_field() ?>
         <div class="field">
-          <label class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Username or Email</label>
-          <input type="text" name="identity" placeholder="e.g. barista or user@example.com" value="<?= $input_value ?>" required autofocus
+          <label for="identity" class="block text-[11px] font-semibold uppercase tracking-wide mb-1" style="color:var(--espresso)">Username or Email</label>
+          <input type="text" id="identity" name="identity" autocomplete="username" placeholder="e.g. barista or user@example.com" value="<?= $input_value ?>" required autofocus
             class="w-full rounded-lg border-2 border-[#EFE0CC] bg-white/70 px-3 py-2 text-sm outline-none placeholder:text-stone-400"
             style="color:var(--espresso)">
         </div>

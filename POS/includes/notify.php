@@ -15,16 +15,7 @@ require_once __DIR__ . '/procurement_helpers.php';
  * Ensure notification schema integrity.
  */
 function ensure_notifications_table(?PDO $pdo = null): void {
-    static $ensured = false;
-    if ($ensured) return;
-    try {
-        $db = $pdo ?? get_db();
-        $cols = $db->query("SHOW COLUMNS FROM notifications LIKE 'read_at'")->fetchAll();
-        if (empty($cols)) {
-            $db->exec("ALTER TABLE notifications ADD COLUMN read_at DATETIME NULL AFTER is_read");
-        }
-    } catch (Throwable $e) {}
-    $ensured = true;
+    require_runtime_schema(get_db());
 }
 ensure_notifications_table();
 
@@ -50,7 +41,7 @@ function users_with_permission(string $perm_key): array {
         $stmt->execute([':p' => $perm_key, ':p2' => $perm_key]);
         return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     } catch (Throwable $e) {
-        error_log('users_with_permission failed: ' . $e->getMessage());
+        error_log('users_with_permission failed: ' . 'Service temporarily unavailable.');
         return [];
     }
 }
@@ -87,7 +78,7 @@ function notify_user_event(
             ':l'  => $target_url,
         ]);
     } catch (Throwable $e) {
-        error_log('notify_user_event failed: ' . $e->getMessage());
+        error_log('notify_user_event failed: ' . 'Service temporarily unavailable.');
     }
 }
 

@@ -164,7 +164,7 @@ try {
     http_response_code(422);
     echo json_encode(['success' => false, 'error' => 'Invalid notification action.']);
 } catch (Throwable $e) {
-    error_log('notifications api error: ' . $e->getMessage());
+    error_log('notifications api error: ' . 'Service temporarily unavailable.');
     http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'Unable to update notification: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'error' => 'Unable to update notification: ' . 'Service temporarily unavailable.']);
 }

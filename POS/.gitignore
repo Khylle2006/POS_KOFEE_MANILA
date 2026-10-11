@@ -15,6 +15,8 @@ node_modules/
 # Logs & temp files
 *.log
 scratch/
+cache/*.cache
+cache/*.tmp
 
 # User uploads (keep directories, ignore uploaded files)
 uploads/resumes/*
@@ -27,3 +29,9 @@ uploads/invoices/*
 !uploads/invoices/.gitkeep
 uploads/avatars/*
 !uploads/avatars/.gitkeep
+
+/vendor/
+/.phpunit.cache/
+/.phpstan.cache/
+/dist/
+/.test-mysql/

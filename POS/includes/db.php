@@ -24,19 +24,24 @@ if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 // raw error text is ever shown to a visitor.
 if (!defined('APP_ENV')) define('APP_ENV', getenv('APP_ENV') ?: 'development');
 
+require_once __DIR__ . '/runtime.php';
+
 // Ensure system timezone is aligned with Kofee Manila (Asia/Manila, UTC+8)
 if (date_default_timezone_get() !== 'Asia/Manila') {
     date_default_timezone_set('Asia/Manila');
 }
 
 function get_db(): PDO {
+    if (PHP_SAPI === 'cli' && defined('APP_MIGRATING') && APP_MIGRATING) {
+        return $GLOBALS['migration_pdo'];
+    }
     static $pdo = null;
 
     if ($pdo === null) {
-        $dsn = sprintf('mysql:host=%s;dbname=%s;charset=%s', DB_HOST, DB_NAME, DB_CHARSET);
+        $dsn = sprintf('mysql:host=%s;dbname=%s;charset=%s', app_setting('DB_HOST'), app_setting('DB_NAME'), app_setting('DB_CHARSET', 'utf8mb4'));
 
         try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+            $pdo = new PDO($dsn, app_setting('DB_USER'), app_setting('DB_PASS'), [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
@@ -44,13 +49,7 @@ function get_db(): PDO {
             ]);
             $pdo->exec("SET time_zone = '+08:00'");
         } catch (PDOException $e) {
-            error_log('DB connection failed: ' . $e->getMessage());
-            http_response_code(500);
-
-            // Never leak the DSN, credentials or driver error to a visitor.
-            die(APP_ENV === 'production'
-                ? 'Service temporarily unavailable.'
-                : 'Database connection failed. Check includes/config.local.php.');
+            throw new SecurityFault('DATABASE_UNAVAILABLE', 'Service temporarily unavailable.', 503);
         }
     }
 

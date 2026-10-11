@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<ruleset name="Backend correctness">
+  <description>Compatibility and correctness checks for the existing mixed PHP/HTML code style.</description>
+  <file>includes</file><file>api</file><file>auth</file><file>php</file><file>tools</file><file>database/migrations</file>
+  <exclude-pattern>*/config.local.php</exclude-pattern>
+  <exclude-pattern>*/PHPMailer/*</exclude-pattern>
+  <rule ref="Generic.PHP.Syntax"/>
+  <rule ref="Generic.PHP.DeprecatedFunctions"/>
+  <rule ref="Generic.PHP.ForbiddenFunctions"/>
+  <rule ref="Generic.CodeAnalysis.EmptyStatement"/>
+</ruleset>

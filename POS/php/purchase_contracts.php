@@ -167,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $toast = $e->getMessage();
+                $toast = 'Service temporarily unavailable.';
                 $toast_type = 'error';
             }
         }
@@ -244,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $toast = $e->getMessage();
+            $toast = 'Service temporarily unavailable.';
             $toast_type = 'error';
         }
     }

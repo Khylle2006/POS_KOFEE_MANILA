@@ -73,6 +73,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'check_new') {
 }
 
 // ── Handle POST Actions ──
+$availableRoles = get_all_roles();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || !empty($_POST['is_ajax']);
@@ -108,39 +109,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'save_settings') {
-        $enabled = isset($_POST['require_approval_enabled']) ? '1' : '0';
-        $autoApprove = isset($_POST['auto_approve_within_geofence']) ? '1' : '0';
-        $storeName = trim($_POST['store_name'] ?? 'Kofee Manila (Main Store)');
-        $storeLat = trim($_POST['store_latitude'] ?? '14.3294');
-        $storeLon = trim($_POST['store_longitude'] ?? '120.9367');
-        $radius = trim($_POST['store_geofence_radius_meters'] ?? '200');
-        $exemptRoles = trim($_POST['exempt_roles'] ?? 'admin,hr');
-
-        save_login_approval_settings($pdo, [
-            'require_approval_enabled'     => $enabled,
-            'auto_approve_within_geofence' => $autoApprove,
-            'store_name'                   => $storeName,
-            'store_latitude'               => $storeLat,
-            'store_longitude'              => $storeLon,
-            'store_geofence_radius_meters' => $radius,
-            'exempt_roles'                 => $exemptRoles,
-        ]);
-
-        $toast = 'Geofence & security settings saved successfully!';
-        $toast_type = 'success';
+        try {
+            save_login_approval_settings($pdo, validate_login_approval_settings($_POST, $availableRoles));
+            $toast = 'Geofence & security settings saved successfully!';
+        } catch (InvalidArgumentException $error) {
+            $toast = $error->getMessage();
+            $toast_type = 'error';
+        }
     }
 
     if ($action === 'revoke_device') {
         $devId = (int)($_POST['device_id'] ?? 0);
         if ($devId > 0) {
-            $pdo->prepare("DELETE FROM trusted_login_devices WHERE id = :id")->execute([':id' => $devId]);
+            $pdo->prepare("DELETE FROM auth_devices WHERE id = :id")->execute([':id' => $devId]);
             $toast = 'Trusted device revoked.';
             $toast_type = 'success';
         }
     }
 
     if (!$isAjax) {
-        $tab = htmlspecialchars($_POST['current_tab'] ?? 'dashboard');
+        $tab = $action === 'save_settings' ? 'settings' : htmlspecialchars($_POST['current_tab'] ?? 'dashboard');
         header('Location: login_approvals.php?tab=' . urlencode($tab) . '&toast=' . urlencode($toast) . '&type=' . $toast_type);
         exit;
     }
@@ -161,9 +149,9 @@ $historyRecords = get_login_authorizations_history($pdo, 80);
 $trustedDevices = $pdo->query("
     SELECT td.*, u.username, u.firstname, u.lastname, u.role,
            hr.firstname AS trusted_by_name
-    FROM trusted_login_devices td
+    FROM auth_devices td
     JOIN users u ON u.id = td.user_id
-    LEFT JOIN users hr ON hr.id = td.trusted_by
+    LEFT JOIN users hr ON hr.id = td.approved_by
     WHERE td.expires_at > NOW()
     ORDER BY td.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
@@ -236,9 +224,16 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
 
     <!-- Toast Notification -->
     <?php if ($toast): ?>
-    <div style="background:#ECFDF5; border:1px solid #10B981; color:#065F46; padding:12px 18px; border-radius:12px; margin-bottom:20px; font-size:13px; font-weight:500; display:flex; align-items:center; justify-content:space-between;">
-      <span><?= $toast_type === 'success' ? '✓' : '⚠️' ?> <?= htmlspecialchars($toast) ?></span>
-      <button onclick="this.parentElement.remove()" style="background:none; border:none; cursor:pointer; font-weight:bold; color:#065F46;">&times;</button>
+    <div id="kfs_toast_alert" class="kfs-toast-alert <?= $toast_type === 'success' ? 'toast-success' : 'toast-error' ?>" role="status" aria-live="polite">
+      <div class="kfs-toast-left">
+        <span class="kfs-toast-icon">
+          <?= $toast_type === 'success' ? icon('check-circle', 18) : icon('alert-triangle', 18) ?>
+        </span>
+        <span><?= htmlspecialchars($toast) ?></span>
+      </div>
+      <button type="button" onclick="dismissToast(this)" class="kfs-toast-close" aria-label="Dismiss message">
+        <?= icon('x', 14) ?>
+      </button>
     </div>
     <?php endif; ?>
 
@@ -246,12 +241,13 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
     <div class="kfs-header-row">
       <div>
         <h1 class="kfs-page-title">Staff Login Approvals - Current Status</h1>
+        <p class="kfs-page-subtitle">Review real-time employee sign-in attempts, verify store geofence proximity, and manage trusted devices.</p>
       </div>
       <div class="kfs-time-badge">
         <span id="current_date_display"><?= date('M d, Y') ?></span>
         <span style="color:#D1D5DB;">|</span>
         <span id="current_time_display" style="font-family:monospace; font-size:13.5px; color:#1F1626; font-weight:600;"><?= date('h:i A') ?></span>
-        <button type="button" onclick="refreshQueue()" class="kfs-refresh-btn" title="Refresh Live Queue">
+        <button type="button" onclick="refreshQueue()" class="kfs-refresh-btn" title="Refresh Live Queue" aria-label="Refresh Queue">
           <svg id="refresh_icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
           </svg>
@@ -316,7 +312,7 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
           </svg>
         </div>
         <div class="kfs-metric-info">
-          <div class="kfs-metric-label">Store Geofence</div>
+          <div class="kfs-metric-label">Store Geofence (<?= htmlspecialchars($settings['store_name']) ?>)</div>
           <div class="kfs-metric-val"><?= (int)$settings['geofence_radius'] ?>m Radius</div>
         </div>
       </div>
@@ -336,10 +332,16 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
         <div class="kfs-map-container">
           <div id="radarMap"></div>
 
+          <!-- Top right recenter button -->
+          <button type="button" class="kfs-map-recenter-btn" onclick="resetRadarView()" title="Center camera on store & employee">
+            <?= icon('crosshair', 14) ?>
+            <span>Center View</span>
+          </button>
+
           <!-- Bottom floating legend pill -->
           <div class="kfs-map-legend-pill">
             <span class="dot"></span>
-            <span>Live GPS Radar Map | <strong><?= (int)$settings['geofence_radius'] ?>m Geofence</strong></span>
+            <span>Live Radar | <strong><?= (int)$settings['geofence_radius'] ?>m Store Geofence</strong></span>
           </div>
         </div>
       </div>
@@ -349,16 +351,17 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
         
         <?php if (empty($pendingRequests)): ?>
         <!-- EMPTY STATE (All Caught Up) -->
-        <div style="text-align:center; padding: 40px 10px; margin:auto;">
-          <div style="width:64px; height:64px; border-radius:50%; background:#E8F8F0; color:#10B981; margin:0 auto 16px auto; display:flex; align-items:center; justify-content:center; font-size:28px;">
-            ✓
+        <div class="kfs-empty-state">
+          <div class="kfs-empty-icon-wrap">
+            <?= icon('shield-check', 32) ?>
           </div>
-          <h3 style="font-size:19px; font-weight:700; color:#1F1626; margin:0 0 6px 0;">No Pending Requests</h3>
-          <p style="font-size:12px; color:#6B7280; line-height:1.5; max-width:280px; margin:0 auto 20px auto;">
+          <h3 class="kfs-empty-title">No Pending Requests</h3>
+          <p class="kfs-empty-desc">
             All staff logins have been verified. When an employee signs in, their GPS proximity and selfie proof will appear here.
           </p>
-          <button type="button" onclick="refreshQueue()" style="padding:9px 18px; border-radius:10px; background:#F3EFEA; border:1px solid #E2D4C3; font-size:12px; font-weight:600; cursor:pointer;">
-            Check for Requests
+          <button type="button" onclick="refreshQueue()" class="kfs-empty-btn">
+            <?= icon('refresh', 14) ?>
+            <span>Check for Requests</span>
           </button>
         </div>
 
@@ -392,17 +395,23 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
           <div class="kfs-card-head" style="margin-bottom:12px; padding-bottom:10px;">
             <h2 class="kfs-req-title">Pending Login Request</h2>
             <?php if (count($pendingRequests) > 1): ?>
-            <div style="font-size:12px; color:#6B7280; display:flex; align-items:center; gap:6px;">
-              <span id="queue_counter_label">1 of <?= count($pendingRequests) ?></span>
-              <button type="button" onclick="navigateQueue(-1)" style="width:22px; height:22px; border-radius:6px; background:#F3EFEA; border:1px solid #E2D4C3; cursor:pointer;">&larr;</button>
-              <button type="button" onclick="navigateQueue(1)" style="width:22px; height:22px; border-radius:6px; background:#F3EFEA; border:1px solid #E2D4C3; cursor:pointer;">&rarr;</button>
+            <div class="kfs-queue-controls">
+              <span id="queue_counter_label" class="kfs-queue-label">1 of <?= count($pendingRequests) ?></span>
+              <div class="kfs-queue-nav-btns">
+                <button type="button" onclick="navigateQueue(-1)" class="kfs-queue-btn" aria-label="Previous request" title="Previous request">
+                  <?= icon('chevron-left', 14) ?>
+                </button>
+                <button type="button" onclick="navigateQueue(1)" class="kfs-queue-btn" aria-label="Next request" title="Next request">
+                  <?= icon('chevron-right', 14) ?>
+                </button>
+              </div>
             </div>
             <?php endif; ?>
           </div>
 
           <!-- Multiple Queue Thumbnails if > 1 -->
           <?php if (count($pendingRequests) > 1): ?>
-          <div style="display:flex; gap:8px; margin-bottom:14px; overflow-x:auto; padding-bottom:4px;">
+          <div class="kfs-queue-thumbs">
             <?php foreach ($pendingRequests as $idx => $pr):
               $pInside = $pr['distance_meters'] !== null && (float)$pr['distance_meters'] <= (float)$settings['geofence_radius'];
               $prThumb = null;
@@ -414,12 +423,13 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
               $prInitials = strtoupper(substr($pr['firstname'] ?: $pr['username'], 0, 1) . substr($pr['lastname'] ?? '', 0, 1));
             ?>
             <button type="button" onclick="selectQueueIndex(<?= $idx ?>)" id="queue_thumb_<?= $idx ?>"
-                    style="padding:4px 10px; border-radius:10px; font-size:11.5px; cursor:pointer; display:flex; align-items:center; gap:7px; border:1px solid <?= $idx === 0 ? '#C97B3D' : '#E5E7EB' ?>; background:<?= $idx === 0 ? '#FFF6EB' : '#ffffff' ?>; color:<?= $idx === 0 ? '#C97B3D' : '#374151' ?>; font-weight:<?= $idx === 0 ? '700' : '500' ?>;">
-              <span style="width:7px; height:7px; border-radius:50%; background:<?= $pInside ? '#10B981' : '#EF4444' ?>; flex-shrink:0;"></span>
+                    class="kfs-queue-thumb <?= $idx === 0 ? 'active' : '' ?>">
+              <span class="kfs-thumb-indicator <?= $pInside ? 'inside' : 'outside' ?>"></span>
               <?php if ($prThumb): ?>
-                <img src="<?= htmlspecialchars($prThumb) ?>" alt="avatar" style="width:20px; height:20px; border-radius:50%; object-fit:cover; border:1px solid #E5E7EB; flex-shrink:0;">
+                <img src="<?= htmlspecialchars($prThumb) ?>" alt="avatar" class="kfs-thumb-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+                <span class="kfs-thumb-initials" style="display:none;"><?= htmlspecialchars($prInitials) ?></span>
               <?php else: ?>
-                <span style="width:20px; height:20px; border-radius:50%; background:#7A1C1C; color:#fff; font-size:9.5px; display:inline-flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;"><?= htmlspecialchars($prInitials) ?></span>
+                <span class="kfs-thumb-initials"><?= htmlspecialchars($prInitials) ?></span>
               <?php endif; ?>
               <span><?= htmlspecialchars($pr['firstname'] ?: $pr['username']) ?></span>
             </button>
@@ -441,10 +451,10 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
               <div class="kfs-photo-ring">
                 <div class="kfs-photo-inner">
                   <?php if ($photoUrl): ?>
-                  <img id="emp_photo_img" src="<?= htmlspecialchars($photoUrl) ?>" alt="Employee Photo" class="kfs-photo-img">
+                  <img id="emp_photo_img" src="<?= htmlspecialchars($photoUrl) ?>" alt="Employee Photo" class="kfs-photo-img" onerror="this.style.display='none'; document.getElementById('emp_avatar_fallback').style.display='flex';">
                   <div id="emp_avatar_fallback" class="kfs-photo-avatar" style="display:none;"><?= htmlspecialchars($empInitials) ?></div>
                   <?php else: ?>
-                  <img id="emp_photo_img" src="" alt="Employee Photo" class="kfs-photo-img" style="display:none;">
+                  <img id="emp_photo_img" src="" alt="Employee Photo" class="kfs-photo-img" style="display:none;" onerror="this.style.display='none'; document.getElementById('emp_avatar_fallback').style.display='flex';">
                   <div id="emp_avatar_fallback" class="kfs-photo-avatar"><?= htmlspecialchars($empInitials) ?></div>
                   <?php endif; ?>
                 </div>
@@ -455,26 +465,32 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
             <!-- Details List -->
             <div class="kfs-details-list">
               <div class="kfs-detail-row">
+                <span class="kfs-detail-icon-wrap"><?= icon('tag', 13) ?></span>
                 <span class="kfs-detail-lbl">ID:</span>
                 <span id="detail_emp_code" class="kfs-detail-val"><?= htmlspecialchars($empCode) ?></span>
               </div>
               <div class="kfs-detail-row">
+                <span class="kfs-detail-icon-wrap"><?= icon('building', 13) ?></span>
                 <span class="kfs-detail-lbl">Dept:</span>
                 <span id="detail_dept" class="kfs-detail-val"><?= htmlspecialchars($dept) ?></span>
               </div>
               <div class="kfs-detail-row">
+                <span class="kfs-detail-icon-wrap"><?= icon('laptop', 13) ?></span>
                 <span class="kfs-detail-lbl">Device:</span>
                 <span id="detail_device" class="kfs-detail-val"><?= htmlspecialchars($deviceModel) ?></span>
               </div>
               <div class="kfs-detail-row">
+                <span class="kfs-detail-icon-wrap"><?= icon('dashboard', 13) ?></span>
                 <span class="kfs-detail-lbl">OS:</span>
                 <span id="detail_os" class="kfs-detail-val"><?= htmlspecialchars($deviceOS) ?></span>
               </div>
               <div class="kfs-detail-row">
+                <span class="kfs-detail-icon-wrap"><?= icon('globe', 13) ?></span>
                 <span class="kfs-detail-lbl">IP:</span>
                 <span id="detail_ip" class="kfs-detail-val mono"><?= htmlspecialchars($activeReq['ip_address']) ?></span>
               </div>
               <div class="kfs-detail-row" style="margin-top:2px;">
+                <span class="kfs-detail-icon-wrap"><?= icon('pin', 13) ?></span>
                 <span class="kfs-detail-lbl">Proximity:</span>
                 <span id="detail_proximity" class="kfs-detail-val" style="color:#1F1626;"><?= htmlspecialchars($proximityText) ?></span>
               </div>
@@ -486,15 +502,18 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
           <div>
             <?php if ($isInsideGeofence): ?>
             <div id="geofence_status_pill" class="kfs-geofence-pill inside">
-              INSIDE STORE GEOFENCE
+              <span class="kfs-pill-icon"><?= icon('check-circle', 14) ?></span>
+              <span class="kfs-pill-text">INSIDE STORE GEOFENCE</span>
             </div>
             <?php elseif ($distMeters !== null): ?>
             <div id="geofence_status_pill" class="kfs-geofence-pill outside">
-              OUTSIDE STORE GEOFENCE (<?= round($distMeters / 1000, 2) ?> km)
+              <span class="kfs-pill-icon"><?= icon('alert-triangle', 14) ?></span>
+              <span class="kfs-pill-text">OUTSIDE STORE GEOFENCE (<?= round($distMeters / 1000, 2) ?> km)</span>
             </div>
             <?php else: ?>
             <div id="geofence_status_pill" class="kfs-geofence-pill unknown">
-              GPS SIGNAL UNAVAILABLE (IP ONLY)
+              <span class="kfs-pill-icon"><?= icon('alert-circle', 14) ?></span>
+              <span class="kfs-pill-text">GPS SIGNAL UNAVAILABLE (IP ONLY)</span>
             </div>
             <?php endif; ?>
           </div>
@@ -504,7 +523,7 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
         <!-- Prominent Action Buttons -->
         <div class="kfs-actions-wrap">
           <div class="kfs-trust-toggle">
-            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;" title="Skip location approval on this browser for 7 days">
               <input type="checkbox" id="trust_device_checkbox" style="width:14px; height:14px; accent-color:#16A34A; cursor:pointer;">
               <span>Trust this device for 7 days (Bypass daily check)</span>
             </label>
@@ -513,12 +532,14 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
 
           <!-- Big Vibrant Green Button -->
           <button type="button" id="btn_approve_main" onclick="handleMainApprove()" class="kfs-btn-approve">
-            APPROVE LOGIN
+            <span class="kfs-btn-icon"><?= icon('check', 17) ?></span>
+            <span class="kfs-btn-text">APPROVE LOGIN</span>
           </button>
 
           <!-- Big Vibrant Red Button -->
           <button type="button" id="btn_reject_main" onclick="handleMainReject()" class="kfs-btn-reject">
-            REJECT
+            <span class="kfs-btn-icon"><?= icon('x', 17) ?></span>
+            <span class="kfs-btn-text">REJECT</span>
           </button>
         </div>
 
@@ -530,20 +551,24 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
     <!-- Bottom Section: Tabs for Audit History, Geofence Settings & Trusted Devices -->
     <div class="kfs-bottom-card">
       <div class="kfs-tab-bar">
-        <div class="kfs-tab-pills">
-          <button type="button" onclick="switchSubTab('history')" id="subtab_btn_history" class="kfs-tab-pill active">
-            📋 Audit History (<?= count($historyRecords) ?>)
+        <div class="kfs-tab-pills" role="tablist">
+          <button type="button" role="tab" aria-selected="true" onclick="switchSubTab('history')" id="subtab_btn_history" class="kfs-tab-pill active">
+            <?= icon('history', 15, 'kfs-tab-svg') ?>
+            <span>Audit History (<?= count($historyRecords) ?>)</span>
           </button>
-          <button type="button" onclick="switchSubTab('settings')" id="subtab_btn_settings" class="kfs-tab-pill">
-            ⚙️ Geofence & Store Pin Settings
+          <button type="button" role="tab" aria-selected="false" onclick="switchSubTab('settings')" id="subtab_btn_settings" class="kfs-tab-pill">
+            <?= icon('settings', 15, 'kfs-tab-svg') ?>
+            <span>Geofence & Store Pin Settings</span>
           </button>
-          <button type="button" onclick="switchSubTab('trusted')" id="subtab_btn_trusted" class="kfs-tab-pill">
-            💻 Trusted Devices (<?= $totalTrusted ?>)
+          <button type="button" role="tab" aria-selected="false" onclick="switchSubTab('trusted')" id="subtab_btn_trusted" class="kfs-tab-pill">
+            <?= icon('laptop', 15, 'kfs-tab-svg') ?>
+            <span>Trusted Devices (<?= $totalTrusted ?>)</span>
           </button>
         </div>
 
-        <span style="font-size:12px; color:#78716C;">
-          Store Pin: <strong style="color:#1F1626; font-family:monospace;"><?= number_format($settings['store_lat'], 5) ?>, <?= number_format($settings['store_lon'], 5) ?></strong>
+        <span class="kfs-store-pin-indicator">
+          <?= icon('pin', 14) ?>
+          <span>Store Pin: <strong class="kfs-coords"><?= number_format($settings['store_lat'], 5) ?>, <?= number_format($settings['store_lon'], 5) ?></strong></span>
         </span>
       </div>
 
@@ -564,7 +589,15 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
             <tbody>
               <?php if (empty($historyRecords)): ?>
               <tr>
-                <td colspan="6" style="text-align:center; padding:32px; color:#9CA3AF;">No authorization events logged yet.</td>
+                <td colspan="6" style="text-align:center; padding:44px 16px;">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:8px; color:#9CA3AF;">
+                    <span style="display:inline-flex; padding:12px; border-radius:50%; background:#F3EFEA; color:#78716C;">
+                      <?= icon('history', 24) ?>
+                    </span>
+                    <strong style="color:#4B5563; font-size:13px;">No authorization events logged yet</strong>
+                    <p style="margin:0; font-size:11.5px; color:#9CA3AF;">Completed approvals and rejections will appear in this audit log.</p>
+                  </div>
+                </td>
               </tr>
               <?php else: foreach ($historyRecords as $h):
                 $hName = trim(($h['firstname'] ?? '') . ' ' . ($h['lastname'] ?? '')) ?: $h['username'];
@@ -592,7 +625,16 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
                   </div>
                 </td>
                 <td>
-                  <span class="badge-app <?= $st ?>"><?= htmlspecialchars($st) ?></span>
+                  <span class="badge-app <?= $st ?>">
+                    <?php if ($st === 'approved'): ?>
+                      <?= icon('check', 11) ?>
+                    <?php elseif ($st === 'rejected'): ?>
+                      <?= icon('x', 11) ?>
+                    <?php elseif ($st === 'pending'): ?>
+                      <?= icon('clock', 11) ?>
+                    <?php endif; ?>
+                    <span><?= htmlspecialchars(ucfirst($st)) ?></span>
+                  </span>
                 </td>
                 <td>
                   <div style="font-weight:500; color:#1F1626;"><?= htmlspecialchars($h['location_name'] ?: 'No GPS') ?></div>
@@ -609,10 +651,14 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
                 </td>
                 <td>
                   <?php if ($st === 'approved'): ?>
-                  <span style="color:#059669; font-weight:600;">Approved by <?= htmlspecialchars($h['approved_by_name'] ?: 'HR') ?></span>
+                  <span style="color:#059669; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
+                    <?= icon('check-circle', 13) ?>
+                    <span>Approved by <?= htmlspecialchars($h['approved_by_name'] ?: 'HR') ?></span>
+                  </span>
                   <?php elseif ($st === 'rejected'): ?>
-                  <span style="color:#DC2626; font-weight:500;" title="<?= htmlspecialchars($h['rejection_reason'] ?? '') ?>">
-                    <?= htmlspecialchars($h['rejection_reason'] ?: 'Denied') ?>
+                  <span style="color:#DC2626; font-weight:500; display:inline-flex; align-items:center; gap:4px;" title="<?= htmlspecialchars($h['rejection_reason'] ?? '') ?>">
+                    <?= icon('alert-circle', 13) ?>
+                    <span><?= htmlspecialchars($h['rejection_reason'] ?: 'Denied') ?></span>
                   </span>
                   <?php else: ?>
                   <span style="color:#9CA3AF;">&mdash;</span>
@@ -627,70 +673,138 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
 
       <!-- SUBTAB 2: GEOFENCE SETTINGS -->
       <div id="subtab_content_settings" style="display:none;">
-        <form method="POST" action="login_approvals.php" style="max-width:760px;">
+        <form id="geofence-settings-form" method="POST" action="login_approvals.php" style="max-width:1040px;">
           <?= csrf_field() ?>
           <input type="hidden" name="action" value="save_settings">
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;">
+          <div class="kfs-settings-grid" style="gap:16px; margin-bottom:18px;">
             <div style="background:#FAF7F2; border:1px solid #EFE6DC; border-radius:14px; padding:16px;">
               <label for="require_approval_enabled" style="font-size:12.5px; font-weight:700; color:#1F1626; display:block; cursor:pointer;">
                 Require HR Login Authorization
               </label>
-              <p style="font-size:11.5px; color:#6B7280; margin:4px 0 10px 0;">Staff logins are paused until reviewed by HR.</p>
+              <p style="font-size:11.5px; color:#6B7280; margin:4px 0 10px 0;">Staff on new devices wait for HR review unless their role is selected for bypass below.</p>
               <input type="checkbox" id="require_approval_enabled" name="require_approval_enabled" value="1"
                      <?= $settings['enabled'] ? 'checked' : '' ?> style="width:16px; height:16px; accent-color:#C97B3D; cursor:pointer;">
             </div>
 
             <div style="background:#FAF7F2; border:1px solid #EFE6DC; border-radius:14px; padding:16px;">
-              <label for="auto_approve_within_geofence" style="font-size:12.5px; font-weight:700; color:#1F1626; display:block; cursor:pointer;">
-                Auto-Approve Inside Store Geofence
-              </label>
-              <p style="font-size:11.5px; color:#6B7280; margin:4px 0 10px 0;">Auto-approves staff if within store radius.</p>
-              <input type="checkbox" id="auto_approve_within_geofence" name="auto_approve_within_geofence" value="1"
-                     <?= $settings['auto_approve_in_zone'] ? 'checked' : '' ?> style="width:16px; height:16px; accent-color:#C97B3D; cursor:pointer;">
+              <strong style="font-size:12.5px; color:#1F1626;">Location for HR Review</strong>
+              <p style="font-size:11.5px; color:#6B7280; margin:4px 0 0;">The store pin and radius help HR review staff locations. GPS alone does not approve a new device.</p>
             </div>
           </div>
 
-          <div style="margin-bottom:14px;">
-            <label style="display:block; font-size:11.5px; font-weight:600; text-transform:uppercase; color:#6B7280; margin-bottom:4px;">Store / Branch Name</label>
-            <input type="text" name="store_name" value="<?= htmlspecialchars($settings['store_name']) ?>" required
-                   style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid #D1D5DB; font-size:12.5px; box-sizing:border-box;">
-          </div>
-
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
-            <div>
-              <label style="display:block; font-size:11.5px; font-weight:600; text-transform:uppercase; color:#6B7280; margin-bottom:4px;">Store Latitude</label>
-              <input type="text" id="setting_lat" name="store_latitude" value="<?= htmlspecialchars((string)$settings['store_lat']) ?>" required
-                     style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid #D1D5DB; font-size:12.5px; font-family:monospace; box-sizing:border-box;">
-            </div>
-            <div>
-              <label style="display:block; font-size:11.5px; font-weight:600; text-transform:uppercase; color:#6B7280; margin-bottom:4px;">Store Longitude</label>
-              <input type="text" id="setting_lon" name="store_longitude" value="<?= htmlspecialchars((string)$settings['store_lon']) ?>" required
-                     style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid #D1D5DB; font-size:12.5px; font-family:monospace; box-sizing:border-box;">
-            </div>
-          </div>
-
-          <div style="margin-bottom:14px;">
-            <button type="button" onclick="detectStorePin()" style="padding:8px 14px; border-radius:8px; background:#F3EFEA; border:1px solid #E2D4C3; font-size:11.5px; font-weight:600; cursor:pointer;">
-              📍 Use My Current Location as Store Pin
+          <!-- Map Toolbar: Detect Location button & guidance -->
+          <div class="kfs-map-toolbar">
+            <button type="button" id="detect-store-pin" class="kfs-btn-detect">
+              <?= icon('crosshair', 14) ?>
+              <span>Use My Current Location</span>
             </button>
+            <p id="store-pin-status" role="status" aria-live="polite" class="kfs-settings-help">Click the map, drag the pin, or enter coordinates to choose a new store location. Save to apply it.</p>
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;">
-            <div>
-              <label style="display:block; font-size:11.5px; font-weight:600; text-transform:uppercase; color:#6B7280; margin-bottom:4px;">Geofence Radius (Meters)</label>
-              <input type="number" name="store_geofence_radius_meters" value="<?= htmlspecialchars((string)$settings['geofence_radius']) ?>" min="20" max="10000" required
-                     style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid #D1D5DB; font-size:12.5px; box-sizing:border-box;">
+          <!-- Side-by-Side: Map on the left, Exempt Roles (Bypass) on the right (same height, scrollable roles) -->
+          <div class="kfs-geofence-map-row">
+            <div class="kfs-map-col">
+              <div id="storePinMap" class="kfs-store-pin-map" aria-label="Store pin location map"></div>
             </div>
-            <div>
-              <label style="display:block; font-size:11.5px; font-weight:600; text-transform:uppercase; color:#6B7280; margin-bottom:4px;">Exempt Roles (Bypass)</label>
-              <input type="text" name="exempt_roles" value="<?= htmlspecialchars(implode(', ', $settings['exempt_roles'])) ?>"
-                     style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid #D1D5DB; font-size:12.5px; box-sizing:border-box;">
+
+            <div class="kfs-bypass-col">
+              <section class="kfs-bypass-roles" aria-labelledby="bypass-roles-heading">
+                <div class="kfs-bypass-header">
+                  <div>
+                    <h2 id="bypass-roles-heading">Exempt Roles (Bypass)</h2>
+                    <span class="kfs-bypass-sub">Skip HR approval upon sign-in</span>
+                  </div>
+                  <button type="button" id="choose-bypass-roles" class="kfs-role-button" aria-haspopup="dialog" aria-controls="bypass-roles-modal">Choose roles</button>
+                </div>
+                <?php $selectedBypassRoles = array_filter($availableRoles, fn($role) => in_array($role['role_key'], $settings['exempt_roles'], true)); ?>
+                <div class="kfs-bypass-body" aria-live="polite" aria-atomic="true">
+                  <ul id="bypass-roles-summary" class="kfs-role-summary" aria-label="Selected bypass roles">
+                    <?php foreach ($selectedBypassRoles as $role): ?>
+                    <li><?= htmlspecialchars($role['label']) ?></li>
+                    <?php endforeach; ?>
+                  </ul>
+                  <p id="bypass-roles-empty" class="kfs-settings-help" <?= $selectedBypassRoles ? 'hidden' : '' ?>>No roles selected for bypass.</p>
+                </div>
+              </section>
             </div>
           </div>
 
-          <button type="submit" style="padding:11px 22px; border-radius:10px; background:#1F1626; color:#ffffff; font-size:12.5px; font-weight:700; border:none; cursor:pointer;">
-            Save Geofence Settings
+          <!-- Below Map: Store/Branch Name, Store Latitude, Store Longitude, Geofence Radius (Meters) -->
+          <div class="kfs-geofence-fields-card">
+            <div class="kfs-geofence-fields-grid">
+              <div class="kfs-field-group kfs-field-store-name">
+                <label for="setting_store_name" class="kfs-field-label">
+                  <?= icon('home', 14) ?>
+                  <span>Store / Branch Name</span>
+                </label>
+                <input type="text" id="setting_store_name" name="store_name" value="<?= htmlspecialchars($settings['store_name']) ?>" maxlength="120" required
+                       class="kfs-form-input" placeholder="e.g. Dasmariñas Branch">
+              </div>
+
+              <div class="kfs-field-group">
+                <label for="setting_lat" class="kfs-field-label">
+                  <?= icon('crosshair', 14) ?>
+                  <span>Store Latitude</span>
+                </label>
+                <input type="number" id="setting_lat" name="store_latitude" value="<?= htmlspecialchars((string)$settings['store_lat']) ?>" min="-90" max="90" step="any" required
+                       class="kfs-form-input font-mono" placeholder="14.3294000">
+              </div>
+
+              <div class="kfs-field-group">
+                <label for="setting_lon" class="kfs-field-label">
+                  <?= icon('crosshair', 14) ?>
+                  <span>Store Longitude</span>
+                </label>
+                <input type="number" id="setting_lon" name="store_longitude" value="<?= htmlspecialchars((string)$settings['store_lon']) ?>" min="-180" max="180" step="any" required
+                       class="kfs-form-input font-mono" placeholder="120.9367000">
+              </div>
+
+              <div class="kfs-field-group">
+                <label for="setting_radius" class="kfs-field-label">
+                  <?= icon('shield', 14) ?>
+                  <span>Geofence Radius (Meters)</span>
+                </label>
+                <input type="number" id="setting_radius" name="store_geofence_radius_meters" value="<?= htmlspecialchars((string)$settings['geofence_radius']) ?>" min="20" max="10000" step="any" required
+                       class="kfs-form-input font-mono" placeholder="200">
+              </div>
+            </div>
+          </div>
+
+          <!-- Exempt Roles Modal (Dialog) Centered in Viewport -->
+          <dialog id="bypass-roles-modal" class="kfs-role-modal" aria-labelledby="bypass-roles-modal-title" aria-describedby="bypass-role-help">
+            <div class="kfs-role-modal-header">
+              <div class="kfs-role-modal-title-wrap">
+                <div class="kfs-role-modal-icon">
+                  <?= icon('shield', 18) ?>
+                </div>
+                <div>
+                  <h2 id="bypass-roles-modal-title">Choose Bypass Roles</h2>
+                  <p id="bypass-role-help" class="kfs-settings-help">Select roles that can sign in without HR approval. Save your selection, then use Save Geofence Settings to apply it.</p>
+                </div>
+              </div>
+              <button type="button" class="kfs-role-modal-close" onclick="document.getElementById('bypass-roles-modal').close()" aria-label="Close dialog">
+                <?= icon('x', 16) ?>
+              </button>
+            </div>
+            <fieldset class="kfs-role-checklist">
+              <legend>Existing roles</legend>
+              <?php foreach ($availableRoles as $role): ?>
+              <label class="kfs-role-option">
+                <input type="checkbox" name="exempt_roles[]" value="<?= htmlspecialchars($role['role_key']) ?>" data-role-label="<?= htmlspecialchars($role['label']) ?>" <?= in_array($role['role_key'], $settings['exempt_roles'], true) ? 'checked' : '' ?>>
+                <span><?= htmlspecialchars($role['label']) ?> <small>(<?= htmlspecialchars($role['role_key']) ?>)</small></span>
+              </label>
+              <?php endforeach; ?>
+            </fieldset>
+            <div class="kfs-role-modal-actions">
+              <button type="button" id="cancel-bypass-roles" class="kfs-role-button">Cancel</button>
+              <button type="button" id="save-bypass-roles" class="kfs-role-button kfs-role-button-primary">Save</button>
+            </div>
+          </dialog>
+
+          <button type="submit" class="kfs-btn-save-settings">
+            <?= icon('save', 15) ?>
+            <span>Save Geofence Settings</span>
           </button>
         </form>
       </div>
@@ -699,19 +813,36 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
       <div id="subtab_content_trusted" style="display:none;">
         <div style="max-width:640px; display:flex; flex-direction:column; gap:10px;">
           <?php if (empty($trustedDevices)): ?>
-          <p style="font-size:12.5px; color:#9CA3AF; padding:16px 0;">No active trusted devices recorded.</p>
+          <div style="text-align:center; padding:36px 16px; background:#FAF7F2; border-radius:14px; border:1px dashed #E5D7C5;">
+            <div style="width:44px; height:44px; border-radius:50%; background:#EFE0CC; color:#78716C; margin:0 auto 10px auto; display:flex; align-items:center; justify-content:center;">
+              <?= icon('laptop', 20) ?>
+            </div>
+            <strong style="display:block; color:#4B5563; font-size:13px; margin-bottom:4px;">No Active Trusted Devices</strong>
+            <p style="font-size:11.5px; color:#78716C; margin:0; max-width:320px; margin:0 auto;">
+              When staff devices are approved with trust enabled, their authorization tokens appear here.
+            </p>
+          </div>
           <?php else: foreach ($trustedDevices as $td): ?>
-          <div style="background:#FAF7F2; border:1px solid #EFE6DC; border-radius:12px; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; font-size:12px;">
-            <div>
-              <strong style="color:#1F1626;"><?= htmlspecialchars($td['firstname'] . ' ' . $td['lastname']) ?></strong>
-              <div style="color:#6B7280; font-size:11px;"><?= htmlspecialchars($td['device_name']) ?> &bull; IP: <?= htmlspecialchars($td['ip_address']) ?></div>
-              <div style="color:#059669; font-size:10px; margin-top:2px;">Expires: <?= date('M d, Y', strtotime($td['expires_at'])) ?></div>
+          <div class="kfs-trusted-card">
+            <div class="kfs-trusted-icon-wrap">
+              <?= icon('laptop', 20) ?>
+            </div>
+            <div class="kfs-trusted-info">
+              <strong class="kfs-trusted-name"><?= htmlspecialchars($td['firstname'] . ' ' . $td['lastname']) ?></strong>
+              <div class="kfs-trusted-meta">Approved browser &bull; ID #<?= $td['id'] ?></div>
+              <div class="kfs-trusted-expiry">
+                <?= icon('clock', 12) ?>
+                <span>Expires: <?= date('M d, Y', strtotime($td['expires_at'])) ?></span>
+              </div>
             </div>
             <form method="POST" action="login_approvals.php" onsubmit="return confirm('Revoke trust for this device?');">
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="revoke_device">
               <input type="hidden" name="device_id" value="<?= $td['id'] ?>">
-              <button type="submit" style="color:#DC2626; background:none; border:none; font-weight:600; cursor:pointer; font-size:11.5px;">Revoke</button>
+              <button type="submit" class="kfs-btn-revoke" title="Revoke device access">
+                <?= icon('trash', 13) ?>
+                <span>Revoke</span>
+              </button>
             </form>
           </div>
           <?php endforeach; endif; ?>
@@ -726,57 +857,74 @@ function parse_telemetry_breakdown(?string $deviceInfo, string $userAgent): arra
 <!-- ============================================================================== -->
 <!-- REJECT MODAL WITH PRESETS                                                      -->
 <!-- ============================================================================== -->
-<div id="reject_modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:16px;">
-  <div style="background:#ffffff; border-radius:22px; width:100%; max-width:440px; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.25);">
-    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #F3EDE6; padding-bottom:12px; margin-bottom:16px;">
-      <h3 style="font-size:17px; font-weight:700; color:#DC2626; margin:0;">Reject Login Attempt</h3>
-      <button onclick="closeRejectModal()" style="width:28px; height:28px; border-radius:50%; background:#F3EFEA; border:none; font-weight:bold; cursor:pointer;">&times;</button>
+<div id="reject_modal" class="kfs-modal-backdrop" onclick="if(event.target===this)closeRejectModal()">
+  <div class="kfs-modal-box" role="dialog" aria-modal="true" aria-labelledby="reject_modal_title">
+    <div class="kfs-modal-head">
+      <div class="kfs-modal-head-title-wrap">
+        <span class="kfs-modal-head-icon"><?= icon('alert-triangle', 18) ?></span>
+        <h3 id="reject_modal_title" class="kfs-modal-title">Reject Login Attempt</h3>
+      </div>
+      <button type="button" onclick="closeRejectModal()" class="kfs-modal-close" aria-label="Close reject modal">
+        <?= icon('x', 16) ?>
+      </button>
     </div>
 
-    <form method="POST" action="login_approvals.php" style="display:flex; flex-direction:column; gap:12px;">
+    <form method="POST" action="login_approvals.php" class="kfs-reject-form">
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="reject">
       <input type="hidden" id="reject_auth_id" name="auth_id" value="">
 
-      <p style="font-size:12px; color:#4B5563; margin:0;">
-        Rejecting login for <strong id="reject_emp_name_modal" style="color:#1F1626;">Staff</strong>. Select or write reason:
+      <p class="kfs-reject-desc">
+        Rejecting sign-in attempt for <strong id="reject_emp_name_modal">Staff</strong>. Select a reason preset or provide specific instructions:
       </p>
 
-      <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
-        <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; border:1px solid #E5E7EB; cursor:pointer;">
+      <div class="kfs-preset-list">
+        <label class="kfs-preset-card">
           <input type="radio" name="reason_preset" value="Outside workplace branch geofence radius." checked onchange="document.getElementById('custom_reason').value = this.value">
-          <span>Outside workplace branch geofence radius</span>
+          <span class="kfs-preset-content">
+            <span class="kfs-preset-icon"><?= icon('pin', 15) ?></span>
+            <span class="kfs-preset-label">Outside workplace branch geofence radius</span>
+          </span>
         </label>
-        <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; border:1px solid #E5E7EB; cursor:pointer;">
+        <label class="kfs-preset-card">
           <input type="radio" name="reason_preset" value="Staff is not scheduled for a shift today." onchange="document.getElementById('custom_reason').value = this.value">
-          <span>Not scheduled for work shift today</span>
+          <span class="kfs-preset-content">
+            <span class="kfs-preset-icon"><?= icon('calendar', 15) ?></span>
+            <span class="kfs-preset-label">Staff is not scheduled for a shift today</span>
+          </span>
         </label>
-        <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; border:1px solid #E5E7EB; cursor:pointer;">
+        <label class="kfs-preset-card">
           <input type="radio" name="reason_preset" value="Unrecognized personal device or suspicious IP." onchange="document.getElementById('custom_reason').value = this.value">
-          <span>Unrecognized personal device or suspicious IP</span>
+          <span class="kfs-preset-content">
+            <span class="kfs-preset-icon"><?= icon('shield', 15) ?></span>
+            <span class="kfs-preset-label">Unrecognized personal device or suspicious IP</span>
+          </span>
         </label>
       </div>
 
-      <div>
-        <label style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; color:#6B7280; margin-bottom:4px;">
+      <div class="kfs-custom-reason-wrap">
+        <label for="custom_reason" class="kfs-input-label">
           Message to Employee:
         </label>
-        <textarea id="custom_reason" name="reason" rows="2" required
-                  style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid #D1D5DB; font-size:12px; box-sizing:border-box;">Outside workplace branch geofence radius.</textarea>
+        <textarea id="custom_reason" name="reason" rows="2" required class="kfs-textarea">Outside workplace branch geofence radius.</textarea>
       </div>
 
-      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
-        <button type="button" onclick="closeRejectModal()" style="padding:9px 16px; border-radius:10px; background:#F3EFEA; border:none; font-size:12px; font-weight:600; cursor:pointer;">Cancel</button>
-        <button type="submit" style="padding:9px 18px; border-radius:10px; background:#DC2626; color:#ffffff; font-size:12px; font-weight:700; border:none; cursor:pointer;">Confirm Rejection</button>
+      <div class="kfs-modal-foot">
+        <button type="button" onclick="closeRejectModal()" class="kfs-btn-secondary">Cancel</button>
+        <button type="submit" class="kfs-btn-danger">
+          <?= icon('x', 14) ?>
+          <span>Confirm Rejection</span>
+        </button>
       </div>
     </form>
   </div>
 </div>
 
+<script src="../js/login-approval-settings.js?v=<?= filemtime(__DIR__ . '/../js/login-approval-settings.js') ?>"></script>
 <script>
 const STORE_LAT = <?= json_encode((float)$settings['store_lat']) ?>;
 const STORE_LON = <?= json_encode((float)$settings['store_lon']) ?>;
-const STORE_NAME = <?= json_encode($settings['store_name']) ?>;
+const STORE_NAME = <?= json_encode($settings['store_name'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const GEOFENCE_RADIUS = <?= json_encode((float)$settings['geofence_radius']) ?>;
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
@@ -792,6 +940,8 @@ let lastSeenCount = <?= (int)$totalPending ?>;
 
 // Silent background detector: auto-reloads ONLY when a NEW login attempt arrives
 async function checkNewLoginAttempts() {
+  // Keep an in-progress pin or role selection intact while HR edits settings.
+  if (document.getElementById('subtab_content_settings').style.display !== 'none') return;
   try {
     const res = await fetch(`login_approvals.php?action=check_new&last_id=${lastSeenPendingId}&count=${lastSeenCount}`, {
       cache: 'no-store'
@@ -824,7 +974,7 @@ setInterval(updateClock, 1000);
 // Initialize Radar Map with Leaflet
 function initRadarMap() {
   const mapEl = document.getElementById('radarMap');
-  if (!mapEl) return;
+  if (!mapEl || typeof L === 'undefined') return;
 
   if (!radarMapInstance) {
     radarMapInstance = L.map('radarMap', { zoomControl: true }).setView([STORE_LAT, STORE_LON], 16);
@@ -845,9 +995,11 @@ function initRadarMap() {
     className: 'custom-store-pin',
     html: `
       <div style="position:relative; width:44px; height:44px; display:flex; align-items:center; justify-content:center;">
-        <div style="position:absolute; inset:0; background:radial-gradient(circle, rgba(230,138,54,0.4) 0%, transparent 70%); border-radius:50%;"></div>
-        <div style="width:36px; height:36px; border-radius:50%; background:#E68A36; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:18px; border:2.5px solid #ffffff; box-shadow:0 6px 14px rgba(0,0,0,0.28);">
-          ☕
+        <div style="position:absolute; inset:0; background:radial-gradient(circle, rgba(201,123,61,0.45) 0%, transparent 70%); border-radius:50%;"></div>
+        <div style="width:36px; height:36px; border-radius:50%; background:#C97B3D; color:#ffffff; display:flex; align-items:center; justify-content:center; border:2.5px solid #ffffff; box-shadow:0 6px 14px rgba(0,0,0,0.28);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+          </svg>
         </div>
       </div>
     `,
@@ -855,8 +1007,11 @@ function initRadarMap() {
     iconAnchor: [22, 22]
   });
 
-  const storeMarker = L.marker([STORE_LAT, STORE_LON], { icon: storeIcon }).addTo(radarMapInstance)
-    .bindPopup(`<b style="font-size:13px; color:#241A2E;">${STORE_NAME}</b><br><span style="font-size:11px; color:#6B7280;">Workplace Store Center</span>`);
+  const storePopup = document.createElement('div');
+  const storeTitle = document.createElement('strong');
+  storeTitle.textContent = STORE_NAME;
+  storePopup.append(storeTitle, document.createElement('br'), 'Workplace Store Center');
+  L.marker([STORE_LAT, STORE_LON], { icon: storeIcon }).addTo(radarMapInstance).bindPopup(storePopup);
 
   // Add Geofence Green Circle (matching mockup's clean perimeter ring)
   geofenceCircle = L.circle([STORE_LAT, STORE_LON], {
@@ -878,7 +1033,7 @@ function initRadarMap() {
 
       const initials = (cur.firstname ? cur.firstname.charAt(0) : (cur.username ? cur.username.charAt(0) : 'E')).toUpperCase() +
                        (cur.lastname ? cur.lastname.charAt(0) : '').toUpperCase();
-      const empPhoto = cur.avatar_path ? ('../' + cur.avatar_path.replace(/^\//,'')) :
+      const empPhoto = cur.avatar_path ? kofeePrivateFileUrl(cur.avatar_path.replace(/^\//,'')) :
                        (cur.selfie_photo ? ('../' + cur.selfie_photo.replace(/^\//,'')) : null);
 
       // Employee Marker (Photo or round badge with initials)
@@ -897,8 +1052,12 @@ function initRadarMap() {
         iconAnchor: [18, 18]
       });
 
+      const statusTag = isInside
+        ? `<span style="display:inline-flex;align-items:center;gap:5px;color:#059669;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#10B981;display:inline-block;"></span> Inside Geofence (${Math.round(dist)}m)</span>`
+        : `<span style="display:inline-flex;align-items:center;gap:5px;color:#DC2626;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#EF4444;display:inline-block;"></span> Outside Store (${(dist/1000).toFixed(2)} km)</span>`;
+
       const empMarker = L.marker([lat, lon], { icon: empIcon }).addTo(radarMapInstance)
-        .bindPopup(`<b>${cur.firstname || cur.username}</b><br>${isInside ? '🟢 Inside Geofence (' + Math.round(dist) + 'm)' : '🔴 Outside Store (' + (dist/1000).toFixed(2) + ' km)'}`)
+        .bindPopup(`<b>${cur.firstname || cur.username}</b><br>${statusTag}`)
         .openPopup();
 
       employeeMarkers.push(empMarker);
@@ -926,6 +1085,9 @@ function initRadarMap() {
 function selectQueueIndex(idx) {
   if (idx < 0 || idx >= pendingList.length) return;
   activeIndex = idx;
+  document.querySelectorAll('.kfs-queue-thumb').forEach((btn, i) => {
+    btn.classList.toggle('active', i === idx);
+  });
   updateEmployeeCardUI();
   initRadarMap();
 }
@@ -937,22 +1099,51 @@ function navigateQueue(step) {
   selectQueueIndex(next);
 }
 
+// Center Radar View on active targets
+function resetRadarView() {
+  if (!radarMapInstance) return;
+  if (pendingList && pendingList.length > 0) {
+    const cur = pendingList[activeIndex];
+    if (cur && cur.latitude !== null && cur.longitude !== null) {
+      const bounds = L.latLngBounds([[STORE_LAT, STORE_LON], [parseFloat(cur.latitude), parseFloat(cur.longitude)]]);
+      radarMapInstance.fitBounds(bounds.pad(0.35));
+      return;
+    }
+  }
+  radarMapInstance.setView([STORE_LAT, STORE_LON], 16);
+}
+
+// Dismiss Toast Notification
+function dismissToast(btn) {
+  const toast = btn.closest('.kfs-toast-alert');
+  if (toast) {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-6px)';
+    setTimeout(() => toast.remove(), 250);
+  }
+}
+
 // Update the Employee Details Panel UI to reflect the selected request
 function updateEmployeeCardUI() {
   const cardContainer = document.getElementById('employee_card_container');
   if (!pendingList || pendingList.length === 0) {
     if (cardContainer) {
       cardContainer.innerHTML = `
-        <div style="text-align:center; padding: 40px 10px; margin:auto;">
-          <div style="width:64px; height:64px; border-radius:50%; background:#E8F8F0; color:#10B981; margin:0 auto 16px auto; display:flex; align-items:center; justify-content:center; font-size:28px;">
-            ✓
+        <div class="kfs-empty-state">
+          <div class="kfs-empty-icon-wrap">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>
+            </svg>
           </div>
-          <h3 style="font-size:19px; font-weight:700; color:#1F1626; margin:0 0 6px 0;">No Pending Requests</h3>
-          <p style="font-size:12px; color:#6B7280; line-height:1.5; max-width:280px; margin:0 auto 20px auto;">
+          <h3 class="kfs-empty-title">No Pending Requests</h3>
+          <p class="kfs-empty-desc">
             All staff logins have been verified. When an employee signs in, their GPS proximity and selfie proof will appear here.
           </p>
-          <button type="button" onclick="refreshQueue()" style="padding:9px 18px; border-radius:10px; background:#F3EFEA; border:1px solid #E2D4C3; font-size:12px; font-weight:600; cursor:pointer;">
-            Check for Requests
+          <button type="button" onclick="refreshQueue()" class="kfs-empty-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span>Check for Requests</span>
           </button>
         </div>
       `;
@@ -995,18 +1186,27 @@ function updateEmployeeCardUI() {
   document.getElementById('detail_device').textContent = devModel;
   document.getElementById('detail_os').textContent = devOS;
 
-  // Status Pill
+  // Status Pill with Offline Vector SVG
   const pill = document.getElementById('geofence_status_pill');
   if (pill) {
     if (isInside) {
       pill.className = 'kfs-geofence-pill inside';
-      pill.textContent = 'INSIDE STORE GEOFENCE';
+      pill.innerHTML = `
+        <span class="kfs-pill-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        <span class="kfs-pill-text">INSIDE STORE GEOFENCE</span>
+      `;
     } else if (dist !== null) {
       pill.className = 'kfs-geofence-pill outside';
-      pill.textContent = `OUTSIDE STORE GEOFENCE (${(dist / 1000).toFixed(2)} km)`;
+      pill.innerHTML = `
+        <span class="kfs-pill-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <span class="kfs-pill-text">OUTSIDE STORE GEOFENCE (${(dist / 1000).toFixed(2)} km)</span>
+      `;
     } else {
       pill.className = 'kfs-geofence-pill unknown';
-      pill.textContent = 'GPS SIGNAL UNAVAILABLE (IP ONLY)';
+      pill.innerHTML = `
+        <span class="kfs-pill-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+        <span class="kfs-pill-text">GPS SIGNAL UNAVAILABLE (IP ONLY)</span>
+      `;
     }
   }
 
@@ -1014,7 +1214,7 @@ function updateEmployeeCardUI() {
   const imgEl = document.getElementById('emp_photo_img');
   const fallbackEl = document.getElementById('emp_avatar_fallback');
   const labelEl = document.getElementById('kfs_photo_label');
-  const photoUrl = cur.avatar_path ? ('../' + cur.avatar_path.replace(/^\//,'')) :
+  const photoUrl = cur.avatar_path ? kofeePrivateFileUrl(cur.avatar_path.replace(/^\//,'')) :
                    (cur.selfie_photo ? ('../' + cur.selfie_photo.replace(/^\//,'')) : null);
 
   if (labelEl) {
@@ -1043,7 +1243,12 @@ async function handleMainApprove() {
   const btn = document.getElementById('btn_approve_main');
   btn.disabled = true;
   btn.style.opacity = '0.7';
-  btn.textContent = 'Approving…';
+  btn.innerHTML = `
+    <svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+    </svg>
+    <span>Approving…</span>
+  `;
 
   const formData = new FormData();
   formData.append('action', 'approve');
@@ -1073,14 +1278,20 @@ async function handleMainApprove() {
       alert(data.error || 'Approval failed.');
       btn.disabled = false;
       btn.style.opacity = '1';
-      btn.textContent = 'APPROVE LOGIN';
+      btn.innerHTML = `
+        <span class="kfs-btn-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span class="kfs-btn-text">APPROVE LOGIN</span>
+      `;
     }
   } catch (err) {
     console.error(err);
     alert('Server error during approval.');
     btn.disabled = false;
     btn.style.opacity = '1';
-    btn.textContent = 'APPROVE LOGIN';
+    btn.innerHTML = `
+      <span class="kfs-btn-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+      <span class="kfs-btn-text">APPROVE LOGIN</span>
+    `;
   }
 }
 
@@ -1101,7 +1312,7 @@ function closeRejectModal() {
 // Live Queue Refresh
 async function refreshQueue() {
   const icon = document.getElementById('refresh_icon');
-  if (icon) icon.style.transform = 'rotate(180deg)';
+  if (icon) icon.classList.add('spin');
 
   try {
     const res = await fetch('login_approvals.php?action=get_pending_json', { cache: 'no-store' });
@@ -1119,7 +1330,7 @@ async function refreshQueue() {
   } catch (err) {
     console.warn('Queue refresh failed:', err);
   } finally {
-    if (icon) icon.style.transform = 'rotate(0deg)';
+    if (icon) icon.classList.remove('spin');
   }
 }
 
@@ -1132,32 +1343,34 @@ function switchSubTab(tab) {
   document.getElementById('subtab_btn_history').classList.remove('active');
   document.getElementById('subtab_btn_settings').classList.remove('active');
   document.getElementById('subtab_btn_trusted').classList.remove('active');
+  document.getElementById('subtab_btn_history').setAttribute('aria-selected', 'false');
+  document.getElementById('subtab_btn_settings').setAttribute('aria-selected', 'false');
+  document.getElementById('subtab_btn_trusted').setAttribute('aria-selected', 'false');
 
   document.getElementById(`subtab_content_${tab}`).style.display = 'block';
   document.getElementById(`subtab_btn_${tab}`).classList.add('active');
+  document.getElementById(`subtab_btn_${tab}`).setAttribute('aria-selected', 'true');
+  if (tab === 'settings') window.storePinSettings.showMap();
 }
 
-// Geolocation Setting Helper: Detect Pin
-function detectStorePin() {
-  if (!('geolocation' in navigator)) {
-    alert('Browser does not support geolocation.');
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      document.getElementById('setting_lat').value = pos.coords.latitude.toFixed(7);
-      document.getElementById('setting_lon').value = pos.coords.longitude.toFixed(7);
-      alert('Store GPS Pin updated with your current location!');
-    },
-    err => {
-      alert('Unable to detect location: ' + err.message);
-    },
-    { enableHighAccuracy: true, timeout: 8000 }
-  );
+// Close reject modal on Escape key
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeRejectModal();
+});
+
+// Auto-dismiss toast after 6 seconds
+const toastEl = document.getElementById('kfs_toast_alert');
+if (toastEl) {
+  setTimeout(() => {
+    toastEl.style.opacity = '0';
+    toastEl.style.transform = 'translateY(-6px)';
+    setTimeout(() => toastEl.remove(), 250);
+  }, 6000);
 }
 
 // Auto-run on load (NO automatic page refresh)
 document.addEventListener('DOMContentLoaded', () => {
+  if (new URLSearchParams(window.location.search).get('tab') === 'settings') switchSubTab('settings');
   setTimeout(() => {
     initRadarMap();
     if (radarMapInstance) radarMapInstance.invalidateSize();

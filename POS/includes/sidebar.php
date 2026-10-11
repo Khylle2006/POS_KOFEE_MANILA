@@ -4,6 +4,7 @@ require_once __DIR__ . '/permissions.php';
 require_once __DIR__ . '/procurement_helpers.php';
 require_once __DIR__ . '/notify.php';
 require_once __DIR__ . '/login_approval_helpers.php';
+require_once __DIR__ . '/cache.php';
 ob_start();
 require_once __DIR__ . '/icons.php';
 ob_end_clean(); // discard any stray/leaked text icons.php might accidentally output
@@ -92,36 +93,50 @@ $access = [
     'profile'                  => true,
 ];
 
-// ── Live badge counts (best-effort; never break the sidebar if a
-//    table isn't set up yet in this install) ──────────────────────
-$pending_count = 0;
-$requests_count = 0;
-$pending_logins_count = 0;
-try {
-    $pdo = get_db();
-    if ($access['pending']) {
-        $pending_count = (int)$pdo->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
-    }
-    if ($access['hr_requests'] || $access['hr_leave']) {
-        $c = 0;
-        try { $c += (int)$pdo->query("SELECT COUNT(*) FROM hr_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
-        try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
-        $requests_count = $c;
-    }
-    $pending_loans_count = 0;
-    if ($access['payroll']) {
-        try { $pending_loans_count = (int)$pdo->query("SELECT COUNT(*) FROM employee_loans WHERE status = 'pending_approval'")->fetchColumn(); } catch (Throwable $e) {}
-    }
-    $pending_finance_approvals_count = 0;
-    if ($access['procurement_finance_review']) {
-        try { $pending_finance_approvals_count = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) {}
-    }
-    if ($access['login_approvals']) {
-        try { $pending_logins_count = count_pending_login_authorizations($pdo); } catch (Throwable $e) {}
-    }
-} catch (Throwable $e) {
-    // DB not reachable — sidebar still renders, just without counts.
-}
+// ── Live badge counts (cached with 15s TTL; never break the sidebar) ──────
+$cache_key_badges = 'sidebar_badges_user_' . (int)($user['id'] ?? 0);
+$cached_badges = cache_remember($cache_key_badges, 15, function() use ($access) {
+    $counts = [
+        'pending'           => 0,
+        'requests'          => 0,
+        'loans'             => 0,
+        'finance_approvals' => 0,
+        'supplier_apps'     => 0,
+        'pending_logins'    => 0,
+    ];
+    try {
+        $pdo = get_db();
+        if ($access['pending']) {
+            $counts['pending'] = (int)$pdo->query("SELECT COUNT(*) FROM orders WHERE status = 'pending'")->fetchColumn();
+        }
+        if ($access['hr_requests'] || $access['hr_leave']) {
+            $c = 0;
+            try { $c += (int)$pdo->query("SELECT COUNT(*) FROM hr_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
+            try { $c += (int)$pdo->query("SELECT COUNT(*) FROM leave_requests WHERE status = 'pending'")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
+            $counts['requests'] = $c;
+        }
+        if ($access['payroll']) {
+            try { $counts['loans'] = (int)$pdo->query("SELECT COUNT(*) FROM employee_loans WHERE status = 'pending_approval'")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
+        }
+        if ($access['procurement_finance_review']) {
+            try { $counts['finance_approvals'] = (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE status = 'selected' AND finance_status = 'pending'")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
+        }
+        if ($access['procurement_suppliers']) {
+            try { $counts['supplier_apps'] = (int)$pdo->query("SELECT COUNT(*) FROM supplier_applications WHERE status IN ('review', 'under_review')")->fetchColumn(); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
+        }
+        if ($access['login_approvals']) {
+            try { $counts['pending_logins'] = count_pending_login_authorizations($pdo); } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
+        }
+    } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
+    return $counts;
+});
+
+$pending_count                   = (int)($cached_badges['pending'] ?? 0);
+$requests_count                  = (int)($cached_badges['requests'] ?? 0);
+$pending_loans_count             = (int)($cached_badges['loans'] ?? 0);
+$pending_finance_approvals_count = (int)($cached_badges['finance_approvals'] ?? 0);
+$pending_supplier_apps_count     = (int)($cached_badges['supplier_apps'] ?? 0);
+$pending_logins_count            = (int)($cached_badges['pending_logins'] ?? 0);
 
 $initials = strtoupper(substr($user['firstname'] ?: $user['username'] ?: '?', 0, 1));
 
@@ -136,7 +151,7 @@ if (!empty($user['id']) && empty($user['avatar_path'])) {
             $user['avatar_path'] = $dbAv;
             $_SESSION['avatar_path'] = $dbAv;
         }
-    } catch (Throwable $e) {}
+    } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 }
 $notification_count = 0;
 $notifications = [];
@@ -144,7 +159,7 @@ try {
     $notification_count = unread_notification_count((int)$user['id']);
     $notifications = recent_notifications_detailed((int)$user['id'], 15);
 } catch (Throwable $e) {
-    error_log('sidebar notifications failed: ' . $e->getMessage());
+    error_log('sidebar notifications failed: ' . 'Service temporarily unavailable.');
 }
 
 // ── Tailwind class helpers ────────────────────────────────────
@@ -174,6 +189,7 @@ if (!function_exists('navBtnClasses')) {
 $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase text-[rgba(251,243,233,0.35)] px-3 pt-[14px] pb-[6px]';
 ?>
 <script>
+  document.body.classList.add('kfs-workspace');
   try {
     if (localStorage.getItem('kfs_sidebar_minimized') === 'true' && window.innerWidth >= 1024) {
       document.documentElement.classList.add('sidebar-minimized');
@@ -183,6 +199,10 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 <link rel="stylesheet" href="../css/index.css?v=<?= filemtime(__DIR__ . '/../css/index.css') ?>">
 <link rel="stylesheet" href="../css/sidebar.css?v=<?= filemtime(__DIR__ . '/../css/sidebar.css') ?>">
 <link rel="stylesheet" href="../css/notifications.css?v=<?= file_exists(__DIR__ . '/../css/notifications.css') ? filemtime(__DIR__ . '/../css/notifications.css') : time() ?>">
+<link rel="stylesheet" href="../css/workspace.css?v=<?= filemtime(__DIR__ . '/../css/workspace.css') ?>">
+<script src="../js/workspace.js?v=<?= filemtime(__DIR__ . '/../js/workspace.js') ?>" defer></script>
+<script src="../js/sidebar-navigation.js?v=<?= filemtime(__DIR__ . '/../js/sidebar-navigation.js') ?>" defer></script>
+<a class="kfs-skip-link" href="#workspace-main">Skip to main content</a>
 
 <!-- ── Kofee Manila Smooth Page Transition & Loader ── -->
 <style>
@@ -311,7 +331,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 </style>
 
 
-<div id="kofee-loader" aria-live="polite" role="status" aria-label="Loading page">
+<div id="kofee-loader" class="loader-hidden" aria-live="polite" role="status" aria-label="Loading page">
   <div class="kfs-loader-card">
     <div class="kfs-cup-wrap">
       <div class="kfs-steam-lines">
@@ -349,7 +369,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         aria-expanded="false" aria-controls="main-sidebar">
         <svg id="menu-icon-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-        <span id="menu-btn-label">Expand</span>
+        <span id="menu-btn-label">Menu</span>
     </button>
 
     <div class="flex items-center gap-2.5 min-w-0">
@@ -511,11 +531,10 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
     $topbar_avatar_path = !empty($user['avatar_path']) ? trim($user['avatar_path']) : '';
     $topbar_avatar_url = $topbar_avatar_path ? ('../' . ltrim($topbar_avatar_path, '/')) : '';
     ?>
-    <div class="kfs-topbar-profile-btn relative w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold cursor-pointer transition-all duration-150 hover:scale-105 hover:ring-2 hover:ring-[var(--caramel,#c47d3e)] shadow-xs overflow-hidden
+    <a href="profile.php" aria-label="My profile" class="kfs-topbar-profile-btn relative w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold cursor-pointer transition-all duration-150 hover:scale-105 hover:ring-2 hover:ring-[var(--caramel,#c47d3e)] shadow-xs overflow-hidden
                 bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                 text-[var(--espresso-deep,#1c1108)]"
-         title="My Profile &amp; Account Details"
-         onclick="window.location.href='profile.php'">
+         title="My Profile &amp; Account Details">
         <?php if ($topbar_avatar_url): ?>
             <img src="<?= htmlspecialchars($topbar_avatar_url) ?>"
                  alt="<?= htmlspecialchars($user['name'] ?: $user['username']) ?>"
@@ -526,7 +545,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         <?php else: ?>
             <span><?= htmlspecialchars($initials) ?></span>
         <?php endif; ?>
-    </div>
+    </a>
 </header>
 
 <!-- ── Notification Detail Modal (Outside header to avoid overflow/display issues) ── -->
@@ -558,7 +577,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
      class="fixed inset-0 bg-black/50 z-[220] opacity-0 pointer-events-none transition-opacity duration-200"></div>
 
 <!-- ── Sidebar popover panel ── -->
-<nav id="main-sidebar"
+<nav id="main-sidebar" aria-label="Main navigation"
      class="fixed top-0 left-0 h-full w-[280px] z-[230] flex flex-col
             px-4 pt-4 pb-4 overflow-y-auto
             bg-[linear-gradient(165deg,#1C1215_0%,#0E0709_115%)]
@@ -702,7 +721,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
         'procurement' => [
             'title' => (in_array('supplier', $roles, true) && count($roles) === 1) ? 'Supplier Portal' : 'Procurement',
             'icon'  => (in_array('supplier', $roles, true) && count($roles) === 1) ? 'briefcase' : 'truck',
-            'badge' => 0,
+            'badge' => $pending_supplier_apps_count,
             'items' => [
                 [
                     'label'  => 'Overview',
@@ -757,6 +776,7 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                     'label'  => 'Suppliers',
                     'url'    => 'suppliers.php',
                     'icon'   => 'employees',
+                    'badge'  => $pending_supplier_apps_count,
                     'access' => $access['procurement_suppliers'],
                     'active' => ($current === 'suppliers.php'),
                 ],
@@ -914,16 +934,16 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
             <div class="kfs-cat-body" id="cat-body-<?= $catKey ?>" role="region" aria-label="<?= htmlspecialchars($cat['title']) ?> Submenu">
                 <div class="kfs-cat-content">
                     <?php foreach ($visibleItems as $item): ?>
-                    <button type="button"
+                    <a href="<?= htmlspecialchars($item['url']) ?>"
                             class="kfs-cat-item <?= !empty($item['active']) ? 'active' : '' ?>"
                             title="<?= htmlspecialchars($item['label']) ?>"
-                            onclick="window.location.href='<?= htmlspecialchars($item['url']) ?>'">
+                            aria-label="<?= htmlspecialchars($item['label']) ?>"<?= !empty($item['active']) ? ' aria-current="page"' : '' ?>>
                         <?= icon($item['icon'], 16) ?>
                         <span class="flex-1 truncate"><?= htmlspecialchars($item['label']) ?></span>
                         <?php if (!empty($item['badge']) && (int)$item['badge'] > 0): ?>
                         <span class="kfs-nav-badge"><?= (int)$item['badge'] ?></span>
                         <?php endif; ?>
-                    </button>
+                    </a>
                     <?php endforeach; ?>
                 </div>
             </div>
@@ -933,9 +953,8 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
 
     <div class="flex-1"></div>
 
-    <div class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2 cursor-pointer hover:bg-[rgba(251,243,233,0.12)] transition-colors"
-         title="View My Profile & Salary Payment Details"
-         onclick="window.location.href='profile.php'">
+    <a href="profile.php" aria-label="My profile and payment details" class="kfs-user-card flex items-center gap-2.5 p-2.5 rounded-xl bg-[rgba(251,243,233,0.06)] mb-2 cursor-pointer hover:bg-[rgba(251,243,233,0.12)] transition-colors"
+         title="View My Profile &amp; Salary Payment Details">
         <div class="kfs-user-avatar w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold
                     bg-[linear-gradient(150deg,var(--caramel-light,#d9a06b),var(--caramel,#c47d3e))]
                     text-[var(--espresso-deep,#1c1108)] overflow-hidden">
@@ -958,14 +977,16 @@ $groupLabel = 'kfs-group-label text-[10px] font-bold tracking-[0.12em] uppercase
                 <?= htmlspecialchars(implode(' + ', $roles)) ?>
             </div>
         </div>
-    </div>
+    </a>
 
-    <button class="kfs-logout-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
+    <form method="post" action="../auth/logout.php">
+    <?= csrf_field() ?>
+    <button type="submit" class="kfs-logout-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-[10px] text-[13px] font-semibold
                    bg-[rgba(198,40,40,0.14)] text-[#f2a9a9] hover:bg-[rgba(198,40,40,0.24)] transition-colors duration-150"
-        title="Logout"
-        onclick="window.location.href='../auth/logout.php'">
+        title="Logout">
         <?= icon('logout') ?><span>Logout</span>
     </button>
+    </form>
 </nav>
 
 <script>
@@ -1493,128 +1514,6 @@ document.getElementById('notif-detail-modal')?.addEventListener('click', e => {
     if (e.target.id === 'notif-detail-modal') closeNotificationDetail();
 });
 
-function toggleSidebarOrMinimize() {
-    if (window.innerWidth >= 1024) {
-        toggleSidebarMinimize();
-    } else {
-        toggleSidebar();
-    }
-}
-
-function toggleSidebar(force) {
-    if (window.innerWidth >= 1024) {
-        toggleSidebarMinimize();
-        return;
-    }
-
-    const panel    = document.getElementById('main-sidebar');
-    const backdrop = document.getElementById('sidebar-backdrop');
-    const btn      = document.getElementById('sidebar-menu-btn');
-
-    const willOpen = typeof force === 'boolean' ? force : !panel.classList.contains('open');
-
-    panel.classList.toggle('open', willOpen);
-    panel.classList.toggle('translate-x-0', willOpen);
-    panel.classList.toggle('-translate-x-full', !willOpen);
-
-    backdrop.classList.toggle('opacity-0', !willOpen);
-    backdrop.classList.toggle('pointer-events-none', !willOpen);
-    backdrop.classList.toggle('opacity-100', willOpen);
-    backdrop.classList.toggle('pointer-events-auto', willOpen);
-
-    if (btn) {
-        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-    }
-
-    document.body.classList.toggle('overflow-hidden', willOpen);
-}
-
-function toggleSidebarMinimize() {
-    const docEl = document.documentElement;
-    const isMin = docEl.classList.toggle('sidebar-minimized');
-    document.body.classList.toggle('sidebar-minimized', isMin);
-
-    try {
-        localStorage.setItem('kfs_sidebar_minimized', isMin ? 'true' : 'false');
-    } catch(e) {}
-
-    updateCollapseButtonState(isMin);
-}
-
-function updateCollapseButtonState(isMin) {
-    const label = document.getElementById('menu-btn-label');
-    if (label) {
-        if (window.innerWidth >= 1024) {
-            label.textContent = 'Expand';
-        } else {
-            label.textContent = 'Menu';
-        }
-    }
-}
-
-// Initial sync on script load & resize
-(function initSidebarMinimizeState() {
-    const isMin = document.documentElement.classList.contains('sidebar-minimized');
-    if (isMin && document.body) {
-        document.body.classList.add('sidebar-minimized');
-    }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            const min = document.documentElement.classList.contains('sidebar-minimized');
-            if (min) document.body.classList.add('sidebar-minimized');
-            updateCollapseButtonState(min);
-        });
-    } else {
-        updateCollapseButtonState(isMin);
-    }
-
-    window.addEventListener('resize', () => {
-        const min = document.documentElement.classList.contains('sidebar-minimized');
-        updateCollapseButtonState(min);
-    });
-})();
-
-function toggleSidebarCategory(catId) {
-    const group = document.getElementById('cat-group-' + catId);
-    if (!group) return;
-    const btn = group.querySelector('.kfs-cat-header');
-    const willOpen = !group.classList.contains('is-open');
-
-    group.classList.toggle('is-open', willOpen);
-    if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-
-    try {
-        const saved = JSON.parse(localStorage.getItem('kfs_open_cats') || '{}');
-        saved[catId] = willOpen;
-        localStorage.setItem('kfs_open_cats', JSON.stringify(saved));
-    } catch(e) {}
-}
-
-(function restoreCategoryState() {
-    try {
-        const saved = JSON.parse(localStorage.getItem('kfs_open_cats') || '{}');
-        Object.keys(saved).forEach(catId => {
-            const group = document.getElementById('cat-group-' + catId);
-            if (!group) return;
-            // Retain active category open state if it has the current page
-            if (group.classList.contains('has-active-child')) return;
-
-            const btn = group.querySelector('.kfs-cat-header');
-            if (saved[catId] === true) {
-                group.classList.add('is-open');
-                if (btn) btn.setAttribute('aria-expanded', 'true');
-            } else if (saved[catId] === false) {
-                group.classList.remove('is-open');
-                if (btn) btn.setAttribute('aria-expanded', 'false');
-            }
-        });
-    } catch(e) {}
-})();
-
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') toggleSidebar(false);
-});
-
 // ── Kofee Manila Loading Screen Controller ──
 (function() {
     function showKofeeLoader(text) {
@@ -1676,13 +1575,6 @@ document.addEventListener('keydown', e => {
             } catch (_) {}
         }
     }, true);
-
-    // Intercept sidebar navigation buttons, category items, and logout
-    document.querySelectorAll('.kfs-nav-btn, .kfs-cat-item, .kfs-logout-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            showKofeeLoader();
-        });
-    });
 
     // Intercept page unloads (form posts that redirect or reload)
     window.addEventListener('beforeunload', () => {

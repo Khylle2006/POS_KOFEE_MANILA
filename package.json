@@ -1,5 +1,12 @@
 {
   "dependencies": {
     "sweetalert2": "^11.26.25"
+  },
+  "scripts": {
+    "test": "npm --prefix POS run test",
+    "lint": "npm --prefix POS run lint",
+    "typecheck": "npm --prefix POS run typecheck",
+    "build": "npm --prefix POS run build",
+    "dev": "npm --prefix POS run watch"
   }
 }

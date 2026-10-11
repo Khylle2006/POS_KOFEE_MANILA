@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/private_storage.php';
 require_once '../includes/auth.php';
 require_login();
 
@@ -38,14 +39,14 @@ if (!preg_match('/^data:image\/(jpeg|png);base64,/', $photo, $m)) {
     exit;
 }
 $ext      = $m[1] === 'png' ? 'png' : 'jpg';
-$raw      = base64_decode(substr($photo, strpos($photo, ',') + 1));
+$raw      = base64_decode(substr($photo, strpos($photo, ',') + 1), true);
 if ($raw === false || strlen($raw) < 100) {
     http_response_code(422);
     echo json_encode(['ok'=>false, 'error'=>'Could not decode image.']);
     exit;
 }
 
-$upload_dir = __DIR__ . '/../uploads/attendance/';
+$upload_dir = private_upload_directory('attendance') . DIRECTORY_SEPARATOR;
 if (!is_dir($upload_dir)) {
     mkdir($upload_dir, 0755, true);
 }
@@ -55,7 +56,7 @@ $filename = 'emp' . $employee['id'] . '_' . $today . '_' . ($action === 'clock_i
 $filepath = $upload_dir . $filename;
 $rel_path = 'uploads/attendance/' . $filename; // stored in DB, resolved as ../<rel_path> from php/
 
-if (file_put_contents($filepath, $raw) === false) {
+if (private_write_file($filepath, $raw) === false) {
     http_response_code(500);
     echo json_encode(['ok'=>false, 'error'=>'Failed to save photo.']);
     exit;
@@ -95,7 +96,7 @@ try {
     echo json_encode(['ok'=>true, 'photo'=>$rel_path, 'time'=>date('g:i A')]);
 } catch (PDOException $e) {
     @unlink($filepath);
-    error_log('mark_attendance error: ' . $e->getMessage());
+    error_log('mark_attendance error: ' . 'Service temporarily unavailable.');
     http_response_code(500);
     echo json_encode(['ok'=>false, 'error'=>'Database error.']);
 }

@@ -8,7 +8,8 @@
 require_once '../includes/db.php';
 require_once '../includes/security.php';
 require_once '../includes/login_approval_helpers.php';
-require_once '../includes/mfa_helpers.php';
+require_once '../includes/email_mfa.php';
+require_once '../includes/login_flow.php';
 
 secure_session_start();
 send_security_headers();
@@ -28,15 +29,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // ── Inputs ────────────────────────────────────
-$username = trim($_POST['username'] ?? '');
-$password = $_POST['password']      ?? '';
+$username = is_string($_POST['username'] ?? null) ? trim($_POST['username']) : '';
+$password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
 
 // ── CSRF ──────────────────────────────────────
 if (!csrf_verify()) {
     redirect_error('Your session expired. Please try again.', $username);
 }
 
-if ($username === '' || $password === '') {
+if ($username === '' || $password === '' || strlen($username) > 190) {
     redirect_error('Please fill in both fields.', $username);
 }
 
@@ -44,7 +45,8 @@ if ($username === '' || $password === '') {
 $wait = login_lockout_seconds($username);
 if ($wait > 0) {
     $minutes = (int)ceil($wait / 60);
-    redirect_error("Too many failed attempts. Try again in {$minutes} minute(s).", $username);
+    header('Retry-After: ' . $wait);
+    throw new SecurityFault('RATE_LIMITED', 'Too many sign-in attempts. Try again later.', 429);
 }
 
 // ── Look up the account ───────────────────────
@@ -59,57 +61,32 @@ try {
     $stmt->execute([':u' => $username]);
     $user = $stmt->fetch();
 } catch (PDOException $e) {
-    error_log('Login error: ' . $e->getMessage());
+    error_log('Login error: ' . 'Service temporarily unavailable.');
     redirect_error('A server error occurred. Please try again.', $username);
 }
 
 // ── Verify ────────────────────────────────────
 // A dummy hash is verified when the user does not exist, so the
 // response time does not reveal which usernames are valid.
-$stored = $user['password']
-       ?? '$2y$10$usesomesillystringforsalttoavoidtimingleaksxxxxxxxxxxxxxxxxx';
-
-if (!password_verify($password, $stored) || !$user) {
+if (!verify_login_password($password, $user['password'] ?? null) || !$user) {
     record_login_attempt($username, false);
     redirect_error('Incorrect username or password.', $username);
 }
 
 // ── Account status ────────────────────
-$status = $user['status'] ?? 'active';
-if ($status === 'blocked') {
-    record_login_attempt($username, false);
-    redirect_error('Your account has been blocked. Contact your manager.', $username);
+$status = $user['status'] ?? '';
+if ($status !== 'active') { record_login_attempt($username, false); redirect_error('Your account is not active. Contact your manager.', $username); }
+$context = array_intersect_key($_POST, array_flip(['latitude', 'longitude', 'accuracy', 'location_status', 'device_info']));
+// Remove any previous authentication or approval state before starting a new sign-in.
+$_SESSION = [];
+session_regenerate_id(true);
+if (email_mfa_enabled($pdo, (int)$user['id'])) {
+    try {
+        start_email_mfa($pdo, (int)$user['id'], 'login', $context);
+    } catch (SecurityFault $exception) {
+        redirect_error($exception->getMessage(), $username);
+    }
+    header('Location: mfa_verify.php');
+    exit;
 }
-if ($status === 'on_hold') {
-    record_login_attempt($username, false);
-    redirect_error('Your account is currently on hold. Contact your manager.', $username);
-}
-
-// ── Step 2: Multi-Factor Authentication (MFA) Email Code Verification ──
-// Password credentials are validated. Initiate MFA challenge with a tokenized 6-digit code.
-$mfaRes = create_mfa_challenge($pdo, $user);
-if (!$mfaRes['ok']) {
-    redirect_error($mfaRes['error'] ?? 'Could not initialize MFA verification. Please try again.', $username);
-}
-
-// Preserve client-provided geolocation & device info across the MFA verification step
-$lat = (isset($_POST['latitude']) && is_numeric($_POST['latitude'])) ? (float)$_POST['latitude'] : null;
-$lon = (isset($_POST['longitude']) && is_numeric($_POST['longitude'])) ? (float)$_POST['longitude'] : null;
-$acc = (isset($_POST['accuracy']) && is_numeric($_POST['accuracy'])) ? (float)$_POST['accuracy'] : null;
-$locStatus = trim($_POST['location_status'] ?? 'unknown');
-$deviceInfo = trim($_POST['device_info'] ?? '');
-
-$_SESSION['pending_mfa'] = [
-    'user_id'         => (int)$user['id'],
-    'username'        => $user['username'],
-    'mfa_token'       => $mfaRes['mfa_token'],
-    'latitude'        => $lat,
-    'longitude'       => $lon,
-    'accuracy'        => $acc,
-    'location_status' => $locStatus,
-    'device_info'     => $deviceInfo,
-    'initiated_at'    => time(),
-];
-
-header('Location: mfa_verify.php?token=' . urlencode($mfaRes['mfa_token']));
-exit;
+complete_password_login($pdo, $user, $context);

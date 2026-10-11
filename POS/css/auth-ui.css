@@ -1,0 +1,28 @@
+@import url('brand.css');
+
+.kfs-auth { background: var(--bg); color: var(--text-main); }
+.kfs-auth * { font-family: var(--font-ui); }
+.kfs-auth .font-display { font-family: var(--font-brand); }
+.kfs-auth .bean-field, .kfs-auth .glow-orb, .kfs-auth .steam { display: none; }
+.kfs-auth .cup-float { animation: none; }
+.kfs-auth :is(.card-pop, .form-pop, .brand-in) { animation: none; }
+.kfs-auth .form-pop { background: #fff; }
+.kfs-auth .form-pop h1 { margin-bottom: 8px; font-family: var(--font-ui); font-size: 24px; font-weight: 700; }
+.auth-intro { color: var(--text-muted); font-size: 14px; margin: 0 0 24px; }
+.kfs-auth .field label { font-size: 13px; letter-spacing: 0; text-transform: none; }
+.kfs-auth .field input { min-height: 48px; font-size: 16px; border-width: 1px; border-radius: 10px; background: #fff; }
+.kfs-auth .btn-brew { background: var(--caramel); min-height: 48px; border-radius: 10px; box-shadow: none; }
+.kfs-auth .btn-brew:hover { background: #71380f; transform: none; }
+.kfs-auth form > p { font-size: 13px; line-height: 1.5; }
+.auth-password-field { position: relative; }
+.auth-password-field input { padding-right: 62px; }
+#toggle-password { position: absolute; right: 6px; top: 4px; min-height: 40px; padding: 0 10px; color: var(--caramel); font-size: 13px; font-weight: 600; background: transparent; border: 0; border-radius: 6px; }
+.kfs-auth #geo_badge { align-items: flex-start; }
+.kfs-auth #geo_badge .truncate { white-space: normal; overflow: visible; }
+.kfs-auth #geo_label { line-height: 1.5; }
+@media (min-width: 640px) { .kfs-auth .form-pop { width: 320px; } }
+@media (max-width: 639px) {
+  .kfs-auth .brand-in { order: -1; }
+  .kfs-auth .brand-in .cup-float, .kfs-auth .brand-in > div:last-child { display: none; }
+  .kfs-auth .brand-in { padding: 0; }
+}

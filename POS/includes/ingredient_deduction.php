@@ -1,8 +1,9 @@
 <?php
 
-/** Deducts the recipe ingredients for a completed order. Call inside a transaction. */
+/** Deducts the recipe ingredients at submission. Call inside a transaction. */
 function deduct_order_ingredients(PDO $pdo, int $orderId, ?int $processedBy = null): void
 {
+    if (!$pdo->inTransaction()) throw new LogicException('Ingredient deduction requires a transaction.');
     $orderStmt = $pdo->prepare('SELECT ingredients_deducted_at FROM orders WHERE id = :id FOR UPDATE');
     $orderStmt->execute([':id' => $orderId]);
     $order = $orderStmt->fetch();
@@ -22,6 +23,7 @@ function deduct_order_ingredients(PDO $pdo, int $orderId, ?int $processedBy = nu
          AND pi.size = oi.size
         WHERE oi.order_id = :order_id
         GROUP BY pi.ingredient_id
+        ORDER BY pi.ingredient_id
         SQL);
     $stmt->execute([':order_id' => $orderId]);
     $requirements = $stmt->fetchAll();
@@ -40,6 +42,7 @@ function deduct_order_ingredients(PDO $pdo, int $orderId, ?int $processedBy = nu
     foreach ($requirements as $requirement) {
         $ingredientId = (int)$requirement['ingredient_id'];
         $requiredQty = (float)$requirement['required_qty'];
+        if ($requiredQty <= 0) throw new SecurityFault('RECIPE_INVALID', 'Recipe quantities must be positive.', 503);
 
         $lockIngredient->execute([':id' => $ingredientId]);
         $ingredient = $lockIngredient->fetch();
@@ -47,7 +50,7 @@ function deduct_order_ingredients(PDO $pdo, int $orderId, ?int $processedBy = nu
             throw new RuntimeException('Ingredient not found');
         }
         if ((float)$ingredient['quantity'] < $requiredQty) {
-            throw new RuntimeException(
+            throw new SecurityFault('STOCK_INSUFFICIENT',
                 sprintf('Insufficient %s stock (need %.2f, have %.2f)', $ingredient['name'], $requiredQty, $ingredient['quantity'])
             );
         }
@@ -60,13 +63,7 @@ function deduct_order_ingredients(PDO $pdo, int $orderId, ?int $processedBy = nu
             ':processed_by' => $processedBy,
         ]);
 
-        if (function_exists('check_and_trigger_reorder')) {
-            try {
-                check_and_trigger_reorder($ingredientId, $processedBy);
-            } catch (Throwable $t) {
-                error_log('check_and_trigger_reorder error: ' . $t->getMessage());
-            }
-        }
+
     }
 
     $pdo->prepare('UPDATE orders SET ingredients_deducted_at = NOW(), stock_deducted = 1 WHERE id = :id')

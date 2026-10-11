@@ -33,7 +33,7 @@ try {
     $stmt->execute([':id' => $user_id]);
     $roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (Exception $e) {
-    error_log('auth/index.php: user_roles lookup failed — ' . $e->getMessage());
+    error_log('auth/index.php: user_roles lookup failed — ' . 'Service temporarily unavailable.');
 }
 
 if (empty($roles)) {
@@ -71,7 +71,7 @@ foreach ($roles as $r) {
         error_log("auth/index.php: role='{$r}' perms=[" . implode(',', $perms_for_role) . "]");
         $user_perms = array_merge($user_perms, $perms_for_role);
     } catch (Exception $e) {
-        error_log("auth/index.php: permission lookup failed for role '{$r}' — " . $e->getMessage());
+        error_log("auth/index.php: permission lookup failed for role '{$r}' — " . 'Service temporarily unavailable.');
     }
 }
 $user_perms = array_values(array_unique($user_perms));

@@ -413,7 +413,7 @@
 }
 
 /* ── Mobile Drawer Open State ── */
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   .mobile-cart-bar {
     display: flex;
   }
@@ -432,7 +432,7 @@
     z-index: 1000;
   }
 
-  .order-panel.is-open {
+  .order-panel.drawer-open {
     bottom: 0;
   }
 
@@ -480,5 +480,195 @@
     display: flex;
     align-items: center;
     gap: 4px;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Mobile Backdrop */
+  .mobile-cart-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(24, 17, 32, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 490;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .mobile-cart-backdrop.drawer-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Slide-Up Bottom Sheet Drawer */
+  .order-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    height: 86vh;
+    max-height: 86vh;
+    border-radius: 24px 24px 0 0;
+    z-index: 500;
+    border-left: none;
+    border-top: 1.5px solid var(--border, #EBE4D8);
+    box-shadow: 0 -8px 34px rgba(36, 26, 46, 0.28);
+    transform: translateY(105%);
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .order-panel.drawer-open {
+    transform: translateY(0);
+  }
+
+  .order-panel-mobile-bar {
+    display: block;
+    padding: 10px 18px 8px;
+    background: #1A1114;
+    border-bottom: 1px solid var(--border, #EBE4D8);
+  }
+
+  .op-drag-handle {
+    width: 42px;
+    height: 4.5px;
+    border-radius: 999px;
+    background: #D8C7B5;
+    margin: 0 auto 10px;
+  }
+
+  .op-mobile-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .op-mobile-title strong {
+    font-size: 15px;
+    font-weight: 800;
+    color: #FAF7F2;
+  }
+
+  .op-mobile-count {
+    font-size: 12px;
+    color: #C4B5A5;
+    margin-left: 6px;
+  }
+
+  .op-mobile-close-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border, #EBE4D8);
+    background: #261A1D;
+    font-size: 12px;
+    font-weight: 700;
+    color: #FAF7F2;
+    cursor: pointer;
+  }
+
+  /* Sticky Bottom Cart Bar for mobile */
+  .mobile-cart-bar {
+    display: flex;
+    position: fixed;
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    z-index: 450;
+    background: #1A1114;
+    color: #FFFFFF;
+    border-radius: 18px;
+    padding: 12px 18px;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 10px 30px rgba(36, 26, 46, 0.4);
+    border: 1px solid rgba(251, 243, 233, 0.15);
+    cursor: pointer;
+    transform: translateY(140%);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .mobile-cart-bar.has-items {
+    transform: translateY(0);
+  }
+
+  .mcb-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .mcb-icon-wrap {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(251, 243, 233, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--cream, #FBF3E9);
+  }
+
+  .mcb-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--caramel, #C97B3D);
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--espresso, #241A2E);
+  }
+
+  .mcb-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mcb-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(251, 243, 233, 0.7);
+    font-weight: 600;
+  }
+
+  .mcb-total {
+    font-size: 17px;
+    font-weight: 900;
+    color: #FFFFFF;
+    letter-spacing: -0.01em;
+  }
+
+  .mcb-btn {
+    background: var(--caramel, #C97B3D);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 12.5px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+
+  .mcb-btn:active {
+    transform: scale(0.96);
   }
 }

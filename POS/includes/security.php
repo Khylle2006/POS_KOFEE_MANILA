@@ -21,8 +21,7 @@ require_once __DIR__ . '/db.php';
 function secure_session_start(): void {
     if (session_status() !== PHP_SESSION_NONE) return;
 
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-          || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $https = app_production() || app_https();
 
     session_set_cookie_params([
         'lifetime' => 0,
@@ -36,6 +35,8 @@ function secure_session_start(): void {
     ini_set('session.use_strict_mode', '1');   // reject attacker-supplied ids
     ini_set('session.use_only_cookies', '1');
 
+    // Preserve the runtime's private no-store policy instead of PHP replacing it.
+    session_cache_limiter('');
     session_start();
 
     // Rotate the id periodically so a leaked one has a short life.
@@ -54,11 +55,12 @@ function send_security_headers(): void {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('X-XSS-Protection: 1; mode=block');
+    header('Content-Security-Policy-Report-Only: ' . app_setting('CSP_REPORT_ONLY', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"));
+    $csp = app_setting('CSP_ENFORCE');
+    if ($csp !== '') header('Content-Security-Policy: ' . $csp);
     header('Permissions-Policy: geolocation=(self), microphone=(), camera=(self)');
 
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-          || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $https = app_production() || app_https();
     if ($https) {
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
     }
@@ -100,22 +102,19 @@ function csrf_meta(): string {
  * X-CSRF-Token header (used by fetch()).
  */
 function csrf_verify(): bool {
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') return true;
+    if (in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD', 'OPTIONS'], true)) return true;
     if (session_status() === PHP_SESSION_NONE) secure_session_start();
 
     $expected = $_SESSION['_csrf_token'] ?? '';
     if ($expected === '') return false;
 
     $supplied = $_POST[CSRF_FIELD]
+             ?? $_POST['csrf_token']
              ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
 
-    // JSON bodies: peek without consuming the stream for the caller.
-    if ($supplied === '') {
-        $raw = file_get_contents('php://input');
-        if ($raw !== '' && $raw !== false) {
-            $json = json_decode($raw, true);
-            $supplied = is_array($json) ? ($json[CSRF_FIELD] ?? '') : '';
-        }
+    if ($supplied === '' && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')) {
+        $json = request_data();
+        $supplied = $json[CSRF_FIELD] ?? $json['csrf_token'] ?? '';
     }
 
     return is_string($supplied) && $supplied !== '' && hash_equals($expected, $supplied);
@@ -137,14 +136,7 @@ function require_csrf(): void {
 function require_csrf_json(): void {
     if (csrf_verify()) return;
 
-    http_response_code(419);
-    header('Content-Type: application/json');
-    echo json_encode([
-        'ok' => false, 'success' => false,
-        'error' => 'Security token expired. Reload the page and try again.',
-        'code'  => 'CSRF_INVALID',
-    ]);
-    exit;
+    throw new SecurityFault('CSRF_INVALID', 'Security token expired. Reload the page and try again.', 419);
 }
 
 // ═══════════════════════════════════════════════
@@ -175,7 +167,7 @@ function record_login_attempt(string $identifier, bool $succeeded): void {
             get_db()->prepare(
                 'DELETE FROM auth_throttle
                   WHERE identifier = :i AND succeeded = 0'
-            )->execute([':i' => strtolower(trim($identifier))]);
+            )->execute([':i' => strtolower(substr(trim($identifier), 0, 190))]);
         }
 
         // Opportunistic cleanup, roughly 1 request in 50.
@@ -186,7 +178,7 @@ function record_login_attempt(string $identifier, bool $succeeded): void {
             );
         }
     } catch (Throwable $e) {
-        error_log('record_login_attempt failed: ' . $e->getMessage());
+        throw new SecurityFault('THROTTLE_UNAVAILABLE', 'Sign-in temporarily unavailable.', 503);
     }
 }
 
@@ -198,7 +190,8 @@ function record_login_attempt(string $identifier, bool $succeeded): void {
 function login_lockout_seconds(string $identifier): int {
     try {
         $ip    = client_ip();
-        $ident = strtolower(trim($identifier));
+        $ident = strtolower(substr(trim($identifier), 0, 190));
+        $accountWait = 0;
 
         // 1. Account-specific lockout (e.g. 6 failed attempts for this username)
         $stmt = get_db()->prepare(
@@ -213,7 +206,7 @@ function login_lockout_seconds(string $identifier): int {
 
         if ($row && (int)$row['failures'] >= THROTTLE_MAX_ATTEMPTS) {
             $unlock = strtotime($row['last_try']) + (THROTTLE_LOCKOUT_MIN * 60);
-            return max(0, $unlock - time());
+            $accountWait = max(0, $unlock - time());
         }
 
         // 2. High-volume IP brute force guard (prevents attacking many accounts from 1 IP, 24 attempts threshold)
@@ -229,13 +222,13 @@ function login_lockout_seconds(string $identifier): int {
 
         if ($ipRow && (int)$ipRow['failures'] >= (THROTTLE_MAX_ATTEMPTS * 4)) {
             $unlock = strtotime($ipRow['last_try']) + (THROTTLE_LOCKOUT_MIN * 60);
-            return max(0, $unlock - time());
+            return max($accountWait, $unlock - time());
         }
 
-        return 0;
+        return $accountWait;
     } catch (Throwable $e) {
-        error_log('login_lockout_seconds failed: ' . $e->getMessage());
-        return 0;   // never lock everyone out because of a DB hiccup
+        error_log('login throttle unavailable request=' . request_id());
+        throw new SecurityFault('THROTTLE_UNAVAILABLE', 'Sign-in temporarily unavailable.', 503);
     }
 }
 

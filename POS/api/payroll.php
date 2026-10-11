@@ -13,17 +13,7 @@ if (file_exists(__DIR__ . '/../includes/procurement_helpers.php')) {
 }
 require_login();
 
-$raw_input = file_get_contents('php://input');
-$json_data = [];
-if ($raw_input !== '' && $raw_input !== false) {
-    $decoded = json_decode($raw_input, true);
-    if (is_array($decoded)) {
-        $json_data = $decoded;
-    }
-}
-
-// Safely merge parameters: JSON payload overrides POST, then GET
-$data = array_merge($_GET, $_POST, $json_data);
+$data = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' ? $_GET : request_data();
 $action = trim((string)($data['action'] ?? ''));
 
 // Detect if this is a standard HTML browser form requesting a page redirect
@@ -41,6 +31,8 @@ require_csrf_json();
 
 $pdo  = get_db();
 $user = current_user();
+require_once __DIR__ . '/../includes/order_service.php';
+if (in_array($action, ['release', 'release_individual', 'batch_release_selected', 'paymongo_dispatch_payout', 'paymongo_retry_item'], true)) claim_financial_request($pdo, 'payroll-payout', $data);
 
 /** Respond, honouring form-vs-fetch. */
 function respond(array $payload, int $code = 200, string $redirect = '../php/payroll.php'): never {
@@ -52,10 +44,13 @@ function respond(array $payload, int $code = 200, string $redirect = '../php/pay
         if (!str_starts_with($redirect, 'http') && !str_starts_with($redirect, '/') && !str_starts_with($redirect, '../')) {
             $redirect = '../php/' . $redirect;
         }
-        header('Location: ' . $redirect . (str_contains($redirect, '?') ? '&' : '?') . 'toast=' . urlencode($msg) . '&type=' . $type);
+        $location = $redirect . (str_contains($redirect, '?') ? '&' : '?') . 'toast=' . urlencode($msg) . '&type=' . $type;
+        complete_financial_request(get_db(), ['status' => 303, 'redirect' => $location]);
+        header('Location: ' . $location, true, 303);
         exit;
     }
 
+    complete_financial_request(get_db(), ['status' => $code, 'body' => $payload]);
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload);
@@ -214,17 +209,30 @@ try {
 
         $payslip_id = (int)($data['payslip_id'] ?? 0);
         $method     = trim((string)($data['payment_method'] ?? 'cash'));
+        if (!in_array($method, ['cash', 'cheque', 'bank_transfer', 'ewallet', 'paymongo'], true)) throw new SecurityFault('PAYMENT_METHOD_INVALID', 'Invalid payout method.');
         $info       = trim((string)($data['payout_account_info'] ?? ''));
 
         if ($payslip_id <= 0) {
             respond(['ok' => false, 'error' => 'Invalid payslip ID.'], 422);
         }
 
+        $pdo->beginTransaction();
+        try {
+        $pdo->prepare('SELECT id FROM payslips WHERE id = ? FOR UPDATE')->execute([$payslip_id]);
+        $attempt = $pdo->prepare("SELECT 1 FROM payment_attempts WHERE operation_key = ? AND status <> 'rejected'");
+        $attempt->execute(['payslip-transfer-' . $payslip_id]);
+        if ($attempt->fetchColumn()) throw new SecurityFault('PAYOUT_RECONCILIATION_REQUIRED', 'Review the existing transfer before changing its destination.', 409);
         $pdo->prepare("
             UPDATE payslips
             SET payment_method = :m, payout_account_info = :info
             WHERE id = :id AND payment_status != 'paid'
         ")->execute([':m' => $method, ':info' => $info, ':id' => $payslip_id]);
+        security_audit($pdo, 'payout_destination_changed', 'payslip', $payslip_id);
+        $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $exception;
+        }
 
         respond(['ok' => true, 'message' => 'Payment method updated.']);
     }
@@ -263,16 +271,9 @@ try {
             respond(['ok' => false, 'error' => 'Only a calculated period can be approved.'], 409);
         }
 
-        // Separation of duties: whoever ran the calculation should not
-        // also be the one approving it.
-        if ((int)$period['created_by'] === (int)$user['id'] && !has_permission('payroll.release')) {
-            respond(['ok' => false,
-                     'error' => 'You created this period, so someone else must approve it.'], 403);
-        }
-
-        $exceptions = (int)$pdo->query(
-            'SELECT COUNT(*) FROM payslips WHERE period_id = ' . $period_id . ' AND has_exception = 1'
-        )->fetchColumn();
+        $exceptionCount = $pdo->prepare('SELECT COUNT(*) FROM payslips WHERE period_id = ? AND has_exception = 1');
+        $exceptionCount->execute([$period_id]);
+        $exceptions = (int)$exceptionCount->fetchColumn();
 
         $pdo->prepare(
             "UPDATE payroll_periods
@@ -371,35 +372,18 @@ try {
         $cfg = get_paymongo_disbursement_config($pdo);
         $payout_res = execute_paymongo_transfer_call($cfg, $item);
 
-        if ($payout_res['ok']) {
-            $pdo->prepare("
-                UPDATE `paymongo_payout_items`
-                SET `status` = 'paid', `paymongo_transfer_id` = :tid, `error_message` = NULL,
-                    `attempt_count` = `attempt_count` + 1, `last_attempt_at` = NOW(), `paid_at` = NOW()
-                WHERE `id` = :id
-            ")->execute([':tid' => $payout_res['transfer_id'], ':id' => $item_id]);
-
-            $pdo->prepare("UPDATE `payslips` SET `payment_status` = 'paid', `paid_at` = NOW() WHERE `id` = :id")
-                ->execute([':id' => $item['payslip_id']]);
-
-            // Check if all items in batch are now paid
-            $chk = $pdo->prepare("SELECT COUNT(*) FROM `paymongo_payout_items` WHERE `batch_id` = :b AND `status` != 'paid'");
-            $chk->execute([':b' => $item['batch_id']]);
-            if ((int)$chk->fetchColumn() === 0) {
-                $pdo->prepare("UPDATE `paymongo_payout_batches` SET `status` = 'paid', `completed_at` = NOW() WHERE `id` = :b")
-                    ->execute([':b' => $item['batch_id']]);
+        $paid = !empty($payout_res['ok']) && in_array($payout_res['status'] ?? '', ['paid', 'succeeded'], true);
+        $status = $paid ? 'paid' : (!empty($payout_res['unknown']) || !empty($payout_res['ok']) ? 'processing' : 'failed');
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('UPDATE paymongo_payout_items SET status = ?, paymongo_transfer_id = ?, error_message = ? WHERE id = ? AND status <> "paid"')->execute([$status, $payout_res['transfer_id'] ?? null, $payout_res['error'] ?? null, $item_id]);
+            if ($paid) {
+                apply_payslip_loan_repayments($pdo, $item);
+                $pdo->prepare("UPDATE payslips SET payment_status = 'paid', paid_at = NOW() WHERE id = ?")->execute([$item['payslip_id']]);
             }
-
-            respond(['ok' => true, 'message' => 'Disbursement transfer succeeded.']);
-        } else {
-            $pdo->prepare("
-                UPDATE `paymongo_payout_items`
-                SET `status` = 'failed', `error_message` = :err, `attempt_count` = `attempt_count` + 1, `last_attempt_at` = NOW()
-                WHERE `id` = :id
-            ")->execute([':err' => $payout_res['error'], ':id' => $item_id]);
-
-            respond(['ok' => false, 'error' => $payout_res['error']], 422);
-        }
+            $pdo->commit();
+        } catch (Throwable $exception) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $exception; }
+        respond(['ok' => $status !== 'failed', 'status' => $status, 'message' => $paid ? 'Payment confirmed.' : 'Payment outcome is pending reconciliation.']);
     }
 
     // ── PayMongo: Test API Credentials & Connection ──
@@ -421,7 +405,7 @@ try {
         }
 
         // Demo key simulation
-        if (str_starts_with($secret_key, 'demo') || str_contains($secret_key, 'demo') || $secret_key === 'sandbox') {
+        if (!app_production() && payment_mode() === 'demo' && (str_starts_with($secret_key, 'demo') || str_contains($secret_key, 'demo') || $secret_key === 'sandbox')) {
             respond([
                 'ok'      => true,
                 'message' => 'PayMongo Sandbox Demo is active. Transfers are simulated in high-fidelity test mode.',
@@ -444,7 +428,7 @@ try {
         if (is_file($caBundle)) {
             $curl_opts[CURLOPT_CAINFO] = $caBundle;
         } else {
-            $curl_opts[CURLOPT_SSL_VERIFYPEER] = false;
+            $curl_opts[CURLOPT_SSL_VERIFYPEER] = true;
         }
 
         curl_setopt_array($ch, $curl_opts);
@@ -605,7 +589,7 @@ try {
             if ($emp_row && !empty($emp_row['user_id']) && function_exists('notify_user')) {
                 notify_user((int)$emp_row['user_id'], 'payroll_loan', 'Cash Advance Issued', 'A cash advance of ₱' . number_format($principal, 2) . ' has been recorded to your account.', 'my_payslips.php');
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 
         respond(['ok' => true, 'message' => 'Loan / advance recorded successfully.']);
     }
@@ -687,7 +671,7 @@ try {
                     notify_user((int)$loan_row['user_id'], 'payroll_loan', 'Cash Advance Declined', 'Your cash advance request of ₱' . number_format((float)$loan_row['principal'], 2) . ' was declined.', 'my_payslips.php');
                 }
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) { error_log('request=' . request_id() . ' exception=' . get_class($e)); }
 
         $verb = $status === 'active' ? 'approved' : ($status === 'declined' ? 'declined' : 'updated');
         respond(['ok' => true, 'message' => 'Loan status ' . $verb . ' successfully.']);
@@ -707,11 +691,6 @@ try {
             'grace_period_minutes',
             'tip_pool_mode',
             'auto_approve_attendance',
-            'paymongo_mode',
-            'paymongo_secret_key',
-            'paymongo_public_key',
-            'paymongo_webhook_secret',
-            'paymongo_disbursement_enabled',
         ];
 
         $settings = $data['settings'] ?? [];
@@ -735,8 +714,6 @@ try {
                 $val = ($val === '1' || $val === 'true') ? '1' : '0';
             } elseif ($key === 'paymongo_mode') {
                 $val = ($val === 'live') ? 'live' : 'sandbox';
-            } elseif (in_array($key, ['paymongo_secret_key', 'paymongo_public_key', 'paymongo_webhook_secret'], true)) {
-                // Keep string keys verbatim
             } else {
                 if (!is_numeric($val)) continue;
                 $f = (float)$val;
@@ -934,7 +911,7 @@ try {
 
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    error_log('payroll api error: ' . $e->getMessage());
+    error_log('payroll api error: ' . 'Service temporarily unavailable.');
     respond(['ok' => false, 'error' => 'A server error occurred. Check the error log.'], 500);
 }
 

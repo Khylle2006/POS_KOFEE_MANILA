@@ -38,7 +38,7 @@ function ingredient_shelf_life_days(int $ingredient_id): int {
         $stmt->execute([':fallback' => DEFAULT_SHELF_LIFE_DAYS, ':id' => $ingredient_id]);
         $days = (int)$stmt->fetchColumn();
     } catch (Throwable $e) {
-        error_log('ingredient_shelf_life_days failed: ' . $e->getMessage());
+        error_log('ingredient_shelf_life_days failed: ' . 'Service temporarily unavailable.');
         $days = 0;
     }
 
@@ -152,7 +152,7 @@ function record_ingredient_batch(int $ingredient_id, float $qty, array $opts = [
 
         return (int)$pdo->lastInsertId();
     } catch (Throwable $e) {
-        error_log('record_ingredient_batch failed: ' . $e->getMessage());
+        error_log('record_ingredient_batch failed: ' . 'Service temporarily unavailable.');
         return 0;
     }
 }
@@ -189,7 +189,7 @@ function consume_ingredient_batches(int $ingredient_id, float $qty): void {
             $left -= $take;
         }
     } catch (Throwable $e) {
-        error_log('consume_ingredient_batches failed: ' . $e->getMessage());
+        error_log('consume_ingredient_batches failed: ' . 'Service temporarily unavailable.');
     }
 }
 
@@ -204,7 +204,7 @@ function sync_expired_batches(): void {
                 AND expiry_date < CURDATE()"
         );
     } catch (Throwable $e) {
-        error_log('sync_expired_batches failed: ' . $e->getMessage());
+        error_log('sync_expired_batches failed: ' . 'Service temporarily unavailable.');
     }
 }
 
@@ -224,7 +224,7 @@ function ingredient_expiry_map(): array {
               GROUP BY ingredient_id"
         )->fetchAll();
     } catch (Throwable $e) {
-        error_log('ingredient_expiry_map failed: ' . $e->getMessage());
+        error_log('ingredient_expiry_map failed: ' . 'Service temporarily unavailable.');
         return [];
     }
 
@@ -269,8 +269,8 @@ function has_active_reorder(int $ingredient_id): bool {
         $stmt->execute([':id1' => $ingredient_id, ':id2' => $ingredient_id]);
         return (bool)$stmt->fetchColumn();
     } catch (Throwable $e) {
-        error_log('has_active_reorder failed: ' . $e->getMessage());
-        return true; // fail closed — better to skip than spam duplicates
+        error_log('has_active_reorder failed: ' . 'Service temporarily unavailable.');
+        throw new SecurityFault('INVENTORY_REORDER_UNAVAILABLE', 'Inventory replenishment is unavailable.', 503);
     }
 }
 
@@ -385,8 +385,8 @@ function check_and_trigger_reorder(int $ingredient_id, ?int $actor_id = null): i
 
         return $req_id;
     } catch (Throwable $e) {
-        error_log('check_and_trigger_reorder failed: ' . $e->getMessage());
-        return 0;
+        error_log('check_and_trigger_reorder failed: ' . 'Service temporarily unavailable.');
+        throw new SecurityFault('INVENTORY_REORDER_UNAVAILABLE', 'Inventory replenishment is unavailable.', 503);
     }
 }
 
@@ -405,7 +405,7 @@ function run_reorder_sweep(?int $actor_id = null): array {
             if ($req) $created[] = $req;
         }
     } catch (Throwable $e) {
-        error_log('run_reorder_sweep failed: ' . $e->getMessage());
+        error_log('run_reorder_sweep failed: ' . 'Service temporarily unavailable.');
     }
     return $created;
 }
@@ -467,7 +467,7 @@ function dispatch_expiry_warnings(): int {
             $sent++;
         }
     } catch (Throwable $e) {
-        error_log('dispatch_expiry_warnings failed: ' . $e->getMessage());
+        error_log('dispatch_expiry_warnings failed: ' . 'Service temporarily unavailable.');
     }
     return $sent;
 }

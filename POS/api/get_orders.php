@@ -14,6 +14,7 @@ $stmt = $pdo->query("
     FROM orders o
     LEFT JOIN order_items oi ON oi.order_id = o.id
     LEFT JOIN products p ON p.id = oi.product_id
+    WHERE o.payment_status = 'paid'
     GROUP BY o.id
     ORDER BY
         FIELD(o.status, 'pending', 'completed', 'cancelled'),

@@ -255,10 +255,10 @@ $initials = strtoupper(substr($fname, 0, 1));
                 <td>
                   <div class="proof-thumbs">
                     <?php if ($r['time_in_photo']): ?>
-                      <img src="../<?= htmlspecialchars($r['time_in_photo']) ?>" class="proof-thumb" onclick="openPhotoPreview('../<?= htmlspecialchars($r['time_in_photo']) ?>')" title="Clock-in photo" onerror="this.style.display='none'"/>
+                      <img src="../<?= htmlspecialchars($r['time_in_photo']) ?>" class="proof-thumb" onclick="openPhotoPreview(kofeePrivateFileUrl('<?= htmlspecialchars($r['time_in_photo'], ENT_QUOTES) ?>'))" title="Clock-in photo" onerror="this.style.display='none'"/>
                     <?php endif; ?>
                     <?php if ($r['time_out_photo']): ?>
-                      <img src="../<?= htmlspecialchars($r['time_out_photo']) ?>" class="proof-thumb" onclick="openPhotoPreview('../<?= htmlspecialchars($r['time_out_photo']) ?>')" title="Clock-out photo" onerror="this.style.display='none'"/>
+                      <img src="../<?= htmlspecialchars($r['time_out_photo']) ?>" class="proof-thumb" onclick="openPhotoPreview(kofeePrivateFileUrl('<?= htmlspecialchars($r['time_out_photo'], ENT_QUOTES) ?>'))" title="Clock-out photo" onerror="this.style.display='none'"/>
                     <?php endif; ?>
                     <?php if (!$r['time_in_photo'] && !$r['time_out_photo']): ?>—<?php endif; ?>
                   </div>

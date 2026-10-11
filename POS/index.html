@@ -918,6 +918,7 @@
     }
 
     /* ─── 2.5D Menu Item Preview Modal ─── */
+    .menu-preview-overlay[hidden] { display: none; }
     .menu-preview-overlay {
       position: fixed;
       inset: 0;
@@ -1615,7 +1616,24 @@
       .hero-plinth { width: 320px; height: 320px; }
       .hero-coffee-card { width: 300px; height: 400px; }
     }
-  </style>
+  .nav-toggle { display: none; min-width: 44px; min-height: 44px; color: #ECC98F; background: transparent; border: 1px solid #68584B; border-radius: 10px; }
+:where(a, button, [tabindex]):focus-visible { outline: 3px solid #ECC98F; outline-offset: 3px; }
+@media (max-width: 900px) {
+  .nav-wrap { position: relative; gap: 8px; }
+  .nav-toggle { display: block; margin-left: auto; }
+  .nav-links { display: none; }
+  .nav-links.open { display: flex; position: absolute; top: 100%; left: 0; right: 0; flex-wrap: wrap; gap: 12px 20px; padding: 20px; background: #140c0e; border: 1px solid #68584b; border-radius: 0 0 12px 12px; }
+  .nav-links a { display: block; padding: 8px 0; }
+}
+@media (max-width: 600px) {
+  .brand-group { gap: 6px; }
+  .brand-logo-frame, .brand-logo-img { width: 30px; height: 30px; }
+  .brand-meta h1 { font-size: 18px; }
+  .brand-meta span { font-size: 7px; letter-spacing: 1px; }
+  .btn-login-cta { padding: 10px 12px; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+</style>
 </head>
 <body>
 
@@ -1655,12 +1673,14 @@
         </div>
       </a>
 
-      <ul class="nav-links">
+      <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="public-navigation">☰</button>
+      <ul class="nav-links" id="public-navigation">
         <li><a href="#" class="active">Home</a></li>
         <li><a href="#featured">Featured</a></li>
         <li><a href="#menu">Our Menu</a></li>
         <li><a href="#craft">The Craft</a></li>
         <li><a href="careers.php">Hiring</a></li>
+        <li><a href="supplier_partnership.php">Suppliers</a></li>
         <li><a href="#contact">Visit Us</a></li>
       </ul>
 
@@ -1725,10 +1745,10 @@
 
             <!-- Cinematic Coffee Showcase Frame -->
             <div class="coffee-image-display">
-              <img src="https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=700&q=80" 
+              <img src="https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=700&q=80"
                    alt="BrewVanti Signature Flat White"
                    onerror="this.src='assets/menu/1.jpg'">
-              
+
               <!-- Subtle Inner Badge -->
               <div class="photo-inner-badge">
                 <span class="badge-dot"></span>
@@ -1796,8 +1816,8 @@
           <div class="card-gloss-sheen"></div>
           <div class="card-img-box">
             <span class="badge-category">HOT COFFEE</span>
-            <img src="https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=600&q=80" 
-                 alt="Caramel Macchiato" 
+            <img src="https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=600&q=80"
+                 alt="Caramel Macchiato"
                  onerror="this.src='assets/menu/3.jpg'">
           </div>
           <div class="card-info">
@@ -1821,8 +1841,8 @@
           <div class="card-gloss-sheen"></div>
           <div class="card-img-box">
             <span class="badge-category">COLD BREW</span>
-            <img src="https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=600&q=80" 
-                 alt="Iced Spanish Latte" 
+            <img src="https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=600&q=80"
+                 alt="Iced Spanish Latte"
                  onerror="this.src='assets/menu/4.jpg'">
           </div>
           <div class="card-info">
@@ -1846,8 +1866,8 @@
           <div class="card-gloss-sheen"></div>
           <div class="card-img-box">
             <span class="badge-category">CRAFT BREW</span>
-            <img src="https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=600&q=80" 
-                 alt="Artisan Cappuccino" 
+            <img src="https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=600&q=80"
+                 alt="Artisan Cappuccino"
                  onerror="this.src='assets/menu/1.jpg'">
           </div>
           <div class="card-info">
@@ -1871,8 +1891,8 @@
           <div class="card-gloss-sheen"></div>
           <div class="card-img-box">
             <span class="badge-category">SIGNATURE</span>
-            <img src="https://images.unsplash.com/photo-1578314670559-338c356f1784?auto=format&fit=crop&w=600&q=80" 
-                 alt="Mocha Delight" 
+            <img src="https://images.unsplash.com/photo-1578314670559-338c356f1784?auto=format&fit=crop&w=600&q=80"
+                 alt="Mocha Delight"
                  onerror="this.src='assets/menu/3.jpg'">
           </div>
           <div class="card-info">
@@ -1919,7 +1939,7 @@
         <!-- Menu List Grid (Two Columns) -->
         <div class="menu-items-columns" id="menuColumns">
           <!-- Item 1 (Hot) -->
-          <div class="menu-list-row" data-cat="hot" onclick="openMenuPreview(event, 'Caramel Macchiato')" title="Preview Drink Details">
+          <div class="menu-list-row" role="button" tabindex="0" aria-label="Preview Caramel Macchiato" data-cat="hot" onclick="openMenuPreview(event, 'Caramel Macchiato')" title="Preview Drink Details">
             <div class="thumb-box">
               <img src="https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=150&q=80" alt="Caramel Macchiato" onerror="this.src='assets/menu/1.jpg'">
             </div>
@@ -1933,7 +1953,7 @@
           </div>
 
           <!-- Item 2 (Hot) -->
-          <div class="menu-list-row" data-cat="hot" onclick="openMenuPreview(event, 'Caffe Americano')" title="Preview Drink Details">
+          <div class="menu-list-row" role="button" tabindex="0" aria-label="Preview Caffe Americano" data-cat="hot" onclick="openMenuPreview(event, 'Caffe Americano')" title="Preview Drink Details">
             <div class="thumb-box">
               <img src="https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=150&q=80" alt="Caffe Americano" onerror="this.src='assets/menu/3.jpg'">
             </div>
@@ -1947,7 +1967,7 @@
           </div>
 
           <!-- Item 3 (Iced) -->
-          <div class="menu-list-row" data-cat="iced" onclick="openMenuPreview(event, 'Iced Vanilla Latte')" title="Preview Drink Details">
+          <div class="menu-list-row" role="button" tabindex="0" aria-label="Preview Iced Vanilla Latte" data-cat="iced" onclick="openMenuPreview(event, 'Iced Vanilla Latte')" title="Preview Drink Details">
             <div class="thumb-box">
               <img src="https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=150&q=80" alt="Iced Vanilla Latte" onerror="this.src='assets/menu/4.jpg'">
             </div>
@@ -1961,7 +1981,7 @@
           </div>
 
           <!-- Item 4 (Hot) -->
-          <div class="menu-list-row" data-cat="hot" onclick="openMenuPreview(event, 'Classic Cappuccino')" title="Preview Drink Details">
+          <div class="menu-list-row" role="button" tabindex="0" aria-label="Preview Classic Cappuccino" data-cat="hot" onclick="openMenuPreview(event, 'Classic Cappuccino')" title="Preview Drink Details">
             <div class="thumb-box">
               <img src="https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=150&q=80" alt="Classic Cappuccino" onerror="this.src='assets/menu/1.jpg'">
             </div>
@@ -1975,7 +1995,7 @@
           </div>
 
           <!-- Item 5 (Special) -->
-          <div class="menu-list-row" data-cat="special" onclick="openMenuPreview(event, 'Dark Chocolate Mocha')" title="Preview Drink Details">
+          <div class="menu-list-row" role="button" tabindex="0" aria-label="Preview Dark Chocolate Mocha" data-cat="special" onclick="openMenuPreview(event, 'Dark Chocolate Mocha')" title="Preview Drink Details">
             <div class="thumb-box">
               <img src="https://images.unsplash.com/photo-1578314670559-338c356f1784?auto=format&fit=crop&w=150&q=80" alt="Dark Mocha" onerror="this.src='assets/menu/3.jpg'">
             </div>
@@ -1989,7 +2009,7 @@
           </div>
 
           <!-- Item 6 (Special) -->
-          <div class="menu-list-row" data-cat="special" onclick="openMenuPreview(event, 'Nitro Cold Brew')" title="Preview Drink Details">
+          <div class="menu-list-row" role="button" tabindex="0" aria-label="Preview Nitro Cold Brew" data-cat="special" onclick="openMenuPreview(event, 'Nitro Cold Brew')" title="Preview Drink Details">
             <div class="thumb-box">
               <img src="https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=150&q=80" alt="Nitro Cold Brew" onerror="this.src='assets/menu/4.jpg'">
             </div>
@@ -2088,10 +2108,10 @@
         <div class="footer-col">
           <h5>Experience</h5>
           <ul>
-            <li><a href="auth/login.php">POS Order Terminal</a></li>
-            <li><a href="#">Table Reservation</a></li>
-            <li><a href="#">Private Tastings</a></li>
+            <li><a href="php/login.php">POS Order Terminal</a></li>
+            <li><a href="#contact">Table Reservation</a></li>
             <li><a href="careers.php">Careers &amp; Hiring</a></li>
+            <li><a href="supplier_partnership.php">Supplier Partnership</a></li>
           </ul>
         </div>
       </div>
@@ -2104,11 +2124,11 @@
   </footer>
 
   <!-- ─── 2.5D Menu Item Preview Modal ─── -->
-  <div class="menu-preview-overlay" id="menuPreviewModal" onclick="closeMenuPreview(event)">
+  <div class="menu-preview-overlay" id="menuPreviewModal" role="dialog" aria-modal="true" aria-labelledby="previewTitle" hidden onclick="closeMenuPreview(event)">
     <div class="menu-preview-card" onclick="event.stopPropagation()">
       <div class="card-gloss-sheen"></div>
       <button class="preview-close-btn" onclick="closeMenuPreview()" aria-label="Close Preview">&times;</button>
-      
+
       <div class="preview-card-grid">
         <!-- Visual Display Column -->
         <div class="preview-img-column">
@@ -2172,11 +2192,52 @@
   </div>
 
   <!-- ─── 2.5D Interactive JavaScript Engine ─── -->
+<script>
+    const navToggle = document.getElementById('navToggle');
+    const navLinks = document.querySelector('.nav-links');
+
+    if (navToggle && navLinks) {
+      const iconHamburger = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+      const iconClose = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+      navToggle.addEventListener('click', () => {
+        const isOpen = navLinks.classList.toggle('open');
+        navToggle.setAttribute('aria-expanded', String(isOpen));
+        navToggle.innerHTML = isOpen ? iconClose : iconHamburger;
+      });
+
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && navLinks.classList.contains('open')) {
+          navLinks.classList.remove('open');
+          navToggle.setAttribute('aria-expanded', 'false');
+          navToggle.innerHTML = iconHamburger;
+          navToggle.focus();
+        }
+      });
+
+      navLinks.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+          navLinks.classList.remove('open');
+          navToggle.setAttribute('aria-expanded', 'false');
+          navToggle.innerHTML = iconHamburger;
+        });
+      });
+
+      document.addEventListener('click', (e) => {
+        // The toggle replaces its SVG; the original event target may be detached.
+        if (!e.composedPath().includes(navToggle) && !navLinks.contains(e.target)) {
+          navLinks.classList.remove('open');
+          navToggle.setAttribute('aria-expanded', 'false');
+          navToggle.innerHTML = iconHamburger;
+        }
+      });
+    }
+  </script>
   <script>
     // 1. 2.5D Mouse Tilt on all [data-tilt] elements
     const tiltCards = document.querySelectorAll('[data-tilt]');
 
-    tiltCards.forEach(card => {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && !window.matchMedia('(pointer: coarse)').matches) tiltCards.forEach(card => {
       card.addEventListener('mousemove', e => {
         const rect = card.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -2199,7 +2260,7 @@
     const stage = document.querySelector('.hero-3d-stage');
     const plinth = document.getElementById('heroPlinth');
 
-    if (stage && plinth) {
+    if (stage && plinth && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && !window.matchMedia('(pointer: coarse)').matches) {
       stage.addEventListener('mousemove', e => {
         const rect = stage.getBoundingClientRect();
         const x = e.clientX - rect.left - rect.width / 2;
@@ -2215,6 +2276,9 @@
         plinth.style.transform = 'rotateX(0deg) rotateY(0deg)';
       });
     }
+
+    let previewTrigger = null;
+    let previewBackground = [];
 
     // 3. 2.5D Menu Preview Logic
     const menuPreviewData = {
@@ -2326,7 +2390,15 @@
       }
       const modal = document.getElementById('menuPreviewModal');
       if (!modal) return;
-      
+      if (!modal.classList.contains('active')) {
+        previewTrigger = document.activeElement;
+        previewBackground = Array.from(document.body.children)
+          .filter(element => element !== modal && element.tagName !== 'SCRIPT')
+          .map(element => ({ element, inert: element.inert }));
+        previewBackground.forEach(({ element }) => { element.inert = true; });
+      }
+      modal.hidden = false;
+
       const data = menuPreviewData[drinkName] || {
         category: 'ARTISAN SPECIALTY',
         price: '₱160.00',
@@ -2360,6 +2432,7 @@
 
       modal.classList.add('active');
       document.body.style.overflow = 'hidden';
+      modal.querySelector('.preview-close-btn').focus();
     }
 
     function closeMenuPreview(event) {
@@ -2369,12 +2442,37 @@
       const modal = document.getElementById('menuPreviewModal');
       if (modal) {
         modal.classList.remove('active');
+        modal.hidden = true;
         document.body.style.overflow = '';
+        previewBackground.forEach(({ element, inert }) => { element.inert = inert; });
+        previewBackground = [];
+        previewTrigger?.focus();
       }
     }
 
     document.addEventListener('keydown', e => {
+      const modal = document.getElementById('menuPreviewModal');
+      if (!modal.classList.contains('active')) {
+        const row = e.target.closest?.('.menu-list-row[role="button"]');
+        if (row && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          row.click();
+        }
+        return;
+      }
       if (e.key === 'Escape') closeMenuPreview();
+      if (e.key === 'Tab') {
+        const controls = modal.querySelectorAll('button, a[href]');
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     });
 
     const toastContainer = document.getElementById('toastContainer');
@@ -2396,7 +2494,7 @@
     }
 
     function triggerPromoToast() {
-      showToast(`🎟️ Promo Code <strong>BREWVANTI20</strong> applied! (20% OFF)`);
+      showToast('Ask our staff about the BREWVANTI20 promotion.');
     }
 
     // 4. Interactive Category Filtering with Staggered Fade

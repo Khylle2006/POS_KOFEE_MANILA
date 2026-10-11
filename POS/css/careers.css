@@ -74,11 +74,15 @@ button, input, select, textarea {
    ───────────────────────────────────────────────────────────── */
 .km-header {
   background-color: var(--km-header-bg);
+  background: rgba(36, 26, 46, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(251, 243, 233, 0.08);
   color: #FFFFFF;
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 12px rgba(17, 9, 21, 0.22);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
 }
 
 .km-header-inner {

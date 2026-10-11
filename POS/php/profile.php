@@ -4,6 +4,7 @@ require_once '../includes/permissions.php';
 require_once '../includes/profile_helpers.php';
 require_once '../includes/paymongo_disbursement_helpers.php';
 require_once '../includes/icons.php';
+require_once '../includes/email_mfa.php';
 
 require_login();
 require_permission('profile.view');
@@ -19,10 +20,51 @@ $toast_type = 'success';
 
 $profile = get_user_profile($pdo, (int)$user['id']);
 $employee_id = (int)($profile['employee_id'] ?? 0);
+$mfa_available = email_mfa_available($pdo);
+$mfa_enabled = email_mfa_enabled($pdo, (int)$user['id']);
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    if (in_array($action, ['mfa_start', 'mfa_verify', 'mfa_disable', 'mfa_cancel'], true)) {
+        require_csrf();
+        try {
+            if (!$mfa_available) throw new SecurityFault('MFA_UNAVAILABLE', 'Email MFA settings are not installed yet.', 503);
+            $userId = (int)$user['id'];
+            if ($action === 'mfa_cancel') {
+                unset($_SESSION['email_mfa_enroll']);
+                $toast = 'Email MFA setup cancelled. Your setting is unchanged.';
+            } elseif ($action === 'mfa_verify') {
+                rate_limit('email-mfa-verify-enroll', (string)$userId, 5, 600);
+                $challenge = &$_SESSION['email_mfa_enroll'];
+                if (!is_array($challenge)) $challenge = [];
+                $code = is_string($_POST['code'] ?? null) ? trim($_POST['code']) : '';
+                enable_email_mfa($pdo, $userId, $challenge, $code);
+                unset($_SESSION['email_mfa_enroll']);
+                $toast = 'Email MFA is on. Future logins will require an email code.';
+            } else {
+                rate_limit('email-mfa-password', (string)$userId, 5, 600);
+                $password = is_string($_POST['current_password'] ?? null) ? $_POST['current_password'] : '';
+                if ($action === 'mfa_disable') {
+                    disable_email_mfa($pdo, $userId, $password);
+                    $toast = 'Email MFA is off.';
+                } else {
+                    $account = email_mfa_user($pdo, $userId);
+                    if (!verify_login_password($password, (string)$account['password'])) {
+                        throw new SecurityFault('PASSWORD_INVALID', 'Your current password is incorrect.');
+                    }
+                    start_email_mfa($pdo, $userId, 'enroll');
+                    $toast = 'A verification code was sent to your profile email. Enter it below to turn on MFA.';
+                }
+            }
+        } catch (SecurityFault $exception) {
+            $toast = $exception->getMessage();
+            $toast_type = 'error';
+        }
+        header('Location: profile.php?tab=personal&toast=' . urlencode($toast) . '&type=' . $toast_type . '#email-mfa');
+        exit;
+    }
 
     if ($action === 'update_profile' && $can_edit_profile) {
         $res = update_user_profile(
@@ -256,8 +298,13 @@ $supported_destinations = get_supported_payout_destinations();
           <?php endif; ?>
           <div class="avatar-overlay">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            <span>Change Photo</span>
+            <span id="quick-avatar-overlay-text">Change Photo</span>
           </div>
+        </div>
+
+        <div id="avatar-quick-loading" style="display:none; align-items:center; justify-content:center; gap:6px; font-size:11.5px; color:var(--caramel,#c47d3e); font-weight:700; margin-bottom:10px;">
+          <svg style="animation:spin 0.9s linear infinite; width:14px; height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg>
+          <span id="avatar-quick-loading-text">Optimizing photo...</span>
         </div>
 
         <div style="display:flex; justify-content:center; gap:8px; margin-bottom:14px;">
@@ -309,7 +356,7 @@ $supported_destinations = get_supported_payout_destinations();
             <?= icon('user', 16, '', 'color:var(--caramel)') ?> Personal Details
           </h3>
 
-          <form method="POST" enctype="multipart/form-data">
+          <form method="POST" enctype="multipart/form-data" id="profile_personal_form" onsubmit="return handleProfileFormSubmit(event)">
             <input type="hidden" name="action" value="update_profile"/>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -377,6 +424,159 @@ $supported_destinations = get_supported_payout_destinations();
               <button type="submit" class="btn-save"><?= icon('check', 14) ?> Save Profile Changes</button>
             </div>
           </form>
+
+          <!-- ─── Enhanced Two-Factor Authentication (Email MFA) UI ─── -->
+          <section id="email-mfa" aria-labelledby="email-mfa-title" style="margin-top:32px;border-top:1.5px dashed var(--border,#EDE8E1);padding-top:24px">
+            
+            <!-- Security Card Container -->
+            <div style="background:#FAF7F2;border:1.5px solid var(--border,#EDE8E1);border-radius:14px;padding:24px;box-shadow:0 2px 10px rgba(44,26,14,0.03);">
+              
+              <!-- Card Header: Title, Icon, and Live Status Badge -->
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <div style="width:42px;height:42px;border-radius:10px;background:#F0EAE1;border:1.5px solid #E0D3C1;color:var(--caramel,#8B4513);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <?= icon('shield-check', 22) ?>
+                  </div>
+                  <div>
+                    <h3 id="email-mfa-title" style="margin:0;font-size:16px;font-weight:700;color:var(--espresso,#1E1517);letter-spacing:-0.2px;">
+                      Two-Factor Authentication (Email MFA)
+                    </h3>
+                    <p style="margin:2px 0 0 0;font-size:12px;color:var(--text-muted,#718096);">
+                      Strengthen your staff sign-in security with one-time verification passcodes.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <?php if ($mfa_enabled): ?>
+                    <span style="display:inline-flex;align-items:center;gap:6px;background:#DCFCE7;color:#166534;border:1px solid #86EFAC;font-size:11.5px;font-weight:700;padding:4px 12px;border-radius:999px;text-transform:uppercase;letter-spacing:0.5px;">
+                      <span style="width:7px;height:7px;border-radius:50%;background:#16A34A;box-shadow:0 0 0 2px rgba(22,163,74,0.2);"></span>
+                      Status: Active &amp; Protected
+                    </span>
+                  <?php else: ?>
+                    <span style="display:inline-flex;align-items:center;gap:6px;background:#F3F4F6;color:#4B5563;border:1px solid #E5E7EB;font-size:11.5px;font-weight:700;padding:4px 12px;border-radius:999px;text-transform:uppercase;letter-spacing:0.5px;">
+                      <span style="width:7px;height:7px;border-radius:50%;background:#9CA3AF;"></span>
+                      Status: Disabled (Off)
+                    </span>
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <!-- Context Explainer Banner -->
+              <div style="background:#FFFFFF;border:1px solid var(--border,#EDE8E1);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:var(--text-muted,#555);line-height:1.5;">
+                <div style="color:var(--caramel,#8B4513);flex-shrink:0;margin-top:2px;">
+                  <?= icon('pending', 16) ?>
+                </div>
+                <div>
+                  <?php if ($mfa_enabled): ?>
+                    Your account requires a temporary 6-digit code sent to <strong style="color:var(--text-main,#1E1517)"><?= htmlspecialchars($profile['email'] ?: 'your profile email') ?></strong> every time you log in.
+                    <span style="display:block;margin-top:3px;font-size:11.5px;color:#92400E;">Notice: Please disable MFA before changing your email address, then verify your new email to turn it back on.</span>
+                  <?php else: ?>
+                    When enabled, signing in requires your master password plus a 6-digit verification code sent to <strong style="color:var(--text-main,#1E1517)"><?= htmlspecialchars($profile['email'] ?: 'your profile email') ?></strong>.
+                    <span style="display:block;margin-top:3px;font-size:11.5px;color:var(--text-muted);">Off by default. Confirm your password below to receive a verification code and activate protection.</span>
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <?php if (!$mfa_available): ?>
+                <div style="background:#FEF3C7;border:1px solid #FCD34D;color:#92400E;padding:12px 16px;border-radius:10px;font-size:12.5px;">
+                  Email MFA settings will be available after the database migration is installed.
+                </div>
+
+              <?php elseif (!$mfa_enabled && !empty($_SESSION['email_mfa_enroll'])): ?>
+                <!-- STEP 2: VERIFICATION CODE ENTRY -->
+                <div style="background:#FFFFFF;border:1.5px solid #FCD34D;border-radius:12px;padding:20px;box-shadow:0 4px 12px rgba(245,158,11,0.06);">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                    <div style="width:24px;height:24px;border-radius:50%;background:#FEF3C7;color:#D97706;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;">2</div>
+                    <h4 style="margin:0;font-size:14.5px;font-weight:700;color:var(--espresso,#1E1517);">Enter 6-Digit Email Verification Code</h4>
+                  </div>
+                  <p style="margin:0 0 16px 0;font-size:12.5px;color:var(--text-muted);line-height:1.5;">
+                    A verification code was dispatched to <strong style="color:var(--text-main)"><?= htmlspecialchars($profile['email']) ?></strong>. Enter the 6-digit passcode below to complete setup. Codes expire in 10 minutes.
+                  </p>
+
+                  <form method="post" style="display:flex;flex-direction:column;gap:14px;">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="mfa_verify">
+                    
+                    <div style="max-width:280px;">
+                      <label for="mfa-code" class="field-label" style="font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;display:block;">
+                        Verification Code
+                      </label>
+                      <input id="mfa-code" name="code" class="field-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required autofocus style="letter-spacing:8px;font-size:20px;font-weight:800;text-align:center;font-family:monospace;padding:10px 14px;background:#FDFBF7;border:1.5px solid var(--caramel,#8B4513);border-radius:10px;" />
+                    </div>
+
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;">
+                      <button type="submit" class="btn-save" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;font-size:13px;font-weight:700;">
+                        <?= icon('check', 15) ?> Verify &amp; Enable Email MFA
+                      </button>
+                    </div>
+                  </form>
+
+                  <form method="post" style="margin-top:10px;">
+                    <?= csrf_field() ?>
+                    <button type="submit" name="action" value="mfa_cancel" style="background:none;border:none;color:#6B7280;font-size:12px;font-weight:600;cursor:pointer;padding:4px 0;text-decoration:underline;display:inline-flex;align-items:center;gap:4px;">
+                      Cancel setup and keep MFA disabled
+                    </button>
+                  </form>
+                </div>
+
+              <?php elseif (!$mfa_enabled): ?>
+                <!-- ENROLLMENT: START MFA SETUP -->
+                <form method="post" style="background:#FFFFFF;border:1px solid var(--border,#EDE8E1);border-radius:12px;padding:18px 20px;">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="mfa_start">
+                  
+                  <div class="field-group" style="margin-bottom:14px;max-width:440px;">
+                    <label for="mfa-password" class="field-label" style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+                      <span>Current Staff Password</span>
+                      <span style="font-size:11px;color:var(--text-muted);font-weight:normal;text-transform:none;">Required to verify identity</span>
+                    </label>
+                    <div style="position:relative;display:flex;align-items:center;">
+                      <input id="mfa-password" name="current_password" class="field-input" type="password" autocomplete="current-password" placeholder="Enter your current password" required style="padding-right:40px;background:#FAF7F2;border:1.5px solid var(--border,#EDE8E1);border-radius:10px;font-size:13px;" />
+                      <button type="button" onclick="toggleMfaPassword('mfa-password', this)" style="position:absolute;right:10px;background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px;display:flex;align-items:center;" aria-label="Toggle password visibility">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <button type="submit" class="btn-save" style="display:inline-flex;align-items:center;gap:6px;padding:10px 22px;font-size:13px;font-weight:700;">
+                      <?= icon('shield-check', 15) ?> Enable Email MFA &rarr;
+                    </button>
+                    <span style="font-size:11.5px;color:var(--text-muted);">A 6-digit setup code will be emailed immediately.</span>
+                  </div>
+                </form>
+
+              <?php else: ?>
+                <!-- DEACTIVATION: TURN MFA OFF -->
+                <form method="post" style="background:#FFFFFF;border:1px solid var(--border,#EDE8E1);border-radius:12px;padding:18px 20px;">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="mfa_disable">
+                  
+                  <div class="field-group" style="margin-bottom:14px;max-width:440px;">
+                    <label for="mfa-password" class="field-label" style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+                      <span>Confirm Current Password</span>
+                      <span style="font-size:11px;color:#B91C1C;font-weight:600;text-transform:none;">Required to turn off MFA</span>
+                    </label>
+                    <div style="position:relative;display:flex;align-items:center;">
+                      <input id="mfa-password" name="current_password" class="field-input" type="password" autocomplete="current-password" placeholder="Enter your current password" required style="padding-right:40px;background:#FAF7F2;border:1.5px solid var(--border,#EDE8E1);border-radius:10px;font-size:13px;" />
+                      <button type="button" onclick="toggleMfaPassword('mfa-password', this)" style="position:absolute;right:10px;background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px;display:flex;align-items:center;" aria-label="Toggle password visibility">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <button type="submit" style="background:#FFF5F5;border:1.5px solid #FED7D7;color:#B91C1C;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;">
+                      <?= icon('lock', 14) ?> Disable Email MFA
+                    </button>
+                    <span style="font-size:11.5px;color:#9CA3AF;">Future sign-ins will only require your master password.</span>
+                  </div>
+                </form>
+              <?php endif; ?>
+
+            </div>
+          </section>
 
         <?php elseif ($active_tab === 'salary' && $employee_id > 0): ?>
           <h3 style="margin:0 0 8px 0;font-size:16px;display:flex;align-items:center;gap:6px">
@@ -620,50 +820,237 @@ function triggerQuickAvatar() {
   if (input) input.click();
 }
 
-function submitQuickAvatar(input) {
-  if (!input.files || !input.files[0]) return;
-  const file = input.files[0];
-  if (file.size > 5 * 1024 * 1024) {
-    alert('Profile picture must not exceed 5MB.');
-    input.value = '';
-    return;
-  }
-  document.getElementById('avatar_quick_form').submit();
-}
-
 function confirmRemoveAvatar() {
   if (confirm('Are you sure you want to remove your profile photo and restore your default initials?')) {
     document.getElementById('avatar_remove_form').submit();
   }
 }
 
-function previewSelectedAvatar(input) {
+function setFileInputFiles(input, file) {
+  try {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    return true;
+  } catch (err) {
+    console.warn('DataTransfer unavailable:', err);
+    return false;
+  }
+}
+
+async function optimizeImageForAvatar(file, maxDimension = 1600, quality = 0.88) {
+  if (!file || !file.type || !file.type.startsWith('image/')) {
+    return file;
+  }
+
+  // Preserve animated GIFs if within safe size limit
+  if (file.type === 'image/gif' && file.size <= 4 * 1024 * 1024) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(file);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve(file);
+      img.onload = () => {
+        const width = img.naturalWidth || img.width;
+        const height = img.naturalHeight || img.height;
+
+        // If dimensions and file size are already well within server limits, keep original
+        if (width <= maxDimension && height <= maxDimension && file.size < 2 * 1024 * 1024) {
+          resolve(file);
+          return;
+        }
+
+        let targetW = width;
+        let targetH = height;
+        if (targetW > maxDimension || targetH > maxDimension) {
+          if (targetW > targetH) {
+            targetH = Math.round((targetH * maxDimension) / targetW);
+            targetW = maxDimension;
+          } else {
+            targetW = Math.round((targetW * maxDimension) / targetH);
+            targetH = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+
+        const isPng = file.type === 'image/png';
+        const outputMime = isPng ? 'image/png' : 'image/jpeg';
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+
+          let outName = file.name;
+          if (!isPng && !/\.(jpe?g)$/i.test(outName)) {
+            outName = outName.replace(/\.[^.]+$/, '') + '.jpg';
+          }
+
+          const resizedFile = new File([blob], outName, {
+            type: blob.type || outputMime,
+            lastModified: Date.now()
+          });
+
+          resolve(resizedFile);
+        }, outputMime, quality);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+let isQuickAvatarSubmitting = false;
+
+async function submitQuickAvatar(input) {
+  if (isQuickAvatarSubmitting) return;
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
-  if (file.size > 5 * 1024 * 1024) {
-    alert('Profile picture must not exceed 5MB.');
-    input.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const dataUrl = e.target.result;
-    const thumb = document.getElementById('form-avatar-thumb');
-    const formPl = document.getElementById('form-avatar-placeholder');
-    const cardImg = document.getElementById('card-avatar-img');
-    const cardPl = document.getElementById('card-avatar-placeholder');
-    const status = document.getElementById('avatar-preview-status');
 
-    if (thumb) { thumb.src = dataUrl; thumb.style.display = 'block'; }
-    if (formPl) { formPl.style.display = 'none'; }
-    if (cardImg) { cardImg.src = dataUrl; cardImg.style.display = 'block'; }
-    if (cardPl) { cardPl.style.display = 'none'; }
+  const overlaySpan = document.getElementById('quick-avatar-overlay-text');
+  const quickLoading = document.getElementById('avatar-quick-loading');
+  const loadingText = document.getElementById('avatar-quick-loading-text');
+
+  if (overlaySpan) overlaySpan.textContent = 'Optimizing...';
+  if (quickLoading) quickLoading.style.display = 'inline-flex';
+  if (loadingText) loadingText.textContent = 'Optimizing photo...';
+  isQuickAvatarSubmitting = true;
+
+  try {
+    const optimizedFile = await optimizeImageForAvatar(file, 1600, 0.88);
+    if (optimizedFile.size > 5 * 1024 * 1024) {
+      alert('Profile picture is too large (maximum 5MB). Please choose a smaller photo.');
+      input.value = '';
+      if (overlaySpan) overlaySpan.textContent = 'Change Photo';
+      if (quickLoading) quickLoading.style.display = 'none';
+      isQuickAvatarSubmitting = false;
+      return;
+    }
+
+    if (overlaySpan) overlaySpan.textContent = 'Uploading...';
+    if (loadingText) loadingText.textContent = 'Uploading photo...';
+
+    const updated = setFileInputFiles(input, optimizedFile);
+    if (updated) {
+      document.getElementById('avatar_quick_form').submit();
+    } else {
+      // Fallback submission via FormData if DataTransfer is not available
+      const formData = new FormData();
+      formData.append('action', 'update_avatar_only');
+      formData.append('avatar_quick', optimizedFile, optimizedFile.name);
+
+      fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+      }).then(() => {
+        window.location.href = 'profile.php?toast=' + encodeURIComponent('Profile picture updated successfully!') + '&type=success';
+      }).catch(() => {
+        alert('Failed to upload profile picture. Please try again.');
+        if (overlaySpan) overlaySpan.textContent = 'Change Photo';
+        if (quickLoading) quickLoading.style.display = 'none';
+        isQuickAvatarSubmitting = false;
+      });
+    }
+  } catch (err) {
+    console.error('Error optimizing avatar:', err);
+    document.getElementById('avatar_quick_form').submit();
+  }
+}
+
+let isFormAvatarOptimizing = false;
+
+async function previewSelectedAvatar(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+
+  const status = document.getElementById('avatar-preview-status');
+  if (status) {
+    status.style.display = 'block';
+    status.style.color = 'var(--caramel, #c47d3e)';
+    status.textContent = 'Processing & optimizing photo...';
+  }
+
+  isFormAvatarOptimizing = true;
+
+  try {
+    const optimizedFile = await optimizeImageForAvatar(file, 1600, 0.88);
+    if (optimizedFile.size > 5 * 1024 * 1024) {
+      alert('Profile picture is too large (maximum 5MB). Please select a smaller photo.');
+      input.value = '';
+      if (status) status.style.display = 'none';
+      isFormAvatarOptimizing = false;
+      return;
+    }
+
+    setFileInputFiles(input, optimizedFile);
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const dataUrl = e.target.result;
+      const thumb = document.getElementById('form-avatar-thumb');
+      const formPl = document.getElementById('form-avatar-placeholder');
+      const cardImg = document.getElementById('card-avatar-img');
+      const cardPl = document.getElementById('card-avatar-placeholder');
+
+      if (thumb) { thumb.src = dataUrl; thumb.style.display = 'block'; }
+      if (formPl) { formPl.style.display = 'none'; }
+      if (cardImg) { cardImg.src = dataUrl; cardImg.style.display = 'block'; }
+      if (cardPl) { cardPl.style.display = 'none'; }
+      if (status) {
+        const sizeKb = Math.round(optimizedFile.size / 1024);
+        status.style.color = '#059669';
+        status.textContent = `Selected: ${optimizedFile.name} (Optimized: ${sizeKb} KB — Ready to save)`;
+        status.style.display = 'block';
+      }
+      isFormAvatarOptimizing = false;
+    };
+    reader.readAsDataURL(optimizedFile);
+  } catch (err) {
+    console.error('Error optimizing preview avatar:', err);
+    isFormAvatarOptimizing = false;
     if (status) {
+      status.style.color = '#059669';
       status.textContent = `Selected: ${file.name} (Ready to save)`;
       status.style.display = 'block';
     }
-  };
-  reader.readAsDataURL(file);
+  }
+}
+
+function handleProfileFormSubmit(e) {
+  if (isFormAvatarOptimizing) {
+    e.preventDefault();
+    alert('Please wait a moment while your photo finishes optimizing.');
+    return false;
+  }
+  return true;
+}
+
+function toggleMfaPassword(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  const isPass = inp.type === 'password';
+  inp.type = isPass ? 'text' : 'password';
+  btn.innerHTML = isPass ?
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>' :
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  btn.setAttribute('aria-label', isPass ? 'Hide password' : 'Show password');
 }
 </script>
 </body>

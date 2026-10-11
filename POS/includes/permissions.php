@@ -5,7 +5,7 @@
 //  Include this AFTER includes/db.php and includes/auth.php.
 // ─────────────────────────────────────────────
 
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/security.php';
 
 // ═══════════════════════════════════════════════
 //  ROLES
@@ -72,8 +72,8 @@ function delete_role(string $role_key): array {
         return ['ok' => false, 'error' => 'This is a system role and cannot be deleted.'];
     }
 
-    $inUse = $pdo->prepare('SELECT COUNT(*) FROM users WHERE role = :r');
-    $inUse->execute([':r' => $role_key]);
+    $inUse = $pdo->prepare('SELECT COUNT(*) FROM users u WHERE u.role = :primary_role OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = :assigned_role)');
+    $inUse->execute([':primary_role' => $role_key, ':assigned_role' => $role_key]);
     $count = (int)$inUse->fetchColumn();
 
     if ($count > 0) {
@@ -146,6 +146,7 @@ function set_role_permission(string $role, string $perm_key, bool $granted): arr
             ->execute([':r' => $role, ':p' => $perm_key]);
     }
 
+    security_audit($pdo, 'role_permission_changed', 'role', null, ['permission' => $perm_key, 'decision' => $granted ? 'granted' : 'revoked']);
     return ['ok' => true];
 }
 
@@ -158,152 +159,78 @@ function set_role_permission(string $role, string $perm_key, bool $granted): arr
  * and module-based ("inventory.view") slugs evaluate identically.
  */
 function get_permission_aliases(string $perm_key): array {
-    $map = [
-        // Inventory & Recipes
-        'can_view_inventory'       => ['inventory.view', 'can_view_inventory'],
-        'inventory.view'           => ['can_view_inventory', 'inventory.view'],
-        'can_manage_inventory'     => ['inventory.manage', 'can_manage_inventory'],
-        'inventory.manage'         => ['can_manage_inventory', 'inventory.manage'],
-        'inventory.expiry.manage'  => ['inventory.expiry.manage', 'inventory.manage', 'can_manage_inventory'],
-
-        // Menu & Items
-        'can_add_item'             => ['menu.manage', 'menu.edit', 'can_add_item'],
-        'menu.manage'              => ['can_add_item', 'menu.manage'],
-        'can_edit_pricing'         => ['menu.edit', 'can_edit_pricing'],
-        'menu.edit'                => ['can_edit_pricing', 'menu.edit', 'can_add_item'],
-        'can_delete_item'          => ['menu.delete', 'can_delete_item'],
-        'menu.delete'              => ['can_delete_item', 'menu.delete'],
-
-        // POS & Orders
-        'can_new_order'            => ['orders.new', 'can_new_order'],
-        'orders.new'               => ['can_new_order', 'orders.new'],
-        'can_view_orders'          => ['orders.pending', 'can_view_orders'],
-        'orders.pending'           => ['can_view_orders', 'orders.pending'],
-        'can_view_history'         => ['orders.history', 'can_view_history'],
-        'orders.history'           => ['can_view_history', 'orders.history'],
-
-        // Reports & Analytics
-        'can_view_reports'         => ['analytics.view', 'reports.view', 'can_view_reports'],
-        'analytics.view'           => ['can_view_reports', 'analytics.view'],
-        'reports.view'             => ['can_view_reports', 'analytics.view'],
-
-        // Permissions & Admin
-        'can_manage_permissions'   => ['permissions.manage', 'manage_permissions', 'can_manage_permissions'],
-        'permissions.manage'       => ['can_manage_permissions', 'manage_permissions', 'permissions.manage'],
-        'manage_permissions'       => ['can_manage_permissions', 'permissions.manage', 'manage_permissions'],
-
-        // Users & HR
-        'can_manage_users'         => ['users.manage', 'can_manage_users'],
-        'users.manage'             => ['can_manage_users', 'users.manage'],
-        'can_manage_recruitment'   => ['recruitment.manage', 'can_manage_recruitment'],
-        'recruitment.manage'       => ['can_manage_recruitment', 'recruitment.manage'],
-        'can_manage_attendance'    => ['attendance.view', 'attendance.manage', 'can_manage_attendance'],
-        'attendance.view'          => ['can_manage_attendance', 'attendance.view'],
-        'can_manage_leave'         => ['leave.view', 'leave.manage', 'hr_leave', 'can_manage_leave'],
-        'leave.view'               => ['can_manage_leave', 'leave.view', 'hr_leave'],
-        'can_manage_requests'      => ['requests.manage', 'can_manage_requests', 'hr_requests'],
-        'requests.manage'          => ['requests.manage', 'can_manage_requests', 'hr_requests'],
-        'can_manage_login_approvals' => ['login_approval.manage', 'login_approvals.manage', 'can_manage_login_approvals', 'login_approval.view', 'login_approvals.view'],
-        'login_approval.manage'    => ['login_approval.manage', 'login_approvals.manage', 'can_manage_login_approvals', 'login_approval.view', 'login_approvals.view'],
-        'login_approvals.manage'   => ['login_approval.manage', 'login_approvals.manage', 'can_manage_login_approvals', 'login_approval.view', 'login_approvals.view'],
-        'login_approval.view'      => ['login_approval.manage', 'login_approvals.manage', 'login_approval.view', 'login_approvals.view'],
-        'login_approvals.view'     => ['login_approval.manage', 'login_approvals.manage', 'login_approval.view', 'login_approvals.view'],
-        'dashboard.view'           => ['dashboard.view', 'can_view_dashboard'],
-
-        // Procurement
-        'can_view_procurement'     => ['procurement.view', 'can_view_procurement'],
-        'procurement.view'         => ['can_view_procurement', 'procurement.view'],
-        'can_manage_requisitions'  => ['procurement.requisitions', 'procurement.requisition.create', 'can_manage_requisitions'],
-        'procurement.requisitions' => ['can_manage_requisitions', 'procurement.requisitions'],
-        'can_manage_rfq'           => ['procurement.rfq.manage', 'can_manage_rfq'],
-        'procurement.rfq.manage'   => ['can_manage_rfq', 'procurement.rfq.manage'],
-        'can_manage_po'            => ['procurement.po.manage', 'can_manage_po'],
-        'procurement.po.manage'    => ['can_manage_po', 'procurement.po.manage'],
-        'can_receive_goods'        => ['procurement.receiving', 'can_receive_goods'],
-        'procurement.receiving'    => ['can_receive_goods', 'procurement.receiving'],
-        'can_manage_invoices'      => ['procurement.invoice.create', 'can_manage_invoices'],
-        'procurement.invoice.create' => ['can_manage_invoices', 'procurement.invoice.create'],
-        'can_match_invoices'       => ['procurement.invoice.match', 'can_match_invoices'],
-        'procurement.invoice.match'=> ['can_match_invoices', 'procurement.invoice.match'],
-        'can_manage_suppliers'     => ['procurement.suppliers.manage', 'can_manage_suppliers'],
-        'procurement.suppliers.manage' => ['can_manage_suppliers', 'procurement.suppliers.manage'],
-        'can_review_finance_quotes'=> ['procurement.finance.review', 'can_review_finance_quotes'],
-        'procurement.finance.review'=> ['can_review_finance_quotes', 'procurement.finance.review'],
-
-        // Payroll
-        'can_view_payroll'         => ['payroll.view', 'can_view_payroll'],
-        'payroll.view'             => ['can_view_payroll', 'payroll.view'],
-        'can_manage_payroll'       => ['payroll.manage', 'can_manage_payroll'],
-        'payroll.manage'           => ['can_manage_payroll', 'payroll.manage'],
-        'payroll.loans'            => ['payroll.loans', 'payroll.loans.manage', 'can_manage_loans'],
-        'payroll.advance.request'  => ['payroll.advance.request', 'can_request_advance'],
-        'payroll.own'              => ['payroll.own', 'can_view_own_payroll'],
+    $legacy = [
+        'can_view_inventory' => 'inventory.view',
+        'can_manage_inventory' => 'inventory.manage',
+        'can_add_item' => 'menu.manage',
+        'can_edit_pricing' => 'menu.edit',
+        'can_delete_item' => 'menu.delete',
+        'can_new_order' => 'orders.new',
+        'can_view_orders' => 'orders.pending',
+        'can_view_history' => 'orders.history',
+        'can_view_reports' => 'analytics.view',
+        'can_manage_permissions' => 'permissions.manage',
+        'manage_permissions' => 'permissions.manage',
+        'can_manage_users' => 'users.manage',
+        'can_manage_recruitment' => 'recruitment.manage',
+        'can_manage_attendance' => 'attendance.manage',
+        'can_manage_leave' => 'leave.manage',
+        'hr_leave' => 'leave.view',
+        'can_manage_requests' => 'requests.manage',
+        'hr_requests' => 'requests.manage',
+        'can_manage_login_approvals' => 'login_approval.manage',
+        'login_approval.manage' => 'login_approval.manage',
+        'login_approval.view' => 'login_approval.view',
+        'can_view_dashboard' => 'dashboard.view',
+        'can_view_procurement' => 'procurement.view',
+        'can_manage_requisitions' => 'procurement.requisitions',
+        'can_manage_rfq' => 'procurement.rfq.manage',
+        'can_manage_po' => 'procurement.po.manage',
+        'can_receive_goods' => 'procurement.receiving',
+        'can_manage_invoices' => 'procurement.invoice.create',
+        'can_match_invoices' => 'procurement.invoice.match',
+        'can_manage_suppliers' => 'procurement.suppliers.manage',
+        'can_review_finance_quotes' => 'procurement.finance.review',
+        'can_view_payroll' => 'payroll.view',
+        'can_manage_payroll' => 'payroll.manage',
+        'can_manage_loans' => 'payroll.loans',
+        'can_request_advance' => 'payroll.advance.request',
+        'can_view_own_payroll' => 'payroll.own',
     ];
-
-    return $map[$perm_key] ?? [$perm_key];
+    return [$legacy[$perm_key] ?? $perm_key];
 }
 
 /**
  * Loads and synchronizes the active user's role permissions into $_SESSION['permissions'].
  */
 function sync_user_session_permissions(): array {
-    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (session_status() === PHP_SESSION_NONE) secure_session_start();
+    $_SESSION['permissions'] = [];
     if (empty($_SESSION['user_id'])) return [];
-
-    $roles = [];
-    try {
-        $pdo = get_db();
-        $stmt = $pdo->prepare("SELECT role FROM user_roles WHERE user_id = ? ORDER BY role");
+    $pdo = get_db();
+    $stmt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = ? ORDER BY role');
+    $stmt->execute([$_SESSION['user_id']]);
+    $roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if ($roles === []) {
+        $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ?');
         $stmt->execute([$_SESSION['user_id']]);
-        $roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        if (empty($roles)) {
-            $uStmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
-            $uStmt->execute([$_SESSION['user_id']]);
-            $single = $uStmt->fetchColumn();
-            if ($single) $roles = [$single];
-        }
-        if (empty($roles)) {
-            $roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
-                ? $_SESSION['roles']
-                : (!empty($_SESSION['role']) ? [$_SESSION['role']] : []);
-        } else {
-            $_SESSION['roles'] = $roles;
-            if (empty($_SESSION['role']) || !in_array($_SESSION['role'], $roles, true)) {
-                $_SESSION['role'] = $roles[0];
-            }
-        }
-    } catch (Exception $e) {
-        error_log("Error syncing user roles: " . $e->getMessage());
-        $roles = (!empty($_SESSION['roles']) && is_array($_SESSION['roles']))
-            ? $_SESSION['roles']
-            : (!empty($_SESSION['role']) ? [$_SESSION['role']] : []);
+        $role = $stmt->fetchColumn();
+        $roles = $role ? [$role] : [];
     }
-
-    // Admin holds all permissions
+    $_SESSION['roles'] = $roles;
+    if (!in_array($_SESSION['role'] ?? '', $roles, true)) $_SESSION['role'] = $roles[0] ?? '';
+    $permissions = [];
     if (in_array('admin', $roles, true)) {
-        $_SESSION['permissions']        = ['*'];
-        $_SESSION['permissions_loaded'] = time();
-        return ['*'];
+        $permissions = ['*'];
+    } elseif ($roles !== []) {
+        $placeholders = implode(',', array_fill(0, count($roles), '?'));
+        $stmt = $pdo->prepare("SELECT DISTINCT perm_key FROM role_permissions WHERE role IN ($placeholders)");
+        $stmt->execute($roles);
+        $permissions = $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
-
-    $allPerms = [];
-    try {
-        $pdo = get_db();
-        if (!empty($roles)) {
-            $inClause = implode(',', array_fill(0, count($roles), '?'));
-            $stmt = $pdo->prepare("SELECT DISTINCT perm_key FROM role_permissions WHERE role IN ($inClause)");
-            $stmt->execute($roles);
-            $allPerms = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        }
-    } catch (Exception $e) {
-        error_log("Error syncing permissions for roles: " . $e->getMessage());
-    }
-
-    
-
-    $_SESSION['permissions']        = $allPerms;
+    $_SESSION['permissions'] = $permissions;
     $_SESSION['permissions_loaded'] = time();
-    return $allPerms;
+    return $permissions;
 }
 
 /**
@@ -312,7 +239,7 @@ function sync_user_session_permissions(): array {
  * Admin always returns true.
  */
 function has_permission(string $perm_key): bool {
-    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (session_status() === PHP_SESSION_NONE) secure_session_start();
 
     // 1. Must be authenticated
     if (empty($_SESSION['user_id'])) {
@@ -327,7 +254,7 @@ function has_permission(string $perm_key): bool {
 
     // 3. Admin bypass — full access across the platform
     $roles = $_SESSION['roles'] ?? (isset($_SESSION['role']) ? [$_SESSION['role']] : []);
-    if (in_array('admin', $roles, true) || (isset($_SESSION['role']) && $_SESSION['role'] === 'admin')) {
+    if (in_array('admin', $roles, true)) {
         return true;
     }
 
@@ -356,6 +283,7 @@ function has_permission(string $perm_key): bool {
  * dashboard.view, which is exactly the case this guard exists for.
  */
 function require_permission(string $perm_key): void {
+    require_login();
     if (session_status() === PHP_SESSION_NONE) {
         require_once __DIR__ . '/security.php';
         secure_session_start();
@@ -374,6 +302,7 @@ function require_permission(string $perm_key): void {
 
 /** JSON-endpoint equivalent. */
 function require_permission_json(string $perm_key): void {
+    require_login();
     if (session_status() === PHP_SESSION_NONE) {
         require_once __DIR__ . '/security.php';
         secure_session_start();
@@ -402,7 +331,7 @@ function require_permission_json(string $perm_key): void {
  * Get the current user's primary role from session or database
  */
 function get_current_user_role(): string {
-    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (session_status() === PHP_SESSION_NONE) secure_session_start();
     if (empty($_SESSION['user_id'])) {
         return '';
     }
@@ -420,7 +349,7 @@ function get_current_user_role(): string {
  * @return string[]
  */
 function get_current_user_roles(): array {
-    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (session_status() === PHP_SESSION_NONE) secure_session_start();
     if (empty($_SESSION['user_id'])) {
         return [];
     }
@@ -451,10 +380,13 @@ function get_current_user_roles(): array {
             return $roles;
         }
     } catch (Exception $e) {
-        error_log("Error getting current user roles: " . $e->getMessage());
+        $_SESSION['role'] = '';
+        $_SESSION['roles'] = [];
+        $_SESSION['permissions'] = [];
+        throw new SecurityFault('PERMISSIONS_UNAVAILABLE', 'Account permissions are unavailable.', 503);
     }
 
-    return !empty($_SESSION['role']) ? [$_SESSION['role']] : [];
+    return [];
 }
 
 /**
@@ -482,7 +414,7 @@ function has_role(string|array $roles): bool {
  * @return string[]
  */
 function get_current_user_permissions(): array {
-    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (session_status() === PHP_SESSION_NONE) secure_session_start();
     if (empty($_SESSION['user_id'])) {
         return [];
     }
@@ -497,7 +429,7 @@ function get_current_user_permissions(): array {
             $pdo = get_db();
             return $pdo->query("SELECT perm_key FROM permissions ORDER BY perm_key")->fetchAll(PDO::FETCH_COLUMN);
         } catch (Exception $e) {
-            return ['*'];
+            throw new SecurityFault('PERMISSIONS_UNAVAILABLE', 'Account permissions are unavailable.', 503);
         }
     }
 
@@ -508,8 +440,7 @@ function get_current_user_permissions(): array {
         $stmt->execute($roles);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (Exception $e) {
-        error_log("Error getting user permissions: " . $e->getMessage());
-        return [];
+        throw new SecurityFault('PERMISSIONS_UNAVAILABLE', 'Account permissions are unavailable.', 503);
     }
 }
 
@@ -540,7 +471,7 @@ function get_default_role_permissions(string $role): array {
             'orders.new', 'orders.pending', 'orders.history',
             'inventory.view', 'inventory.manage', 'inventory.expiry.manage',
             'menu.manage', 'menu.edit', 'menu.delete',
-            'attendance.view', 'leave.view', 'requests.manage',
+            'attendance.view', 'attendance.manage', 'leave.view', 'leave.manage', 'requests.manage',
             'payroll.view', 'payroll.manage', 'payroll.approve', 'payroll.loans', 'payroll.own', 'payroll.advance.request',
             'procurement.view', 'procurement.requisitions', 'procurement.requisition.create', 'procurement.requisition.review',
             'procurement.reports.view', 'procurement.attachments.manage', 'procurement.audit.view',
@@ -589,7 +520,7 @@ function get_default_role_permissions(string $role): array {
         ],
         'hr' => [
             'dashboard.view', 'employee_dashboard.view', 'profile.view', 'profile.edit',
-            'users.manage', 'login_approval.manage', 'recruitment.manage', 'attendance.view', 'leave.view', 'requests.manage', 'employee.payment.manage',
+            'users.manage', 'login_approval.manage', 'recruitment.manage', 'attendance.view', 'attendance.manage', 'leave.view', 'leave.manage', 'requests.manage', 'employee.payment.manage',
             'payroll.view', 'payroll.manage', 'payroll.loans', 'payroll.settings', 'payroll.own', 'payroll.advance.request',
             'analytics.view', 'files.download', 'store.view'
         ],
@@ -640,7 +571,7 @@ function reset_role_to_default_permissions(string $role): array {
         return ['ok' => true, 'message' => "Role '{$role}' reset to default permissions.", 'permissions' => $defaultPerms];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        return ['ok' => false, 'error' => $e->getMessage()];
+        return ['ok' => false, 'error' => 'Service temporarily unavailable.'];
     }
 }
 
@@ -648,122 +579,6 @@ function reset_role_to_default_permissions(string $role): array {
  * Install default permissions and roles (idempotent setup).
  */
 function install_default_permissions(): void {
-    try {
-        $pdo = get_db();
-        
-        $default_permissions = [
-            // General / Account
-            ['dashboard.view',                  'View Dashboard Overview',               'General',             'Access system summary metrics, daily charts, and quick actions'],
-            ['employee_dashboard.view',         'View Employee Dashboard',              'General',             'Personal staff portal to clock in/out, view schedule, and request leave'],
-            ['profile.view',                    'View Own Profile',                     'General',             'View personal profile, assigned roles, and store credentials'],
-            ['profile.edit',                    'Update Personal Profile',              'General',             'Update personal contact information, avatar, and security password'],
-
-            // POS & Orders
-            ['orders.new',                      'Create POS Orders',                    'POS & Orders',        'Ring up walk-in and takeout customer orders and process checkout payments'],
-            ['orders.pending',                  'Kitchen & Pending Orders',             'POS & Orders',        'View, manage, and fulfill active drink orders in the barista queue'],
-            ['orders.history',                  'Order Receipts & History',             'POS & Orders',        'View completed transaction history, sales receipts, and reprint orders'],
-
-            // Inventory
-            ['inventory.view',                  'View Inventory & BOM',                 'Inventory',           'View current stock levels, unit costs, low-stock reorder alerts, and recipe bill of materials'],
-            ['inventory.manage',                'Manage & Restock Inventory',           'Inventory',           'Add ingredients, adjust stock counts, record wastage, and process store restocks'],
-            ['inventory.expiry.manage',         'Manage Batch Expiry Dates',            'Inventory',           'Track perishable ingredient batches, shelf-life dates, and handle expired items'],
-
-            // Menu
-            ['menu.manage',                     'Menu Management & Add Items',          'Menu',                'Access menu catalog and create new drinks, pastries, and items'],
-            ['menu.edit',                       'Edit Items & Pricing',                 'Menu',                'Modify item prices, descriptions, recipe configurations, and categories'],
-            ['menu.delete',                     'Delete & Archive Items',               'Menu',                'Archive or permanently remove products from the active POS menu'],
-
-            // HR & Staff
-            ['users.manage',                    'Staff & User Management',              'HR & Staff',          'Create, edit, and deactivate employee login accounts and roles'],
-            ['login_approval.manage',           'Login Approvals & Geolocation',        'HR & Staff',          'Review, approve, or reject staff login authorization requests and configure store geofence settings'],
-            ['attendance.view',                 'Attendance & Time-Clock',              'HR & Staff',          'Track employee clock-in/out records, calculate work hours, and approve shifts'],
-            ['leave.view',                      'Leave & PTO Management',               'HR & Staff',          'Review, approve, or reject employee leave and paid time-off applications'],
-            ['recruitment.manage',              'Recruitment & Job Vacancies',          'HR & Staff',          'Manage career job postings, applicant tracking, and interview stages'],
-            ['requests.manage',                 'Manage HR Requests',                   'HR & Staff',          'Process general employee inquiries, certificates, and HR change requests'],
-            ['employee.payment.manage',         'Manage Employee Payment Details',      'HR & Staff',          'Review and approve employee bank account and e-wallet payout destinations'],
-
-            // Payroll
-            ['payroll.view',                    'View Payroll Register & Dashboard',    'Payroll',             'View payroll dashboard summary, period registers, and employee payslips'],
-            ['payroll.manage',                  'Manage Payroll Periods & Calculate',   'Payroll',             'Create multi-step pay periods, edit employee amounts, and calculate deductions'],
-            ['payroll.approve',                 'Approve Calculated Payroll Runs',      'Payroll',             'Review and sign-off on payroll figures prior to payout release'],
-            ['payroll.release',                 'Disburse & Release Payroll',           'Payroll',             'Execute automated bank/e-wallet transfers or manual cash payouts to employees'],
-            ['payroll.loans',                   'Manage & Approve Loans / Advances',    'Payroll',             'Issue staff cash advances, set installment amortizations, and manage balances'],
-            ['payroll.settings',                'Configure Payroll Standards',          'Payroll',             'Configure working hours, overtime/holiday multipliers, and tip pooling rules'],
-            ['payroll.payout.approve',          'Approve Payout Batches',               'Payroll',             'Authorize PayMongo automated disbursement batches for transmission'],
-            ['payroll.payout.paymongo',         'PayMongo Disbursements',               'Payroll',             'Configure and connect PayMongo API disbursement credentials'],
-            ['payroll.own',                     'My Compensation & Payslips',           'Payroll',             'Staff self-service: view own salary slips, breakdown, and loan ledgers'],
-            ['payroll.advance.request',         'Request Cash Advance',                 'Payroll',             'Staff self-service: submit salary cash advance requests for management review'],
-
-            // Procurement
-            ['procurement.view',                'View Procurement Dashboard',           'Procurement',         'Access procurement analytics, order pipelines, and requisition registers'],
-            ['procurement.requisitions',        'Create / Edit Requisitions',           'Procurement',         'View, draft, and modify departmental purchase requisitions'],
-            ['procurement.requisition.create',  'File Purchase Requisitions',           'Procurement',         'Submit purchase requests for coffee beans, dairy, packaging, and supplies'],
-            ['procurement.requisition.review',  'Review & Approve Requisitions',        'Procurement',         'Authorize or reject purchase requests and verify departmental budget allocation'],
-            ['procurement.rfq.manage',          'Manage RFQs',                          'Procurement',         'Create Requests for Quotation and invite verified suppliers to bid'],
-            ['procurement.bidding.review',      'Review Supplier Bids',                 'Procurement',         'Evaluate competing supplier bids on price, quality, warranty, and lead time'],
-            ['procurement.negotiation',         'Negotiate Supplier Terms',             'Procurement',         'Conduct commercial negotiations and finalize unit pricing with suppliers'],
-            ['procurement.po.manage',           'Manage Purchase Orders',               'Procurement',         'Generate, issue, and track Purchase Orders sent to vendor partners'],
-            ['procurement.receiving',           'Record Goods Receipt (GRN)',           'Procurement',         'Log delivered physical shipments, inspect quality, and record received items'],
-            ['procurement.grn.discrepancy.manage','Resolve Delivery Discrepancies',      'Procurement',         'Handle damaged shipments, missing items, and vendor return authorizations'],
-            ['procurement.invoice.create',      'Log Supplier Invoices',                'Procurement',         'Enter incoming supplier billing statements and tax invoices against Purchase Orders'],
-            ['procurement.invoice.match',       'Match Invoices (3-Way Match)',         'Procurement',         'Perform 3-way reconciliation among Purchase Order, Goods Receipt, and Invoice'],
-            ['procurement.payment.process',     'Process Supplier Payments',            'Procurement',         'Schedule and record disbursements for approved supplier invoices'],
-            ['procurement.finance.review',      'Finance Review of Quotes',             'Procurement',         'Review and approve high-value quotations exceeding the manager threshold'],
-            ['procurement.suppliers.manage',    'Manage Supplier Directory',            'Procurement',         'Add, verify, and maintain vendor contact details and payment terms'],
-            ['procurement.performance.rate',    'Rate Supplier Performance',            'Procurement',         'Score vendor reliability, fulfillment speed, product quality, and compliance'],
-            ['procurement.close',               'Close & Archive Orders',               'Procurement',         'Officially close completed purchase orders upon fulfillment and rating'],
-            ['procurement.reports.view',        'View Procurement Reports',             'Procurement',         'Generate vendor spend reports, lead time analytics, and purchase statistics'],
-            ['procurement.budget.manage',       'Manage Procurement Budgets',           'Procurement',         'Allocate and adjust departmental monthly purchasing budgets'],
-            ['procurement.attachments.manage',  'Manage Procurement Attachments',       'Procurement',         'Upload and inspect contractual agreements, delivery receipts, and spec sheets'],
-            ['procurement.audit.view',          'View Procurement Audit Log',           'Procurement',         'Inspect chronological audit trails of all purchasing events and approvals'],
-            ['procurement.supplier.portal',     'Supplier Portal Access',               'Procurement',         'External vendor access to view RFQ invites, submit quotes, and track orders'],
-
-            // Reports & Analytics
-            ['analytics.view',                  'Financial Analytics & Reports',        'Reports & Analytics', 'Inspect store revenue, profit & loss, product sales, and cashier metrics'],
-            ['operations.activity.view',        'View Operations Activity Log',         'Reports & Analytics', 'Review comprehensive system-wide activity, audit events, and user actions'],
-
-            // Settings & Store
-            ['store.view',                      'View Store Hours & Schedule',          'Settings & Store',    'Check branch operational schedule, opening hours, and active notices'],
-            ['store.manage',                    'Manage Store Hours & Schedules',       'Settings & Store',    'Update store operating hours, holiday closures, and branch parameters'],
-            ['permissions.manage',              'Manage Role Permissions (RBAC)',       'Settings & Store',    'Configure system roles, access levels, and assign permissions'],
-            ['files.download',                  'Download Secured Files',               'Settings & Store',    'Download exported reports, invoices, backups, and secure attachments'],
-        ];
-        
-        $pStmt = $pdo->prepare("INSERT INTO permissions (perm_key, label, category, description) VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE label = VALUES(label), category = VALUES(category), description = VALUES(description)");
-        foreach ($default_permissions as $perm) {
-            $pStmt->execute($perm);
-        }
-        
-        // Clean roles to standard 10
-        $roles_to_ensure = [
-            ['admin',       'System Administrator',           1],
-            ['manager',     'Branch / Store Manager',         1],
-            ['cashier',     'POS Cashier',                    1],
-            ['crew',        'Crew / Barista',                 1],
-            ['warehouse',   'Warehouse & Inventory Officer',  1],
-            ['procurement', 'Procurement Officer',            1],
-            ['finance',     'Finance Officer',                1],
-            ['hr',          'Human Resources Officer',        1],
-            ['ops',         'Operations Supervisor',          1],
-            ['supplier',    'Supplier Partner',               1],
-        ];
-        
-        $rStmt = $pdo->prepare("INSERT INTO roles (role_key, label, is_system) VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE label = VALUES(label), is_system = VALUES(is_system)");
-        foreach ($roles_to_ensure as $r) {
-            $rStmt->execute($r);
-        }
-        
-        // Ensure Admin has all permissions
-        $allPerms = $pdo->query("SELECT perm_key FROM permissions")->fetchAll(PDO::FETCH_COLUMN);
-        $rpStmt = $pdo->prepare("INSERT IGNORE INTO role_permissions (role, perm_key) VALUES (?, ?)");
-        foreach ($allPerms as $pk) {
-            $rpStmt->execute(['admin', $pk]);
-        }
-        
-    } catch (Exception $e) {
-        error_log("Error installing default permissions: " . $e->getMessage());
-    }
+    require_runtime_schema(get_db());
 }
 ?>
