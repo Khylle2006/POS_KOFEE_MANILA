@@ -3,7 +3,10 @@
     const script = document.currentScript;
     const base = new URL('../', script.src);
     const nativeFetch = window.fetch.bind(window);
-    const token = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const token = () => document.querySelector('meta[name="csrf-token"]')?.content
+        || document.querySelector('input[name="_csrf"]')?.value
+        || document.querySelector('input[name="csrf_token"]')?.value
+        || '';
     let confirmation = null;
     const operations = new Map();
     const storageKey = 'kofee-order-operations';
@@ -364,6 +367,33 @@
             catch (error) { /* Cancellation leaves the form available to retry. */ }
         }
     }, true);
+
+    if (typeof HTMLFormElement !== 'undefined' && HTMLFormElement.prototype) {
+        const nativeSubmit = HTMLFormElement.prototype.submit;
+        HTMLFormElement.prototype.submit = function(...args) {
+            try {
+                const method = (this.getAttribute?.('method') || this.method || 'GET').toUpperCase();
+                if (method === 'POST') {
+                    const action = this.getAttribute?.('action') || location.href;
+                    const url = new URL(action, location.href);
+                    if (url.origin === location.origin && !this.querySelector?.('[name="_csrf"], [name="csrf_token"]')) {
+                        const csrfToken = token();
+                        if (csrfToken) {
+                            const field = document.createElement('input');
+                            field.type = 'hidden';
+                            field.name = '_csrf';
+                            field.value = csrfToken;
+                            if (this.append) this.append(field);
+                            else if (this.appendChild) this.appendChild(field);
+                        }
+                    }
+                }
+            } catch (e) {}
+            if (typeof nativeSubmit === 'function') {
+                return nativeSubmit.apply(this, args);
+            }
+        };
+    }
 
     document.addEventListener('click', event => {
         const link = event.target.closest?.('a[href]');

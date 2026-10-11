@@ -258,6 +258,7 @@ $invoices = $list_stmt->fetchAll();
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Invoices — Kofee POS</title>
+  <?= csrf_meta() ?>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
   <style>
@@ -290,6 +291,7 @@ $invoices = $list_stmt->fetchAll();
         <p class="muted-cell" style="margin-bottom:16px">PO #<?= str_pad($new_po['id'],5,'0',STR_PAD_LEFT) ?> · <?= htmlspecialchars($new_po['supplier_name']) ?> · PO Total: <?= php_currency($new_po['total_amount']) ?></p>
 
         <form method="POST" id="invoice-form" enctype="multipart/form-data">
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="create"/>
           <input type="hidden" name="po_id" value="<?= $new_po['id'] ?>"/>
 
@@ -452,6 +454,7 @@ $invoices = $list_stmt->fetchAll();
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
           <?php if (in_array($invoice['status'], ['pending','disputed','submitted','needs_correction'], true) && has_permission('procurement.invoice.create')): ?>
             <form method="POST" onsubmit="return confirm('Cancel this invoice?')">
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="cancel"/><input type="hidden" name="id" value="<?= $invoice['id'] ?>"/>
               <button type="submit" class="btn-cancel"><?= icon('x', 13) ?> Cancel Invoice</button>
             </form>
@@ -472,6 +475,7 @@ $invoices = $list_stmt->fetchAll();
           <h4 style="margin:0 0 8px 0;font-size:13.5px;color:var(--espresso)">Request Correction from Supplier</h4>
           <p style="margin:0 0 10px 0;font-size:12px;color:var(--text-muted)">State the exact discrepancy (e.g. quantity difference, incorrect price, missing attachment) so the supplier can resubmit.</p>
           <form method="POST">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="request_correction"/>
             <input type="hidden" name="id" value="<?= $invoice['id'] ?>"/>
             <textarea class="field-input" name="correction_notes" rows="3" placeholder="Describe the correction required..." required style="margin-bottom:10px"><?= htmlspecialchars($invoice['correction_notes'] ?? '') ?></textarea>

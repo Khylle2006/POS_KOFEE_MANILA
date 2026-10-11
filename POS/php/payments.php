@@ -661,6 +661,7 @@ $payout_dests = get_supported_payout_destinations();
         <!-- TAB 1: PayMongo Automated Disbursement (Direct Bank or GCash Transfer) -->
         <div id="pane-pay-disburse">
           <form method="POST" id="form-paymongo-disburse">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="paymongo_disburse"/>
             <input type="hidden" name="invoice_id" value="<?= $new_invoice['id'] ?>"/>
 
@@ -764,6 +765,7 @@ $payout_dests = get_supported_payout_destinations();
         <!-- TAB 2: PayMongo Online Checkout Session -->
         <div id="pane-pay-checkout" style="display:none">
           <form method="POST" id="form-paymongo-checkout">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="paymongo_checkout"/>
             <input type="hidden" name="invoice_id" value="<?= $new_invoice['id'] ?>"/>
 
@@ -796,6 +798,7 @@ $payout_dests = get_supported_payout_destinations();
         <!-- TAB 3: Manual Payment Entry (Existing) -->
         <div id="pane-pay-manual" style="display:none">
           <form method="POST" id="payment-entry-form" enctype="multipart/form-data">
+            <?= csrf_field() ?>
             <input type="hidden" name="invoice_id" value="<?= $new_invoice['id'] ?>"/>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px">
@@ -990,12 +993,14 @@ $payout_dests = get_supported_payout_destinations();
               <?= icon('check-circle', 14) ?> Complete Payment (Upload Proof)
             </button>
             <form method="POST" onsubmit="return confirm('Cancel this scheduled payment?')">
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="cancel"/>
               <input type="hidden" name="id" value="<?= $payment['id'] ?>"/>
               <button type="submit" class="btn-cancel">Cancel Schedule</button>
             </form>
           </div>
           <form method="POST" style="margin-top:10px;display:flex;gap:8px">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="fail"/>
             <input type="hidden" name="id" value="<?= $payment['id'] ?>"/>
             <input class="field-input" type="text" name="fail_reason" placeholder="Reason payment failed" style="flex:1;padding:7px 10px"/>
@@ -1014,6 +1019,7 @@ $payout_dests = get_supported_payout_destinations();
             <button type="button" class="btn-cancel" onclick="closeCompleteScheduledModal()" style="padding:2px 8px">&times;</button>
           </div>
           <form method="POST" enctype="multipart/form-data">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="complete"/>
             <input type="hidden" name="id" value="<?= $payment['id'] ?>"/>
 

@@ -265,9 +265,13 @@ let orderSubmitted = false;
 
 window.addEventListener('beforeunload', () => {
     if (orderItems.length > 0 && !orderSubmitted) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+            || document.querySelector('input[name="_csrf"]')?.value
+            || '';
         const body = JSON.stringify({
             action: 'refund_batch',
-            items: orderItems
+            items: orderItems,
+            _csrf: csrfToken
         });
         if (navigator.sendBeacon) {
             navigator.sendBeacon('../api/cart_stock.php', new Blob([body], { type: 'application/json' }));

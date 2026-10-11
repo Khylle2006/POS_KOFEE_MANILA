@@ -393,6 +393,7 @@ $pos = $list_stmt->fetchAll();
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Purchase Orders — Kofee POS</title>
+  <?= csrf_meta() ?>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
   <style>
@@ -545,7 +546,7 @@ $pos = $list_stmt->fetchAll();
             <div class="po-step-dot <?= $po['status']!=='draft'?'done':'' ?>"><?= $po['status']!=='draft'? icon('check', 11) : '' ?></div>
             <div class="po-step-label">PO Sent to Supplier</div>
             <?php if ($po['status']==='draft' && has_permission('procurement.po.manage')): ?>
-              <form method="POST" class="po-step-action"><input type="hidden" name="action" value="send"/><input type="hidden" name="id" value="<?= $po['id'] ?>"/>
+              <form method="POST" class="po-step-action"><?= csrf_field() ?><input type="hidden" name="action" value="send"/><input type="hidden" name="id" value="<?= $po['id'] ?>"/>
                 <button type="submit" class="act-btn act-activate"><?= icon('send', 13) ?> Send PO</button></form>
             <?php endif; ?>
           </div>
@@ -783,6 +784,7 @@ $pos = $list_stmt->fetchAll();
             <button class="modal-close" onclick="closeResolveModal()"><?= icon('x', 14) ?></button>
           </div>
           <form method="POST">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="resolve_issue"/>
             <input type="hidden" name="id" value="<?= $po['id'] ?>"/>
             <div class="modal-body">
@@ -816,6 +818,7 @@ $pos = $list_stmt->fetchAll();
             <button class="modal-close" onclick="closeCloseRateModal()"><?= icon('x', 14) ?></button>
           </div>
           <form method="POST" id="close-rate-form">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="close_and_rate"/>
             <input type="hidden" name="id" value="<?= $po['id'] ?>"/>
             <div class="modal-body" style="padding:16px 20px;max-height:75vh;overflow-y:auto">

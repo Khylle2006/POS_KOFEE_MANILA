@@ -132,6 +132,7 @@ if ($invoice) {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>3-Way Match — Kofee POS</title>
+  <?= csrf_meta() ?>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
   <style>
@@ -230,12 +231,12 @@ if ($invoice) {
 
         <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
           <?php if (in_array($invoice['status'], ['pending','disputed','submitted','under_review'], true)): ?>
-            <form method="POST"><input type="hidden" name="action" value="confirm_match"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
+            <form method="POST"><?= csrf_field() ?><input type="hidden" name="action" value="confirm_match"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
               <button type="submit" class="btn-save"><?= icon('check', 14) ?> Run Match</button></form>
           <?php endif; ?>
 
           <?php if ($invoice['status'] === 'matched'): ?>
-            <form method="POST"><input type="hidden" name="action" value="approve"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
+            <form method="POST"><?= csrf_field() ?><input type="hidden" name="action" value="approve"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
               <button type="submit" class="btn-save"><?= icon('check', 14) ?> Approve for Payment</button></form>
           <?php endif; ?>
 
@@ -253,6 +254,7 @@ if ($invoice) {
         </div>
 
         <form method="POST" id="correction-form" style="margin-top:12px;display:none;background:#FFF5F5;border:1px solid #FED7D7;border-radius:8px;padding:12px" class="inline-toggle-form">
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="request_correction"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
           <strong style="font-size:12px;color:#9B2C2C;display:block;margin-bottom:6px">Request Invoice Correction from Supplier</strong>
           <textarea class="field-input" name="correction_notes" placeholder="Explain the discrepancy (e.g. price exceeds contract rate, missing tax breakdown, invoiced quantity exceeds received goods)..." required style="width:100%;min-height:70px;margin-bottom:8px"></textarea>
@@ -263,6 +265,7 @@ if ($invoice) {
 
         <?php if ($invoice['status'] === 'disputed'): ?>
         <form method="POST" id="override-form" style="margin-top:12px;display:none" class="inline-toggle-form">
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="force_approve"/><input type="hidden" name="invoice_id" value="<?= $invoice['id'] ?>"/>
           <textarea class="field-input" name="override_note" placeholder="Justify why this exception is being overridden (required, goes in the audit log)" style="width:100%;min-height:60px;margin-bottom:8px" required></textarea>
           <div style="text-align:right"><button type="submit" class="btn-save">Confirm Override</button></div>

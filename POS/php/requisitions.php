@@ -210,6 +210,7 @@ unset($r);
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Purchase Requisitions — Kofee POS</title>
+  <?= csrf_meta() ?>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
   <style>
@@ -313,6 +314,7 @@ unset($r);
       <button class="modal-close" onclick="closeCreate()"><?= icon('x', 14) ?></button>
     </div>
     <form method="POST" id="create-form">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="create"/>
       <input type="hidden" name="items" id="items-json"/>
       <div class="modal-body">
@@ -349,6 +351,16 @@ unset($r);
     </form>
   </div>
 </div>
+
+<!-- Dedicated Review Form -->
+<form method="POST" id="review-form" style="display:none">
+  <?= csrf_field() ?>
+  <input type="hidden" name="action" value="review"/>
+  <input type="hidden" name="id" id="rf-id"/>
+  <input type="hidden" name="status" id="rf-status"/>
+  <input type="hidden" name="review_notes" id="rf-notes"/>
+  <input type="hidden" name="budget_override_note" id="rf-override"/>
+</form>
 
 <!-- View / Review modal -->
 <div class="modal-overlay" id="view-modal">
@@ -568,12 +580,26 @@ function submitReview(id, status) {
     return;
   }
 
+  const reviewForm = document.getElementById('review-form');
+  if (reviewForm) {
+    document.getElementById('rf-id').value = id;
+    document.getElementById('rf-status').value = status;
+    document.getElementById('rf-notes').value = document.getElementById('v-review-notes').value;
+    document.getElementById('rf-override').value = overrideNote;
+    reviewForm.submit();
+    return;
+  }
+
   const fd = new FormData();
   fd.append('action', 'review');
   fd.append('id', id);
   fd.append('status', status);
   fd.append('review_notes', document.getElementById('v-review-notes').value);
   fd.append('budget_override_note', overrideNote);
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+    || document.querySelector('input[name="_csrf"]')?.value
+    || '';
+  if (csrfToken) fd.append('_csrf', csrfToken);
 
   const form = document.createElement('form');
   form.method = 'POST';

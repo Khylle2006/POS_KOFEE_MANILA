@@ -203,6 +203,7 @@ $current_qty_tol   = (float)get_procurement_setting('three_way_match_qty_toleran
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Finance Purchase Approvals — Kofee POS</title>
+  <?= csrf_meta() ?>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
   <style>
@@ -378,6 +379,7 @@ $current_qty_tol   = (float)get_procurement_setting('three_way_match_qty_toleran
       <button class="modal-close" onclick="closeReviewModal()"><?= icon('x', 14) ?></button>
     </div>
     <form method="POST" id="form-review">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="finance_decision"/>
       <input type="hidden" name="bid_id" id="rev-bid-id" value=""/>
       <input type="hidden" name="decision" id="rev-decision" value=""/>
@@ -450,6 +452,7 @@ $current_qty_tol   = (float)get_procurement_setting('three_way_match_qty_toleran
     <button class="modal-close" onclick="closeSettingsDrawer()"><?= icon('x', 14) ?></button>
   </div>
   <form method="POST">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="save_settings"/>
     <div class="drawer-body">
       <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">

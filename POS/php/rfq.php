@@ -322,6 +322,7 @@ $finance_threshold = (float)get_procurement_setting('finance_approval_threshold'
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>RFQ &amp; Bidding — Kofee POS</title>
+  <?= csrf_meta() ?>
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/sidebar.css"/>
   <style>
@@ -396,6 +397,7 @@ $finance_threshold = (float)get_procurement_setting('finance_approval_threshold'
           <p class="muted-cell">No active suppliers registered. <a href="suppliers.php" style="color:var(--caramel);font-weight:700">Add an active supplier first →</a></p>
         <?php else: ?>
         <form method="POST" id="rfq-create-form" onsubmit="return validateRfqForm()">
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="create_rfq"/>
           <input type="hidden" name="requisition_id" value="<?= $requisition['id'] ?>"/>
           <input type="hidden" name="title" value="RFQ - <?= htmlspecialchars($requisition['title']) ?>"/>
@@ -614,6 +616,7 @@ $finance_threshold = (float)get_procurement_setting('finance_approval_threshold'
         <!-- Record Quote Manually (Only if open and not expired) -->
         <?php if (has_permission('procurement.rfq.manage') && $rfq['status'] === 'open' && $can_quote['can_bid']): ?>
         <form method="POST" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px;padding:16px;background:#FBF6EF;border-radius:12px">
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="record_bid"/>
           <input type="hidden" name="rfq_id" value="<?= $rfq['id'] ?>"/>
           <div class="field-group" style="margin:0;min-width:180px">
@@ -757,6 +760,7 @@ $finance_threshold = (float)get_procurement_setting('finance_approval_threshold'
               <?php if ($rfq['status'] === 'open' && $b['status'] !== 'withdrawn' && $b['status'] !== 'selected'): ?>
                 <?php if (has_permission('procurement.bidding.review') && $b['status'] === 'submitted'): ?>
                   <form method="POST">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="shortlist"/>
                     <input type="hidden" name="bid_id" value="<?= $b['id'] ?>"/>
                     <input type="hidden" name="rfq_id" value="<?= $rfq['id'] ?>"/>
@@ -773,6 +777,7 @@ $finance_threshold = (float)get_procurement_setting('finance_approval_threshold'
                 <!-- Withdraw button (before deadline) -->
                 <?php if ($can_quote['can_bid']): ?>
                   <form method="POST" onsubmit="return confirm('Are you sure you want to mark this quote as withdrawn?');">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="withdraw_bid"/>
                     <input type="hidden" name="bid_id" value="<?= $b['id'] ?>"/>
                     <input type="hidden" name="rfq_id" value="<?= $rfq['id'] ?>"/>
@@ -934,6 +939,7 @@ $finance_threshold = (float)get_procurement_setting('finance_approval_threshold'
       <button class="modal-close" onclick="closeSelectQuote()"><?= icon('x', 14) ?></button>
     </div>
     <form method="POST">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="select_quote"/>
       <input type="hidden" name="rfq_id" value="<?= $rfq['id'] ?? '' ?>"/>
       <input type="hidden" name="bid_id" id="sel-bid-id"/>
