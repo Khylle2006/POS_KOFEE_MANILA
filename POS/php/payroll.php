@@ -98,7 +98,8 @@ $suggested = suggest_payroll_period('semimonthly');
 <link rel="stylesheet" href="../css/style.css"/>
 <link rel="stylesheet" href="../css/sidebar.css"/>
 <link rel="stylesheet" href="../css/payroll.css"/>
-<script src="../assets/vendor/sweetalert2/sweetalert2.all.min.js"></script>
+<script src="../assets/sweetalert2/sweetalert2.all.min.js"></script>
+<script>if (!window.Swal) document.write('<script src="../assets/vendor/sweetalert2/sweetalert2.all.min.js"><\/script>');</script>
 </head>
 <body>
 
@@ -754,13 +755,21 @@ function nextPayStep() {
     const end   = document.getElementById('pay-end').value;
     const pay   = document.getElementById('pay-date').value;
     if (!start || !end || !pay) {
-      Swal.fire({ icon: 'warning', title: 'Dates Required', text: 'Please specify the period start, end, and scheduled pay dates.' });
+      if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+        Swal.fire({ icon: 'warning', title: 'Dates Required', text: 'Please specify the period start, end, and scheduled pay dates.' });
+      } else {
+        alert('Please specify the period start, end, and scheduled pay dates.');
+      }
       return;
     }
     goToPayStep(2);
   } else if (currentPayStep === 2) {
     if (selectedEmpIds.size === 0) {
-      Swal.fire({ icon: 'warning', title: 'No Employees Selected', text: 'Please select at least one employee for this payroll run.' });
+      if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+        Swal.fire({ icon: 'warning', title: 'No Employees Selected', text: 'Please select at least one employee for this payroll run.' });
+      } else {
+        alert('Please select at least one employee for this payroll run.');
+      }
       return;
     }
     goToPayStep(3);
@@ -1223,7 +1232,11 @@ async function submitPayrollToFinance() {
   const originalHtml = submitBtn.innerHTML;
 
   if (selectedEmpIds.size === 0) {
-    Swal.fire({ icon: 'warning', title: 'No Staff Selected', text: 'Please select at least one employee for payout.' });
+    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+      Swal.fire({ icon: 'warning', title: 'No Staff Selected', text: 'Please select at least one employee for payout.' });
+    } else {
+      alert('Please select at least one employee for payout.');
+    }
     return;
   }
 
@@ -1265,27 +1278,36 @@ async function submitPayrollToFinance() {
     });
   });
 
-  const confirmRes = await Swal.fire({
-    title: 'Submit for Finance Review?',
-    html: `You are submitting payroll for <strong>${employeesPayload.length}</strong> employee(s) totalling <strong>₱${document.getElementById('step3-sum-total').textContent}</strong>.<br><br><small style="color:#6b7280">This will notify Finance officers for review and fund release approval.</small>`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonColor: '#8B4513',
-    cancelButtonColor: '#52434F',
-    confirmButtonText: 'Yes, Send to Finance'
-  });
+  const totalText = document.getElementById('step3-sum-total')?.textContent || '0.00';
+  let isConfirmed = false;
+  if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+    const confirmRes = await Swal.fire({
+      title: 'Submit for Finance Review?',
+      html: `You are submitting payroll for <strong>${employeesPayload.length}</strong> employee(s) totalling <strong>₱${totalText}</strong>.<br><br><small style="color:#6b7280">This will notify Finance officers for review and fund release approval.</small>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#8B4513',
+      cancelButtonColor: '#52434F',
+      confirmButtonText: 'Yes, Send to Finance'
+    });
+    isConfirmed = confirmRes.isConfirmed;
+  } else {
+    isConfirmed = window.confirm(`Submit payroll for ${employeesPayload.length} employee(s) totalling ₱${totalText} to Finance for review?`);
+  }
 
-  if (!confirmRes.isConfirmed) return;
+  if (!isConfirmed) return;
 
   submitBtn.disabled = true;
   submitBtn.innerHTML = '<span>Submitting to Finance…</span>';
 
-  Swal.fire({
-    title: 'Submitting to Finance...',
-    text: 'Please wait while the payroll run is recorded.',
-    allowOutsideClick: false,
-    didOpen: () => Swal.showLoading()
-  });
+  if (typeof Swal !== 'undefined' && typeof Swal.showLoading === 'function') {
+    Swal.fire({
+      title: 'Submitting to Finance...',
+      text: 'Please wait while the payroll run is recorded.',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+  }
 
   try {
     const res = await fetch('../api/payroll.php', {
@@ -1308,17 +1330,25 @@ async function submitPayrollToFinance() {
     if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to create payroll run.');
 
     closePayrollModal();
-    await Swal.fire({
-      icon: 'success',
-      title: 'Submitted to Finance',
-      text: data.message || 'Payroll run has been submitted for Finance review.',
-      timer: 1500,
-      showConfirmButton: false
-    });
+    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+      await Swal.fire({
+        icon: 'success',
+        title: 'Submitted to Finance',
+        text: data.message || 'Payroll run has been submitted for Finance review.',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } else {
+      alert(data.message || 'Payroll run has been submitted for Finance review.');
+    }
 
     window.location.href = 'payroll_run.php?id=' + data.period_id;
   } catch (err) {
-    Swal.fire({ icon: 'error', title: 'Submission Failed', text: err.message });
+    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+      Swal.fire({ icon: 'error', title: 'Submission Failed', text: err.message });
+    } else {
+      alert('Submission Failed: ' + err.message);
+    }
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = originalHtml;
@@ -1347,17 +1377,23 @@ function filterPeriodsTable() {
 }
 
 async function deletePeriod(periodId, label) {
-  const result = await Swal.fire({
-    title: 'Delete Pay Period?',
-    text: `Are you sure you want to delete "${label}"?`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#c62828',
-    cancelButtonColor: '#52434F',
-    confirmButtonText: 'Yes, delete it'
-  });
+  let isConfirmed = false;
+  if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+    const result = await Swal.fire({
+      title: 'Delete Pay Period?',
+      text: `Are you sure you want to delete "${label}"?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#c62828',
+      cancelButtonColor: '#52434F',
+      confirmButtonText: 'Yes, delete it'
+    });
+    isConfirmed = result.isConfirmed;
+  } else {
+    isConfirmed = window.confirm(`Are you sure you want to delete pay period "${label}"?`);
+  }
 
-  if (!result.isConfirmed) return;
+  if (!isConfirmed) return;
 
   try {
     const res = await fetch('../api/payroll.php', {
@@ -1368,15 +1404,24 @@ async function deletePeriod(periodId, label) {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to delete period.');
 
-    Swal.fire({
-      icon: 'success',
-      title: 'Deleted',
-      text: 'Pay period deleted successfully.',
-      timer: 1400,
-      showConfirmButton: false
-    }).then(() => location.reload());
+    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+      Swal.fire({
+        icon: 'success',
+        title: 'Deleted',
+        text: 'Pay period deleted successfully.',
+        timer: 1400,
+        showConfirmButton: false
+      }).then(() => location.reload());
+    } else {
+      alert('Pay period deleted successfully.');
+      location.reload();
+    }
   } catch (err) {
-    Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+      Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    } else {
+      alert('Error: ' + err.message);
+    }
   }
 }
 

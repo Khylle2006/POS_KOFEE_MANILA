@@ -52,7 +52,8 @@ RedirectMatch 404 (?i)/(composer\.json|phpunit\.xml|phpcs\.xml|phpstan\.neon)$
   </IfModule>
 </FilesMatch>
 # Backups and development tools are never deployment endpoints.
-RedirectMatch 404 (?i)/(scratch|tests|tools|vendor|database|dist|\.test-mysql|\.phpunit\.cache|\.phpstan\.cache)(/|$)
+RedirectMatch 404 (?i)/(scratch|tests|tools|database|dist|\.test-mysql|\.phpunit\.cache|\.phpstan\.cache)(/|$)
+RedirectMatch 404 (?i)(?<!/assets)/vendor(/|$)
 <FilesMatch "(?i)\.(zip|gz|tar|7z|phar|env|ini|bak|backup)$">
   Require all denied
 </FilesMatch>
