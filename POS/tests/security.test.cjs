@@ -451,3 +451,96 @@ test('request_security.php adds cache-busting version query params to local styl
     assert.match(result, /href=["']\.\.\/css\/style\.css\?v=\d+["']/);
 });
 
+test('payments form with shadowed action input intercepts submit and opens password confirmation', async () => {
+    let dialogAppended = false;
+    let submittedAfterConfirm = false;
+    const listeners = new Map();
+
+    class FakeForm {
+        constructor() {
+            this.method = 'POST';
+            this.dataset = {};
+            this.action = { toString: () => '[object HTMLInputElement]', value: 'paymongo_disburse' };
+            this._fields = new Map([['_csrf', 'token123'], ['action', 'paymongo_disburse']]);
+        }
+        getAttribute(attr) {
+            if (attr === 'action') return null; // Form has no action attribute, uses page URL
+            if (attr === 'method') return 'POST';
+            return null;
+        }
+        querySelectorAll(selector) { return []; }
+        querySelector(selector) {
+            if (selector === '[name="_csrf"]') return { value: 'token123' };
+            return null;
+        }
+        closest(selector) { return null; }
+        requestSubmit(submitter) {
+            submittedAfterConfirm = true;
+        }
+    }
+
+    const formInstance = new FakeForm();
+    const context = {
+        URL, Headers, Response, Request, crypto: webcrypto,
+        HTMLFormElement: FakeForm,
+        FormData: class {
+            constructor(f) { this.form = f; }
+            get(key) { return key === 'action' ? 'paymongo_disburse' : null; }
+        },
+        location: new URL('https://example.test/POS/php/payments.php?new_for_invoice=41'),
+        document: {
+            currentScript: null, // Test null currentScript resilience
+            querySelector: () => ({ content: 'csrf-test-token' }),
+            addEventListener: (type, handler) => listeners.set(type, handler),
+            body: {
+                append(el) { dialogAppended = true; }
+            },
+            createElement(tag) {
+                const handlers = new Map();
+                const input = { value: 'correct-password', focus() {} };
+                return {
+                    className: '',
+                    innerHTML: '',
+                    style: {},
+                    querySelector(selector) {
+                        if (selector === 'input') return input;
+                        return { addEventListener: (type, handler) => handlers.set(type, handler) };
+                    },
+                    addEventListener() {}, remove() {},
+                    showModal() { queueMicrotask(() => handlers.get('submit')({ preventDefault() {} })); },
+                };
+            },
+        },
+        sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+        window: {
+            fetch: async (input, options) => {
+                if (String(input).includes('reauthenticate.php')) return new Response('{"success":true}');
+                return new Response('{"success":true}');
+            }
+        },
+    };
+
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../js/security.js'), 'utf8'), context);
+    assert.strictEqual(context.window.__kofeeSecurityLoaded, true);
+
+    const submitHandler = listeners.get('submit');
+    assert.ok(submitHandler, 'Submit listener should be registered');
+
+    let prevented = false;
+    let stopped = false;
+    const fakeEvent = {
+        target: formInstance,
+        submitter: { getAttribute: () => null },
+        preventDefault: () => { prevented = true; },
+        stopImmediatePropagation: () => { stopped = true; },
+    };
+
+    await submitHandler(fakeEvent);
+    assert.strictEqual(prevented, true, 'Original submit should be prevented');
+    assert.strictEqual(stopped, true, 'Propagation should be stopped');
+    assert.strictEqual(dialogAppended, true, 'Confirm password dialog should have been appended');
+    assert.strictEqual(submittedAfterConfirm, true, 'Form requestSubmit should have been called after confirmation');
+    assert.strictEqual(formInstance.dataset.passwordConfirmed, 'true', 'Password confirmed flag should be set');
+});
+
+

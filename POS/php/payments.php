@@ -1275,5 +1275,6 @@ if (payMethodSelect) {
   toggleRefReq(payMethodSelect.value);
 }
 </script>
+<script src="../js/security.js"></script>
 </body>
 </html>

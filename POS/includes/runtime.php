@@ -69,8 +69,21 @@ function safe_exception(Throwable $exception): never
         echo json_encode(['ok' => false, 'success' => false, 'error' => $message, 'code' => $code, 'request_id' => request_id()]);
     } else {
         header('Content-Type: text/html; charset=utf-8');
-        echo '<!doctype html><meta charset="utf-8"><title>Request failed</title><h1>Request failed</h1><p>'
-            . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p><p>Reference: ' . request_id() . '</p>';
+        $ref = request_id();
+        $safeMsg = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+        $backUrl = htmlspecialchars($_SERVER['HTTP_REFERER'] ?? 'javascript:history.back()', ENT_QUOTES, 'UTF-8');
+        echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Request failed</title>'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            . '<style>'
+            . 'body{margin:0;padding:24px;background:#FAF7F2;color:#1E1224;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;box-sizing:border-box}'
+            . '.card{background:#FFFFFF;border-radius:18px;box-shadow:0 12px 36px rgba(36,26,46,0.12);border:1px solid #E8DED2;max-width:440px;width:100%;padding:28px 24px;box-sizing:border-box}'
+            . 'h1{margin:0 0 12px;font-size:20px;font-weight:700;color:#241A2E}'
+            . 'p{margin:0 0 12px;font-size:14px;color:#52434F;line-height:1.5}'
+            . '.ref{font-size:12px;color:#8B4513;margin-bottom:20px}'
+            . '.btn{display:inline-flex;align-items:center;justify-content:center;padding:10px 20px;border-radius:10px;background:#241A2E;color:#FFFFFF;text-decoration:none;font-size:13px;font-weight:600}'
+            . '</style></head><body>'
+            . '<div class="card"><h1>Request failed</h1><p>' . $safeMsg . '</p><p class="ref">Reference: ' . $ref . '</p>'
+            . '<a href="' . $backUrl . '" class="btn">← Back to previous page</a></div></body></html>';
     }
     exit;
 }

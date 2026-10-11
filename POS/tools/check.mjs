@@ -20,9 +20,14 @@ function files(folder, extension) {
 if (mode === 'lint') {
     for (const file of files(root, '.php')) run(php, ['-l', file]);
     for (const file of files(root, '.js')) run(process.execPath, ['--check', file]);
-    run(php, ['vendor/bin/phpcs']);
-} else if (mode === 'typecheck') run(php, ['vendor/bin/phpstan', 'analyse', '--no-progress']);
+    const phpcs = existsSync(join(root, 'vendor/bin/phpcs')) ? 'vendor/bin/phpcs' : (existsSync(join(root, 'vendor/bin/phpcs.bat')) ? 'vendor/bin/phpcs.bat' : null);
+    if (phpcs) run(php, [phpcs]);
+} else if (mode === 'typecheck') {
+    const phpstan = existsSync(join(root, 'vendor/bin/phpstan')) ? 'vendor/bin/phpstan' : (existsSync(join(root, 'vendor/bin/phpstan.bat')) ? 'vendor/bin/phpstan.bat' : null);
+    if (phpstan) run(php, [phpstan, 'analyse', '--no-progress']);
+}
 else if (mode === 'test') {
     run(process.execPath, ['--test', 'tests/ui.test.cjs', 'tests/security.test.cjs', 'tests/analytics.test.cjs', 'tests/public_pages.test.cjs']);
-    run(php, ['vendor/bin/phpunit']);
+    const phpunit = existsSync(join(root, 'vendor/bin/phpunit')) ? 'vendor/bin/phpunit' : (existsSync(join(root, 'vendor/bin/phpunit.bat')) ? 'vendor/bin/phpunit.bat' : null);
+    if (phpunit) run(php, [phpunit]);
 } else throw new Error('Use lint, typecheck, or test.');

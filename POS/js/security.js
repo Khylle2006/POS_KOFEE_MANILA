@@ -1,7 +1,11 @@
 (() => {
     'use strict';
-    const script = document.currentScript;
-    const base = new URL('../', script.src);
+    if (typeof window !== 'undefined' && window.__kofeeSecurityLoaded) return;
+    if (typeof window !== 'undefined') window.__kofeeSecurityLoaded = true;
+
+    const script = typeof document !== 'undefined' ? document.currentScript : null;
+    const scriptSrc = script?.src || (typeof location !== 'undefined' ? new URL('../js/security.js', location.href).href : 'http://localhost/');
+    const base = new URL('../', scriptSrc);
     const nativeFetch = window.fetch.bind(window);
     const token = () => document.querySelector('meta[name="csrf-token"]')?.content
         || document.querySelector('input[name="_csrf"]')?.value
@@ -264,14 +268,24 @@
         if (confirmation) return confirmation;
         confirmation = new Promise((resolve, reject) => {
             ensureConfirmStyles();
+            let settled = false;
             const dialog = document.createElement('dialog');
             dialog.className = 'kfs-confirm-dialog';
-            dialog.innerHTML = '<div class="kfs-confirm-dialog-card" style="padding:0;box-sizing:border-box;display:flex;flex-direction:column;background:#FFFFFF;border-radius:20px;overflow:hidden;font-family:\'Poppins\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;"><div class="kfs-confirm-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 24px;background:linear-gradient(165deg,#241A2E 0%,#181120 100%);border-bottom:1px solid rgba(251,243,233,0.1);color:#FBF3E9;"><div class="kfs-confirm-header-left" style="display:flex;align-items:center;gap:14px;"><div class="kfs-confirm-icon-badge" style="width:40px;height:40px;border-radius:12px;background:rgba(251,243,233,0.12);border:1px solid rgba(251,243,233,0.22);color:#E6A25C;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div><h2 class="kfs-confirm-title" style="margin:0;font-size:16px;font-weight:700;color:#FFFFFF;line-height:1.25;letter-spacing:-0.01em;">Confirm Your Password</h2><p class="kfs-confirm-subtitle" style="margin:3px 0 0 0;font-size:12px;color:rgba(251,243,233,0.72);line-height:1.4;">Security verification required to proceed.</p></div></div><button type="button" class="kfs-confirm-close-btn" data-close aria-label="Close dialog" style="background:transparent;border:none;cursor:pointer;color:rgba(251,243,233,0.65);padding:6px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><form method="dialog" class="kfs-confirm-form" style="display:flex;flex-direction:column;padding:22px 24px 24px;margin:0;background:#FFFFFF;"><div class="kfs-confirm-field" style="display:flex;flex-direction:column;"><label class="kfs-confirm-label" for="kfs-confirm-pw-input" style="display:block;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#52434F;margin-bottom:8px;">Current Password</label><div class="kfs-confirm-input-wrap" style="position:relative;display:flex;align-items:center;width:100%;"><input id="kfs-confirm-pw-input" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required class="kfs-confirm-input" style="width:100%;height:44px;padding:0 44px 0 14px;border-radius:10px;border:1.5px solid #D8C7B5;font-size:14px;color:#1E1224;background:#FFFFFF;box-sizing:border-box;outline:none;font-family:inherit;"><button type="button" class="kfs-confirm-eye-btn" aria-label="Toggle password visibility" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;color:#8B4513;padding:6px;display:flex;align-items:center;justify-content:center;border-radius:6px;"><svg class="kfs-eye-show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="kfs-eye-hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div></div><p role="alert" class="kfs-confirm-alert" style="display:none;background:#FEF2F2;border:1px solid #FCA5A5;color:#DC2626;border-radius:10px;padding:10px 14px;font-size:12.5px;font-weight:500;margin:12px 0 0 0;line-height:1.4;"></p><div class="kfs-confirm-actions" style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid #F3EDE6;"><button type="button" data-cancel class="kfs-confirm-btn-cancel" style="height:40px;padding:0 20px;border:1px solid #D8C7B5;border-radius:10px;background:#FBF3E9;color:#241A2E;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button><button type="submit" class="kfs-confirm-btn-submit" style="height:40px;padding:0 24px;border:1px solid #241A2E;border-radius:10px;background:#241A2E;color:#FFFFFF;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(36,26,46,0.25);">Continue</button></div></form></div>';
+            dialog.innerHTML = '<div class="kfs-confirm-dialog-card" style="padding:0;box-sizing:border-box;display:flex;flex-direction:column;background:#FFFFFF;border-radius:20px;overflow:hidden;font-family:\'Poppins\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;"><div class="kfs-confirm-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 24px;background:linear-gradient(165deg,#241A2E 0%,#181120 100%);border-bottom:1px solid rgba(251,243,233,0.1);color:#FBF3E9;"><div class="kfs-confirm-header-left" style="display:flex;align-items:center;gap:14px;"><div class="kfs-confirm-icon-badge" style="width:40px;height:40px;border-radius:12px;background:rgba(251,243,233,0.12);border:1px solid rgba(251,243,233,0.22);color:#E6A25C;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div><h2 class="kfs-confirm-title" style="margin:0;font-size:16px;font-weight:700;color:#FFFFFF;line-height:1.25;letter-spacing:-0.01em;">Confirm Your Password</h2><p class="kfs-confirm-subtitle" style="margin:3px 0 0 0;font-size:12px;color:rgba(251,243,233,0.72);line-height:1.4;">Security verification required to proceed.</p></div></div><button type="button" class="kfs-confirm-close-btn" data-close aria-label="Close dialog" style="background:transparent;border:none;cursor:pointer;color:rgba(251,243,233,0.65);padding:6px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><form class="kfs-confirm-form" onsubmit="return false;" style="display:flex;flex-direction:column;padding:22px 24px 24px;margin:0;background:#FFFFFF;"><div class="kfs-confirm-field" style="display:flex;flex-direction:column;"><label class="kfs-confirm-label" for="kfs-confirm-pw-input" style="display:block;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#52434F;margin-bottom:8px;">Current Password</label><div class="kfs-confirm-input-wrap" style="position:relative;display:flex;align-items:center;width:100%;"><input id="kfs-confirm-pw-input" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required class="kfs-confirm-input" style="width:100%;height:44px;padding:0 44px 0 14px;border-radius:10px;border:1.5px solid #D8C7B5;font-size:14px;color:#1E1224;background:#FFFFFF;box-sizing:border-box;outline:none;font-family:inherit;"><button type="button" class="kfs-confirm-eye-btn" aria-label="Toggle password visibility" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;color:#8B4513;padding:6px;display:flex;align-items:center;justify-content:center;border-radius:6px;"><svg class="kfs-eye-show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="kfs-eye-hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div></div><p role="alert" class="kfs-confirm-alert" style="display:none;background:#FEF2F2;border:1px solid #FCA5A5;color:#DC2626;border-radius:10px;padding:10px 14px;font-size:12.5px;font-weight:500;margin:12px 0 0 0;line-height:1.4;"></p><div class="kfs-confirm-actions" style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid #F3EDE6;"><button type="button" data-cancel class="kfs-confirm-btn-cancel" style="height:40px;padding:0 20px;border:1px solid #D8C7B5;border-radius:10px;background:#FBF3E9;color:#241A2E;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button><button type="submit" class="kfs-confirm-btn-submit" style="height:40px;padding:0 24px;border:1px solid #241A2E;border-radius:10px;background:#241A2E;color:#FFFFFF;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(36,26,46,0.25);">Continue</button></div></form></div>';
             if (dialog.style) dialog.style.cssText = 'position:fixed!important;inset:auto!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;margin:0!important;padding:0!important;border:1px solid rgba(36,26,46,0.2)!important;border-radius:20px!important;background:#FFFFFF!important;box-shadow:0 24px 64px rgba(24,17,32,0.38)!important;width:min(440px,calc(100vw - 32px))!important;max-width:440px!important;z-index:10002!important;overflow:hidden!important;box-sizing:border-box!important;outline:none!important;';
             document.body.append(dialog);
-            dialog.querySelector('[data-cancel]').addEventListener('click', () => dialog.close());
+
+            const closeDialog = () => {
+                if (typeof dialog.close === 'function') {
+                    try { dialog.close(); } catch (e) { dialog.remove(); }
+                } else {
+                    dialog.remove();
+                }
+            };
+
+            dialog.querySelector('[data-cancel]').addEventListener('click', closeDialog);
             const closeBtn = dialog.querySelector('[data-close]');
-            if (closeBtn) closeBtn.addEventListener('click', () => dialog.close());
+            if (closeBtn) closeBtn.addEventListener('click', closeDialog);
             const eyeBtn = dialog.querySelector('.kfs-confirm-eye-btn');
             if (eyeBtn) {
                 eyeBtn.addEventListener('click', () => {
@@ -289,10 +303,20 @@
                     }
                 });
             }
-            dialog.addEventListener('close', () => { dialog.remove(); reject(new Error('Password confirmation cancelled.')); }, { once: true });
+            dialog.addEventListener('close', () => {
+                dialog.remove();
+                if (!settled) {
+                    settled = true;
+                    reject(new Error('Password confirmation cancelled.'));
+                }
+            }, { once: true });
+
             dialog.querySelector('form').addEventListener('submit', async event => {
                 event.preventDefault();
                 const input = dialog.querySelector('input');
+                const submitBtn = dialog.querySelector('.kfs-confirm-btn-submit');
+                const prevBtnText = submitBtn && typeof submitBtn.textContent === 'string' ? submitBtn.textContent : '';
+                if (submitBtn && 'disabled' in submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Verifying...'; }
                 try {
                     const response = await nativeFetch(new URL('api/reauthenticate.php', base), {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
@@ -301,15 +325,18 @@
                     input.value = '';
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.error || 'Password could not be verified.');
+                    settled = true;
+                    closeDialog();
                     dialog.remove();
                     resolve();
                 } catch (error) {
+                    if (submitBtn && 'disabled' in submitBtn) { submitBtn.disabled = false; submitBtn.textContent = prevBtnText; }
                     const alertEl = dialog.querySelector('[role="alert"]');
                     if (alertEl) { alertEl.textContent = error.message; alertEl.style.display = 'block'; }
                 }
             });
-            dialog.showModal();
-            dialog.querySelector('input').focus();
+            if (typeof dialog.showModal === 'function') dialog.showModal();
+            dialog.querySelector('input')?.focus();
         }).finally(() => { confirmation = null; });
         return confirmation;
     }
@@ -348,7 +375,9 @@
         if (!(form instanceof HTMLFormElement) || form.closest('dialog')) return;
         const method = (event.submitter?.getAttribute('formmethod') || form.method).toUpperCase();
         if (method !== 'POST') return;
-        const url = new URL(event.submitter?.getAttribute('formaction') || form.action || location.href, location.href);
+        const actionAttr = event.submitter?.getAttribute('formaction') || form.getAttribute('action');
+        const formActionUrl = (typeof actionAttr === 'string' && actionAttr.trim()) ? actionAttr.trim() : location.href;
+        const url = new URL(formActionUrl, location.href);
         if (url.origin !== location.origin) {
             for (const field of form.querySelectorAll('[name="_csrf"], [name="csrf_token"]')) field.remove();
             return;
@@ -359,12 +388,30 @@
         }
         const sensitiveRoute = /\/(manage_users|manage_permissions|payments|suppliers)\.php$/.test(url.pathname);
         const action = new FormData(form).get('action');
-        const sensitiveAction = ['request_payment_change', 'hr_review_request', 'approve', 'release', 'release_individual', 'batch_release_selected', 'finance_review', 'paymongo_dispatch_payout', 'paymongo_retry_item', 'update_settings', 'update_payslip_payment_method'].includes(action);
+        const sensitiveAction = [
+            'request_payment_change', 'hr_review_request', 'approve', 'release',
+            'release_individual', 'batch_release_selected', 'finance_review',
+            'paymongo_dispatch_payout', 'paymongo_retry_item', 'update_settings',
+            'update_payslip_payment_method',
+            'paymongo_disburse', 'paymongo_checkout', 'record_complete', 'schedule', 'complete'
+        ].includes(action);
         if ((sensitiveRoute || sensitiveAction) && !form.dataset.passwordConfirmed) {
             event.preventDefault();
             event.stopImmediatePropagation();
-            try { await confirmPassword(); form.dataset.passwordConfirmed = 'true'; form.requestSubmit(event.submitter); }
-            catch (error) { /* Cancellation leaves the form available to retry. */ }
+            try {
+                await confirmPassword();
+                form.dataset.passwordConfirmed = 'true';
+                if (event.submitter && typeof form.requestSubmit === 'function') {
+                    form.requestSubmit(event.submitter);
+                } else if (typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                } else {
+                    form.submit();
+                }
+            } catch (error) {
+                delete form.dataset.passwordConfirmed;
+                /* Cancellation leaves the form available to retry. */
+            }
         }
     }, true);
 
