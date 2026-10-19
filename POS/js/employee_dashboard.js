@@ -121,6 +121,13 @@ function retakePhoto() {
   document.getElementById('camera-retake-btn').style.display = 'none';
 }
 
+function getCsrfToken() {
+  return document.querySelector('meta[name="csrf-token"]')?.content
+    || document.querySelector('input[name="_csrf"]')?.value
+    || document.querySelector('input[name="csrf_token"]')?.value
+    || '';
+}
+
 async function confirmCapture() {
   if (!capturedDataUrl) return;
   const btn = document.getElementById('camera-confirm-btn');
@@ -132,10 +139,14 @@ async function confirmCapture() {
   }
 
   try {
+    const csrf = getCsrfToken();
     const res = await fetch('../api/mark_attendance.php', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: cameraMode, photo: capturedDataUrl })
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrf
+      },
+      body: JSON.stringify({ action: cameraMode, photo: capturedDataUrl, _csrf: csrf, csrf_token: csrf })
     });
     const data = await res.json();
 
@@ -174,10 +185,14 @@ async function quickClockWithoutPhoto() {
     fbBtn.textContent = 'Submitting…';
   }
   try {
+    const csrf = getCsrfToken();
     const res = await fetch('../api/shift_clock.php', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: cameraMode || 'clock_in' })
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrf
+      },
+      body: JSON.stringify({ action: cameraMode || 'clock_in', _csrf: csrf, csrf_token: csrf })
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
@@ -251,10 +266,14 @@ async function submitLeave() {
   }
 
   try {
+    const csrf = getCsrfToken();
     const res = await fetch('../api/submit_leave.php', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ leave_type: type, start_date: start, end_date: end, reason })
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrf
+      },
+      body: JSON.stringify({ leave_type: type, start_date: start, end_date: end, reason, _csrf: csrf, csrf_token: csrf })
     });
     const data = await res.json();
 

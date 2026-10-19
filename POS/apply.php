@@ -42,7 +42,9 @@ if (!$job) {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Apply for <?= htmlspecialchars($job ? $job['title'] : 'Position') ?> — Kofee Manila Careers</title>
+  <title>Apply for <?= htmlspecialchars($job ? $job['title'] : 'Position') ?> — BrewVanti Careers</title>
+  <link rel="icon" type="image/png" href="assets/brewvanti_logo.png">
+  <link rel="shortcut icon" href="assets/brewvanti_logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -56,17 +58,11 @@ if (!$job) {
     <div class="container">
       <div class="km-header-inner">
         <!-- Brand -->
-        <a href="index.html" class="km-brand">
-          <div class="km-brand-logo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
-              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-              <line x1="6" y1="1" x2="6" y2="4"/>
-              <line x1="10" y1="1" x2="10" y2="4"/>
-              <line x1="14" y1="1" x2="14" y2="4"/>
-            </svg>
+        <a href="index.html" class="km-brand" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+          <div class="km-brand-logo" style="background:transparent;border:none;width:38px;height:38px;display:flex;align-items:center;justify-content:center;padding:0;">
+            <img src="assets/brewvanti_logo.png" alt="BrewVanti Logo" style="height:36px;width:auto;object-fit:contain;" onerror="this.src='assets/brewvanti_pos_logo.svg'">
           </div>
-          <span class="km-brand-name">Kofee Manila</span>
+          <span class="km-brand-name" style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:700;color:#FAF7F2;letter-spacing:0.5px;">BrewVanti</span>
         </a>
 
         <!-- Links -->
@@ -427,7 +423,7 @@ if (!$job) {
     <div class="container">
       <div class="km-footer-inner">
         <div class="km-footer-brand">
-          Kofee Manila &nbsp;·&nbsp; Careers
+          BrewVanti &nbsp;·&nbsp; Careers
         </div>
         <div class="km-footer-links">
           <a href="javascript:void(0)" onclick="openPrivacyModal()">Privacy policy</a>

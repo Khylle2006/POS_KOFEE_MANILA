@@ -21,6 +21,9 @@ function private_storage_root(): string
         $parent = dirname($_SERVER['DOCUMENT_ROOT']);
         if (is_dir($parent) && is_writable($parent)) {
             $configured = $parent . DIRECTORY_SEPARATOR . 'kofee_storage';
+        } else {
+            // Shared hosting fallback (e.g. InfinityFree) where writing outside document root is forbidden
+            $configured = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'storage';
         }
     }
     if ($configured === '' || !preg_match('#^(?:[A-Za-z]:[/\\\\]|/)#', $configured)) {
@@ -35,13 +38,12 @@ function private_storage_root(): string
     if ($isInsideWebRoot) {
         $allowWebroot = app_setting('STORAGE_ALLOW_WEBROOT') === 'true' || app_setting('STORAGE_PERMIT_INTERNAL') === 'true';
         $htaccess = is_dir($configured) ? $configured . DIRECTORY_SEPARATOR . '.htaccess' : '';
+        if ($htaccess !== '' && !is_file($htaccess)) {
+            @file_put_contents($htaccess, "Deny from all\n<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n");
+        }
         $hasHtaccessDeny = $htaccess !== '' && is_file($htaccess) && (str_contains((string)@file_get_contents($htaccess), 'Deny from all') || str_contains((string)@file_get_contents($htaccess), 'Require all denied'));
 
-        if ($allowWebroot || $hasHtaccessDeny) {
-            if ($htaccess !== '' && !is_file($htaccess)) {
-                @file_put_contents($htaccess, "Deny from all\n<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n");
-            }
-        } else {
+        if (!$allowWebroot && !$hasHtaccessDeny) {
             throw new SecurityFault('STORAGE_CONFIGURATION_INVALID', 'Private storage must be outside the web document root.', 503);
         }
     }

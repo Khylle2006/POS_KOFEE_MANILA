@@ -193,7 +193,18 @@ try {
     $appId = (int)$pdo->lastInsertId();
     issue_application_tracking($pdo, 'job', $appId, $email);
     $pdo->commit();
-    $emailSent = false;
+
+    // Send confirmation email with tracking code to applicant
+    require_once __DIR__ . '/../includes/mailer.php';
+    $trackingUrl = app_url() . '/careers.php#track=' . urlencode($trackingCode);
+    $mailResult = send_application_confirmation_email(
+        $email,
+        $first_name . ' ' . $last_name,
+        $jobRow['title'],
+        $trackingCode,
+        $trackingUrl
+    );
+    $emailSent = !empty($mailResult['ok']) || !empty($mailResult['sent']);
 
     echo json_encode([
         'success'         => true,
@@ -203,7 +214,7 @@ try {
         'job_title'       => $jobRow['title'],
         'candidate_name'  => $first_name . ' ' . $last_name,
         'email'           => $email,
-        'email_queued'      => true,
+        'email_sent'      => $emailSent,
     ]);
 
 } catch (Throwable $e) {

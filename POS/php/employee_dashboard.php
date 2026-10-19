@@ -86,7 +86,10 @@ $initials = strtoupper(substr($fname, 0, 1));
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>My Dashboard — Kofee Manila</title>
+  <title>My Dashboard — BrewVanti</title>
+  <?= csrf_meta() ?>
+  <link rel="icon" type="image/png" href="../assets/brewvanti_logo.png">
+  <link rel="shortcut icon" href="../assets/brewvanti_logo.png">
   <link rel="stylesheet" href="../css/style.css"/>
   <link rel="stylesheet" href="../css/home.css"/>
   <link rel="stylesheet" href="../css/employee_dashboard.css"/>
@@ -641,6 +644,7 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCreate(); } });
 </script>
+<script src="../js/security.js"></script>
 <script src="../js/validator.js"></script>
 <script src="../js/employee_dashboard.js?v=<?= filemtime(__DIR__.'/../js/employee_dashboard.js') ?>"></script>
 

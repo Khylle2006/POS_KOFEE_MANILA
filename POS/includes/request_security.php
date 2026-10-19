@@ -86,7 +86,7 @@ function guard_authenticated_request(): void
         if ($method === 'POST' && $route === 'leave_requests.php' && $action === 'review') require_permission('leave.manage');
         if ($method === 'POST' && $route === 'attendance.php') require_permission('attendance.manage');
         if ($method === 'POST' && $route === 'profile.php' && $action === 'hr_review_request') require_permission('employee.payment.manage');
-        if ($route === 'manage_users.php' || $route === 'manage_permissions.php'
+        if ($route === 'manage_permissions.php'
             || ($route === 'profile.php' && in_array($action, ['request_payment_change', 'hr_review_request'], true))
             || ($route === 'payments.php' && $method === 'POST')
             || ($route === 'suppliers.php' && $method === 'POST')) {

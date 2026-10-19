@@ -387,7 +387,7 @@ $invoices = $list_stmt->fetchAll();
               <?= icon('dollar', 14) ?> Recorded Payments (<?= count($invoice_payments) ?>)
             </h4>
             <div style="overflow-x:auto">
-              <table style="width:100%;font-size:12px;border-collapse:collapse">
+              <table style="width:100%;font-size:12px;border-collapse:collapse">https://127.0.0.1:64018/static/artifacts/1aa74eb2-4b2f-489a-a873-2870dad51437/.user_uploaded/media_1791747624143.png?csrf=82e30955-c3be-431c-a8ec-520fa03cbef1
                 <thead>
                   <tr style="text-align:left;border-bottom:1px solid var(--border,#e8ded2);color:var(--text-muted)">
                     <th style="padding:6px 8px">Date</th>

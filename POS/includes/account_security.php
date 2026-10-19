@@ -9,6 +9,7 @@ function register_auth_session(PDO $pdo, int $userId): void
         ->execute([hash('sha256', $handle), $userId]);
     $_SESSION['auth_handle'] = $handle;
     $_SESSION['authenticated_at'] = time();
+    $_SESSION['reauthenticated_at'] = time();
     $_SESSION['last_activity'] = time();
     security_audit($pdo, 'login', 'user', $userId);
 }

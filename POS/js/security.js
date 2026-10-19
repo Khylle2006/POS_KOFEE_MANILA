@@ -389,7 +389,7 @@
             const field = document.createElement('input');
             field.type = 'hidden'; field.name = '_csrf'; field.value = token(); form.append(field);
         }
-        const sensitiveRoute = /\/(manage_users|manage_permissions|payments|suppliers)\.php$/.test(url.pathname);
+        const sensitiveRoute = /\/(manage_permissions|payments|suppliers)\.php$/.test(url.pathname);
         const action = new FormData(form).get('action');
         const sensitiveAction = [
             'request_payment_change', 'hr_review_request', 'approve', 'release',

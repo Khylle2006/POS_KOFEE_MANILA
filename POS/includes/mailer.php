@@ -117,7 +117,7 @@ function get_phpmailer_instance(?array $customConfig = null): PHPMailer {
  * @return array{ok: bool, sent: bool, simulated?: bool, error?: string, message?: string}
  */
 function send_kofee_email(string $toEmail, string $toName, string $subject, string $htmlBody, string $altBody = '', ?array $customConfig = null): array {
-    if (PHP_SAPI !== 'cli' && $customConfig === null) {
+    if (app_setting('QUEUE_EMAILS') === 'true' && PHP_SAPI !== 'cli' && $customConfig === null) {
         require_once __DIR__ . '/jobs.php';
         enqueue_job(get_db(), 'email-' . bin2hex(random_bytes(16)), 'email', ['to' => $toEmail, 'name' => $toName, 'subject' => $subject, 'html' => $htmlBody, 'alt' => $altBody]);
         return ['ok' => true, 'sent' => false, 'queued' => true, 'error' => null];

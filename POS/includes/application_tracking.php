@@ -13,9 +13,21 @@ function issue_application_tracking(PDO $pdo, string $type, int $id, string $ema
     $page = $type === 'job' ? 'careers.php' : 'supplier_partnership.php';
     // A URL fragment keeps the token out of access logs and referrers on page navigation.
     $link = htmlspecialchars(app_url() . '/' . $page . '#track=' . $token, ENT_QUOTES, 'UTF-8');
-    enqueue_job($pdo, 'tracking-email-' . hash('sha256', $token), 'email', ['to' => $email,
-        'subject' => 'Your Kofee Manila application status',
-        'html' => '<p>View your application status using this private link. It expires in 30 days.</p><p><a href="' . $link . '">View application status</a></p>']);
+    $html = '<div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; background: #fff; border: 1px solid #EFE0CC; border-radius: 12px;">'
+        . '<div style="text-align: center; margin-bottom: 20px;"><h2 style="color: #241A2E; margin: 0;">BrewVanti</h2><p style="color: #C97B3D; font-size: 13px; margin: 4px 0 0;">Application Status Tracking</p></div>'
+        . '<p>Hello,</p><p>You requested a private link to track your application status. Click the button below (valid for 30 days):</p>'
+        . '<div style="text-align: center; margin: 24px 0;"><a href="' . $link . '" style="display: inline-block; padding: 12px 24px; background: #241A2E; color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold;">View Application Status</a></div>'
+        . '<p style="font-size: 12px; color: #888;">If the button does not work, copy and paste this link:<br>' . $link . '</p>'
+        . '</div>';
+
+    if (app_setting('QUEUE_EMAILS') === 'true') {
+        enqueue_job($pdo, 'tracking-email-' . hash('sha256', $token), 'email', ['to' => $email,
+            'subject' => 'Your BrewVanti Application Status',
+            'html' => $html]);
+    } else {
+        require_once __DIR__ . '/mailer.php';
+        send_kofee_email($email, '', 'Your BrewVanti Application Status', $html);
+    }
 }
 
 function public_submission_guard(string $scope): void
